@@ -1,8 +1,8 @@
 //! Integrated headquarters / roster / service / tablet host.
 //!
 //! One `Host` owns the headquarters state that the lower layers do not:
-//! the 108 source recruit bytes (`gs+0x1AF4`), the castle stage produced by
-//! the recount/promote pair (`gs+0x34` -> `story.recruitment_tier`), the
+//! the 108 source recruit bytes, the castle stage produced by
+//! the recount/promote pair (`story.recruitment_tier`), the
 //! roster sidecar, the service screen, the tablet view and the optional-game
 //! frame seam.
 //!
@@ -27,7 +27,6 @@
 const std = @import("std");
 const owner_state = @import("owner_state_hq");
 const field = @import("field");
-const event_runtime = @import("event_runtime");
 const stage_mod = @import("stage.zig");
 const scene_mod = @import("scene.zig");
 const windows_mod = @import("windows.zig");
@@ -36,6 +35,12 @@ const services_mod = @import("services/root.zig");
 const tablet_mod = @import("tablet/root.zig");
 const service_engines = @import("services/engines.zig");
 const results = @import("campaign_policies").mode_result;
+
+const population_host = @import("host/population.zig");
+const recruit_host = @import("host/recruit.zig");
+const services_host = @import("host/services.zig");
+const mode_host = @import("host/mode.zig");
+const sidecar_host = @import("host/sidecar.zig");
 
 const hq_assets = @import("hq_data");
 const stage_data = hq_assets;
@@ -57,7 +62,6 @@ pub const identity_slots: usize = 108;
 
 pub const story_castle_index: u8 = 15;
 pub const story_castle_mask: u8 = 0x02;
-const arcade_status_story_index: usize = 160;
 
 pub const Screen = enum { field, party, service, tablet, mode, recruit };
 pub const Intent = enum { up, down, left, right, confirm, cancel };
@@ -180,6 +184,8 @@ pub const Host = struct {
     party_bitmap: [identity_slots]u8 = @splat(0),
     level_buffer: [identity_slots]u8 = @splat(0),
 
+    pub const Construction = population_host.Construction;
+
     pub const Init = struct {
         field_state: *field.State,
         roster: roster_mod.roster.Roster,
@@ -256,7 +262,7 @@ pub const Host = struct {
         return self.content_sha;
     }
 
-    fn validateInitial(self: *Host) !void {
+    pub fn validateInitial(self: *Host) !void {
         try self.roster.validate(self.roster_packet.value);
         for (self.recruit) |byte| if (byte & 0xFC != 0) return error.InvalidRecruitByte;
         // Every *active* member must be a recruited identity: no fabricated
@@ -294,7 +300,7 @@ pub const Host = struct {
         return scenario.scenario[story_castle_index] & story_castle_mask != 0;
     }
 
-    /// The source record id of a combat member (the `gs+0x1AF4` flag slot).
+    /// The source record id of a combat member (the recruit flag slot).
     /// The portrait index the HQ roster asset exposes is a *different* space.
     pub fn recordIdOf(self: *Host, member_id: []const u8) ?u16 {
         const profile = self.roster_packet.value.profile(member_id) orelse return null;
@@ -327,7 +333,7 @@ pub const Host = struct {
     }
 
     /// Active party record ids in party order.
-    fn partyIdentities(self: *Host) [6]u8 {
+    pub fn partyIdentities(self: *Host) [6]u8 {
         var out: [6]u8 = @splat(0);
         var count: usize = 0;
         for (self.roster.snapshot.active) |maybe| if (maybe) |id| {
@@ -359,111 +365,16 @@ pub const Host = struct {
 
     // -- headquarters population -------------------------------------------
 
-    pub const Construction = struct {
-        rooms: []const scene_mod.RoomView,
-        actors: []const scene_mod.ActorView,
-        skipped_unproved_actors: u16,
-        skipped_unproved_entrances: u16,
-    };
-
-    /// Reconstruct the current stage's reachable rooms and present actors.  An
-    /// unproved doorway/actor is skipped by HQ scene construction, never defaulted.
     pub fn construction(self: *Host) !Construction {
-        var state = self.sceneState();
-        const facts = try state.facts();
-        const built = try scene_mod.reconstruct(&self.scenes.value, facts, &self.room_buffer, &self.actor_buffer);
-        return .{
-            .rooms = built.rooms,
-            .actors = built.actors,
-            .skipped_unproved_actors = built.skipped_unproved_actors,
-            .skipped_unproved_entrances = built.skipped_unproved_entrances,
-        };
+        return population_host.construction(self);
     }
 
     pub fn stageEntry(self: *const Host) !*const scene_mod.StageEntry {
-        return scene_mod.findStage(self.scenes.value, try self.stage()) orelse error.UnknownStage;
+        return population_host.stageEntry(self);
     }
 
-    /// The HQ recruitment window bound to one constructed actor, if any.  The binding
-    /// is the source area file plus the entity index plus the identity byte --
-    /// a catalogue/portrait match alone is never a window.
-    fn windowForActor(self: *Host, entry: *const scene_mod.StageEntry, actor: scene_mod.ActorView) ?*const windows_mod.Window {
-        for (self.windows.asset().windows) |*window| {
-            if (!std.mem.eql(u8, window.area.source_file, entry.area.file)) continue;
-            if (window.area.entity_id != actor.source_character_id) continue;
-            if (window.area.room_entity != actor.entity_index) continue;
-            return window;
-        }
-        return null;
-    }
-
-    fn serviceActorFor(_: *Host, entry: *const scene_mod.StageEntry, actor: scene_mod.ActorView) ?scene_mod.ServiceActor {
-        for (entry.service_actors) |service| {
-            if (std.mem.eql(u8, service.id, actor.id)) return service;
-        }
-        return null;
-    }
-
-    /// Rebuild the current room's interaction list from the current facts.
     pub fn rebuild(self: *Host) !void {
-        self.interaction_count = 0;
-        self.cursor = 0;
-        self.blocker = null;
-        if (self.area) |area_id| {
-            try self.rebuildArea(area_id);
-            return;
-        }
-        const entry = try self.stageEntry();
-        const built = try self.construction();
-        for (built.actors) |actor| {
-            if (actor.room != self.room) continue;
-            if (self.interaction_count == max_interactions) return error.TooManyInteractions;
-            if (self.windowForActor(entry, actor)) |window| {
-                self.push(.{
-                    .kind = .recruit,
-                    .id = actor.id,
-                    .room = actor.room,
-                    .entity_index = actor.entity_index,
-                    .identity = actor.source_character_id,
-                    .window = window.id,
-                });
-            } else if (self.serviceActorFor(entry, actor)) |service| {
-                self.push(.{
-                    .kind = .service_unbound,
-                    .id = actor.id,
-                    .room = actor.room,
-                    .entity_index = actor.entity_index,
-                    .identity = actor.source_character_id,
-                    .blocker = service.binding_status,
-                });
-            } else {
-                self.push(.{
-                    .kind = .inspect,
-                    .id = actor.id,
-                    .room = actor.room,
-                    .entity_index = actor.entity_index,
-                    .identity = actor.source_character_id,
-                });
-            }
-        }
-        // The tablet's field object is not yet bound; the host exposes it
-        // as a declared entry only, in the landing room.
-        if (self.room == entry.landing.room and self.interaction_count < max_interactions) {
-            self.push(.{ .kind = .tablet, .id = "stars_of_destiny_tablet", .room = self.room, .declared = true, .blocker = "tablet_entry_unbound" });
-        }
-    }
-
-    fn rebuildArea(self: *Host, area_id: []const u8) !void {
-        for (self.services.value.callers) |*caller| {
-            if (!std.mem.eql(u8, caller.area, area_id)) continue;
-            if (self.interaction_count == max_interactions) return error.TooManyInteractions;
-            self.push(.{ .kind = .service_caller, .id = caller.id, .room = caller.room, .entity_index = caller.entity });
-        }
-    }
-
-    fn push(self: *Host, interaction: Interaction) void {
-        self.interactions[self.interaction_count] = interaction;
-        self.interaction_count += 1;
+        return population_host.rebuild(self);
     }
 
     pub fn interactionList(self: *const Host) []const Interaction {
@@ -518,10 +429,10 @@ pub const Host = struct {
         switch (self.screen) {
             .field => try self.stepField(intent),
             .party => try self.stepParty(intent),
-            .service => try self.stepService(intent),
-            .tablet => try self.stepTablet(intent),
-            .mode => try self.stepMode(intent),
-            .recruit => try self.stepRecruit(intent),
+            .service => try services_host.stepService(self, intent),
+            .tablet => try services_host.stepTablet(self, intent),
+            .mode => try mode_host.stepMode(self, intent),
+            .recruit => try recruit_host.stepRecruit(self, intent),
         }
     }
 
@@ -562,49 +473,11 @@ pub const Host = struct {
         self.cursor = 0;
     }
 
-    // -- recruit ------------------------------------------------------------
-
-    /// The HQ recruitment window facts for the current canonical state.  Every fact comes
-    /// from a real owner; a fact the port cannot express (item identity) is
-    /// left empty so a window that needs it blocks instead of defaulting true.
-    pub fn recruitFacts(self: *Host, interaction: bool) windows_mod.Facts {
-        @memset(&self.party_bitmap, 0);
-        const identities = self.partyIdentities();
-        var party_count: u8 = 0;
-        for (identities) |id| if (id != 0) {
-            self.party_bitmap[id] = 1;
-            party_count += 1;
-        };
-        const by_identity = self.levels();
-        @memcpy(&self.level_buffer, by_identity[0..identity_slots]);
-        return .{
-            .entity_available = true,
-            .interaction = interaction,
-            .scenario = if (self.field_state.progress.story.scenario) |*scenario| &scenario.scenario else null,
-            .recruit = &self.recruit,
-            .party = &self.party_bitmap,
-            .money = self.field_state.progress.money,
-            .levels = &self.level_buffer,
-            .tier = self.stageByte(),
-            .eligible = self.counts().present,
-            .party_count = party_count,
-            .hero_x = @intCast(@divTrunc(self.field_state.x, 8)),
-            .hero_y = @intCast(@divTrunc(self.field_state.y, 8)),
-            .input_mask = 0x41,
-            .mode_word = 0,
-            .random = 0,
-        };
-    }
-
-    fn evaluateWindow(self: *Host, window: *const windows_mod.Window, interaction: bool) windows_mod.Outcome {
-        return windows_mod.evaluate(window, self.recruitFacts(interaction));
-    }
-
     fn confirmInteraction(self: *Host) !void {
         const interaction = self.currentInteraction() orelse return error.NoInteraction;
         switch (interaction.kind) {
-            .recruit => try self.openRecruit(interaction),
-            .service_caller => try self.openService(interaction),
+            .recruit => try recruit_host.openRecruit(self, interaction),
+            .service_caller => try services_host.openService(self, interaction),
             .service_unbound => {
                 self.blocker = .{ .code = interaction.blocker orelse "service_family_unproved", .detail = "the headquarters service actor has no bound service family", .interaction = interaction.id };
                 return error.ServiceFamilyUnproved;
@@ -619,228 +492,24 @@ pub const Host = struct {
         }
     }
 
-    fn openRecruit(self: *Host, interaction: Interaction) !void {
-        const window = windows_mod.windowById(self.windows.asset(), interaction.window orelse return error.UnknownWindow) orelse return error.UnknownWindow;
-        const outcome = self.evaluateWindow(window, true);
-        switch (outcome.route) {
-            .admitted => {
-                self.screen = .recruit;
-                self.message = window.id;
-            },
-            else => {
-                self.blocker = .{
-                    .code = @tagName(outcome.blocker.?.code),
-                    .detail = outcome.blocker.?.detail,
-                    .interaction = interaction.id,
-                };
-                return error.RecruitWindowClosed;
-            },
-        }
+    // -- recruit ------------------------------------------------------------
+
+    pub fn recruitFacts(self: *Host, interaction: bool) windows_mod.Facts {
+        return recruit_host.recruitFacts(self, interaction);
     }
 
-    fn stepRecruit(self: *Host, intent: Intent) !void {
-        switch (intent) {
-            .cancel => {
-                self.screen = .field;
-                self.message = "recruit_declined";
-                try self.rebuild();
-            },
-            .confirm => {
-                const interaction = self.currentInteraction() orelse return error.NoInteraction;
-                const window = windows_mod.windowById(self.windows.asset(), interaction.window orelse return error.UnknownWindow) orelse return error.UnknownWindow;
-                // A window without a source menu grants on its admitted entry
-                // conjunction; only a real menu goes through `choose`, which
-                // keeps an unproved second arm on the typed second route.
-                const outcome = if (window.choice == null)
-                    windows_mod.evaluate(window, self.recruitFacts(true))
-                else
-                    windows_mod.choose(window, 0, self.recruitFacts(true));
-                if (outcome.route != .admitted) {
-                    self.blocker = .{ .code = @tagName(outcome.blocker.?.code), .detail = outcome.blocker.?.detail, .interaction = interaction.id };
-                    return error.RecruitRefused;
-                }
-                const plan = outcome.plan orelse return error.MissingRecruitPlan;
-                // Only the reviewed roster recruitment invocation is applied.
-                if (!std.mem.eql(u8, plan.op_id, windows_mod.grant_op_id) or plan.op_code != windows_mod.grant_op_code) return error.UnsupportedRecruitPlan;
-                try self.commitRecruit(plan.cid, window.id);
-            },
-            .up, .down, .left, .right => {},
-        }
-    }
-
-    /// Apply one admitted source grant: roster mutation, recruit byte, the
-    /// Recount/promote pair, then a fresh population rebuild.
-    fn commitRecruit(self: *Host, cid: u8, source_text: []const u8) !void {
-        if (cid >= flag_slots) return error.InvalidRecruitSlot;
-        if (self.recruit[cid] & 1 != 0) return error.AlreadyRecruited;
-        const identity = self.identityForRecord(cid) catch |err| {
-            self.blocker = .{ .code = @errorName(err), .detail = "no roster identity for this source record id" };
-            return err;
-        };
-        self.roster.setRecruit(self.roster_packet.value, identity, true, source_text) catch |err| {
-            // A combatant with no member record cannot be given fabricated
-            // stats; the missing character seed is a typed blocker.
-            if (err == error.RecordUnavailable) {
-                self.blocker = .{ .code = "combat_member_seed_unresolved", .detail = "the roster carries no member record for this combatant" };
-            }
-            return err;
-        };
-        self.recruit[cid] |= 1;
-        try self.promoteAfterRecount();
-        self.screen = .field;
-        self.message = "recruited";
-        try self.rebuild();
-    }
-
-    /// Re-run the source recount/promotion on the current facts (the
-    /// save/load and recruit-flag path).  Exactly one step is applied.
     pub fn recountStage(self: *Host) !stage_mod.Plan {
-        const current = try self.stage();
-        const plan = try stage_mod.afterRecount(current, self.counts(), self.storyCastleFlag());
-        self.field_state.progress.story.recruitment_tier = plan.stage.byte();
-        try self.rebuild();
-        return plan;
+        return recruit_host.recountStage(self);
     }
 
-    /// The one source promotion step (`0x801395FC`).  The stage byte is the
-    /// produced value; it is never hand-set.
-    fn promoteAfterRecount(self: *Host) !void {
-        const current = try self.stage();
-        const plan = try stage_mod.afterRecount(current, self.counts(), self.storyCastleFlag());
-        self.field_state.progress.story.recruitment_tier = plan.stage.byte();
-    }
-
-    // -- services -----------------------------------------------------------
+    // -- services & tablet --------------------------------------------------
 
     pub fn openService(self: *Host, interaction: Interaction) !void {
-        const caller = self.services.value.findCaller(interaction.id) orelse return error.UnknownServiceCaller;
-        // The three runtime facts are supplied by the interaction owner.  The
-        // per-caller story gate is not decoded in the packet, so the host
-        // records that as a blocker instead of pretending it was checked.
-        const supplied = self.service_access orelse return error.MissingServiceAccess;
-        const access: services_mod.Access = .{
-            .area = self.area,
-            .npc_present = supplied.npc_present,
-            .service_available = supplied.service_available,
-            .story_gate = if (caller.access.requires_story_gate) supplied.story_gate else null,
-            .rune_permitted = supplied.rune_permitted,
-        };
-        switch (services_mod.open(&self.services.value, caller.id, access, self.revision)) {
-            .blocked => |blocked| {
-                self.blocker = .{ .code = @tagName(blocked.reason), .detail = blocked.requirement orelse "", .interaction = caller.id };
-                return error.ServiceBlocked;
-            },
-            .opened => |host| {
-                self.service = host;
-                self.service_op_count = 0;
-                for (caller.services) |id| {
-                    if (self.service_op_count == max_service_ops) break;
-                    self.service_ops[self.service_op_count] = id;
-                    self.service_op_count += 1;
-                }
-                self.service_cursor = 0;
-                self.screen = .service;
-                self.message = caller.id;
-            },
-        }
+        return services_host.openService(self, interaction);
     }
 
-    fn stepService(self: *Host, intent: Intent) !void {
-        switch (intent) {
-            .up => if (self.service_cursor > 0) {
-                self.service_cursor -= 1;
-            },
-            .down => if (self.service_cursor + 1 < self.service_op_count) {
-                self.service_cursor += 1;
-            },
-            .cancel => {
-                if (self.service) |*host| _ = host.cancel();
-                self.service = null;
-                self.screen = .field;
-                self.message = "service_cancelled";
-                try self.rebuild();
-            },
-            .confirm => try self.executeService(),
-            .left, .right => {},
-        }
-    }
-
-    fn executeService(self: *Host) !void {
-        if (self.service == null) return error.NoService;
-        const host = &self.service.?;
-        const id = self.service_ops[self.service_cursor];
-        const engine = self.service_adapter.engine();
-        const outcome = switch (id) {
-            .shop_buy => blk: {
-                const caller = host.caller orelse return error.UnknownServiceCaller;
-                if (caller.stock.len == 0) break :blk services_mod.Outcome{ .failed = .{ .reason = .not_in_stock, .caller = caller.id } };
-                break :blk host.buy(&engine, 0, caller.stock[0].native_id);
-            },
-            .shop_sell => host.sell(&engine, 0, 0),
-            .warehouse_deposit => blk: {
-                // The interactive AZUKARI caller is unresolved: the overlay entry
-                // stays locked in production.
-                break :blk services_mod.Outcome{ .failed = .{ .reason = .non_canonical_overlay, .caller = "azukari_entry" } };
-            },
-            .warehouse_withdraw => services_mod.Outcome{ .failed = .{ .reason = .non_canonical_overlay, .caller = "azukari_entry" } },
-            .appraisal_appraise => host.appraise(&engine, 0, 0),
-            .blacksmith_sharpen => blk: {
-                const caller = host.caller orelse return error.UnknownServiceCaller;
-                const limit = caller.level_limit orelse
-                    break :blk services_mod.Outcome{ .failed = .{ .reason = .level_limit_invalid, .requirement = "blacksmith_level_limit_unresolved", .caller = caller.id } };
-                break :blk host.sharpen(&engine, 0, limit);
-            },
-            .rune_attach => host.attach(&engine, 0, 0, 0),
-            .rune_detach => host.detach(&engine, 0),
-        };
-        switch (outcome) {
-            .ok => |receipt| {
-                self.revision += 1;
-                self.message = "service_ok";
-                _ = receipt;
-            },
-            .failed => |blocked| {
-                self.blocker = .{ .code = @tagName(blocked.reason), .detail = blocked.requirement orelse "", .interaction = blocked.caller };
-                return error.ServiceRefused;
-            },
-        }
-    }
-
-    // -- tablet -------------------------------------------------------------
-
-    /// Journey owns the field callers. The standalone host opens declared entries.
     pub fn openTablet(self: *Host, entry: Entry) !void {
-        if (self.screen != .field) return error.WrongScreen;
-        if (entry == .canonical) return error.TabletEntryUnbound;
-        self.tablet = tablet_mod.View.init(self.recruit);
-        self.screen = .tablet;
-        self.message = "tablet_declared_entry";
-    }
-
-    fn stepTablet(self: *Host, intent: Intent) !void {
-        var view = &(self.tablet orelse return error.NoTablet);
-        const result = view.apply(switch (intent) {
-            .up => .up,
-            .down => .down,
-            .left => .left,
-            .right => .right,
-            .confirm => .confirm,
-            .cancel => .cancel,
-        });
-        switch (result) {
-            .closed => {
-                self.tablet = null;
-                self.screen = .field;
-                self.message = "tablet_closed";
-                try self.rebuild();
-            },
-            .revealed => |reveal| self.message = reveal.name,
-            .blocked => |reason| {
-                self.blocker = .{ .code = @tagName(reason), .detail = "tablet entry is not listed/active", .interaction = "stars_of_destiny_tablet" };
-                return error.TabletEntryBlocked;
-            },
-            .moved => {},
-        }
+        return services_host.openTablet(self, entry);
     }
 
     pub fn tabletView(self: *const Host) ?*const tablet_mod.View {
@@ -851,118 +520,15 @@ pub const Host = struct {
     // -- optional-game seam -------------------------------------------------
 
     pub fn admitMode(self: *Host, caller_site: u32) !void {
-        const driver = self.mode_driver orelse {
-            self.blocker = .{ .code = "optional_game_seam_unbound", .detail = "the optional-game driver needs the accepted contracts" };
-            return error.OptionalGameSeamUnbound;
-        };
-        if (self.screen != .field) return error.WrongScreen;
-        try driver.admit(driver.ctx, caller_site);
-        self.screen = .mode;
-        self.message = "optional_game_admitted";
+        return mode_host.admitMode(self, caller_site);
     }
 
-    fn stepMode(self: *Host, intent: Intent) !void {
-        const driver = self.mode_driver orelse return error.OptionalGameSeamUnbound;
-        switch (intent) {
-            .confirm => try driver.play(driver.ctx, .confirm),
-            .cancel => {
-                driver.finish(driver.ctx) catch |err| {
-                    self.blocker = .{ .code = @errorName(err), .detail = "a pending settlement must be committed before the field resumes" };
-                    return err;
-                };
-                self.screen = .field;
-                self.message = "optional_game_closed";
-                try self.rebuild();
-            },
-            .up, .down, .left, .right => try driver.play(driver.ctx, switch (intent) {
-                .up => .up,
-                .down => .down,
-                .left => .left,
-                .right => .right,
-                else => unreachable,
-            }),
-        }
-    }
-
-    /// Build the shared mode-result store for one optional-game transaction from the
-    /// canonical owners.  This is a projection, never a second stored host.
     pub fn modeProjection(self: *Host) results.Store {
-        var store: results.Store = .{};
-        store.revision = self.mode_facts.revision;
-        store.money = self.field_state.progress.money;
-        store.net = self.mode_facts.net;
-        store.status = self.mode_facts.status;
-        if (self.field_state.progress.story.scenario) |story| {
-            store.story = story.scenario;
-            store.story_bound = true;
-            @memcpy(&store.status, story.scenario[arcade_status_story_index..][0..store.status.len]);
-        }
-        store.retained = self.mode_facts.retained;
-        store.best = self.mode_facts.best;
-        store.draws_cursor = self.mode_facts.draws_cursor;
-        store.draws_bios = self.mode_facts.draws_bios;
-        store.receipts = self.mode_facts.receipts;
-        store.camera = .{
-            .x = self.field_state.x,
-            .y = self.field_state.y,
-            .facing = switch (self.field_state.facing) {
-                .up => .north,
-                .right => .east,
-                .down => .south,
-                .left => .west,
-            },
-            .place = .field,
-        };
-        // Party identity/HP/level facts only: an optional-game result cannot
-        // publish an item, and the bags stay with the field owner.
-        store.party.count = 0;
-        for (self.roster.snapshot.members) |maybe| if (maybe) |member| {
-            if (store.party.count == results.max_members) break;
-            const member_state = self.roster.stateOf(member.member.id) orelse continue;
-            if (member_state.presence != .active) continue;
-            var slot = results.Member{};
-            slot.id = results.Id.init(member.member.id) catch continue;
-            slot.hp = member.member.hp;
-            slot.max_hp = member.member.max_hp;
-            slot.status = switch (member.member.status) {
-                .healthy => .healthy,
-                .poisoned => .poisoned,
-                .unconscious => .unconscious,
-            };
-            slot.level = member.level;
-            slot.experience = member.experience;
-            slot.weapon_level = member.weapon_level;
-            store.party.members[store.party.count] = slot;
-            store.party.count += 1;
-        };
-        return store;
+        return mode_host.modeProjection(self);
     }
 
-    /// Publish one optional-game result through the shared transaction.  The
-    /// mode facts are written back only after the store is committed.
     pub fn publishMode(self: *Host, result: results.Result) !results.Outcome {
-        try self.result_host.begin(result);
-        const outcome = try self.result_host.commit();
-        const committed = self.result_host.store;
-        self.field_state.progress.money = committed.money;
-        if (committed.story_bound) {
-            if (self.field_state.progress.story.scenario) |*story| {
-                story.scenario = committed.story;
-                @memcpy(story.scenario[arcade_status_story_index..][0..committed.status.len], &committed.status);
-            }
-        }
-        self.mode_facts = .{
-            .net = committed.net,
-            .status = committed.status,
-            .retained = committed.retained,
-            .best = committed.best,
-            .draws_cursor = committed.draws_cursor,
-            .draws_bios = committed.draws_bios,
-            .receipts = committed.receipts,
-            .revision = committed.revision,
-        };
-        self.revision += 1;
-        return outcome;
+        return mode_host.publishMode(self, result);
     }
 
     pub fn modeFacts(self: *const Host) ModeFacts {
@@ -1003,131 +569,20 @@ pub const Host = struct {
 
     // -- durable sidecar ----------------------------------------------------
 
-    /// The caller owns `roster_json`; the world-session capture passes its own
-    /// arena so the sidecar never leaks into the session allocator.
     pub fn captureOwnerState(self: *Host, allocator: std.mem.Allocator) !owner_state.HqState {
-        const snapshot = try self.capture(allocator);
-        return .{
-            .content_sha256 = snapshot.content_sha256,
-            .recruit = snapshot.recruit,
-            .roster_json = snapshot.roster_json,
-            .tablet = if (snapshot.tablet) |tablet| .{
-                .magic = tablet.magic,
-                .layout = tablet.layout,
-                .reserved = tablet.reserved,
-                .tablet_sha256 = tablet.tablet_sha256,
-                .flags_sha256 = tablet.flags_sha256,
-                .cursor = tablet.cursor,
-                .revealed_entry = tablet.revealed_entry,
-                .up_counter = tablet.up_counter,
-                .down_counter = tablet.down_counter,
-                .up_armed = tablet.up_armed,
-                .down_armed = tablet.down_armed,
-                .revision = tablet.revision,
-                .scroll = tablet.scroll,
-                .scroll_target = tablet.scroll_target,
-                .checksum = tablet.checksum,
-            } else null,
-            .mode = .{
-                .net = snapshot.mode.net,
-                .status = snapshot.mode.status,
-                .retained = snapshot.mode.retained,
-                .best = snapshot.mode.best,
-                .draws_cursor = snapshot.mode.draws_cursor,
-                .draws_bios = snapshot.mode.draws_bios,
-                .receipts = snapshot.mode.receipts,
-                .revision = snapshot.mode.revision,
-            },
-            .screen = @fromBackingInt(@intCast(@backingInt(snapshot.screen))),
-            .room = snapshot.room,
-            .cursor = snapshot.cursor,
-            .revision = snapshot.revision,
-        };
+        return sidecar_host.captureOwnerState(self, allocator);
     }
 
     pub fn applyOwnerState(self: *Host, state: owner_state.HqState) !void {
-        const tablet: ?tablet_mod.Snapshot = if (state.tablet) |tablet| .{
-            .magic = tablet.magic,
-            .layout = tablet.layout,
-            .reserved = tablet.reserved,
-            .tablet_sha256 = tablet.tablet_sha256,
-            .flags_sha256 = tablet.flags_sha256,
-            .cursor = tablet.cursor,
-            .revealed_entry = tablet.revealed_entry,
-            .up_counter = tablet.up_counter,
-            .down_counter = tablet.down_counter,
-            .up_armed = tablet.up_armed,
-            .down_armed = tablet.down_armed,
-            .revision = tablet.revision,
-            .scroll = tablet.scroll,
-            .scroll_target = tablet.scroll_target,
-            .checksum = tablet.checksum,
-        } else null;
-        try self.restore(.{
-            .content_sha256 = state.content_sha256,
-            .recruit = state.recruit,
-            .roster_json = state.roster_json,
-            .tablet = tablet,
-            .mode = .{
-                .net = state.mode.net,
-                .status = state.mode.status,
-                .retained = state.mode.retained,
-                .best = state.mode.best,
-                .draws_cursor = state.mode.draws_cursor,
-                .draws_bios = state.mode.draws_bios,
-                .receipts = state.mode.receipts,
-                .revision = state.mode.revision,
-            },
-            .screen = @fromBackingInt(@intCast(@backingInt(state.screen))),
-            .room = state.room,
-            .cursor = state.cursor,
-            .revision = state.revision,
-        });
+        return sidecar_host.applyOwnerState(self, state);
     }
 
     pub fn capture(self: *Host, allocator: std.mem.Allocator) !Snapshot {
-        const roster_bytes = try self.roster.save(allocator);
-        return .{
-            .content_sha256 = &self.content_hex,
-            .recruit = self.recruit,
-            .roster_json = roster_bytes,
-            .tablet = if (self.tablet) |*view| view.snapshot() else null,
-            .mode = self.mode_facts,
-            .screen = self.screen,
-            .room = self.room,
-            .cursor = self.cursor,
-            .revision = self.revision,
-        };
+        return sidecar_host.capture(self, allocator);
     }
 
-    /// Restore a sidecar into this host.  Every component validates itself: a
-    /// different content identity, a different roster packet, a stale tablet
-    /// roster digest or a tampered recruit byte is a typed refusal, never a
-    /// silent reset to a default state.
     pub fn restore(self: *Host, snapshot: Snapshot) !void {
-        if (!std.mem.eql(u8, snapshot.schema, sidecar_schema)) return error.UnsupportedHqSidecar;
-        if (snapshot.version != sidecar_version) return error.UnsupportedHqSidecar;
-        if (!std.mem.eql(u8, snapshot.content_sha256, &self.content_hex)) return error.HqContentMismatch;
-        for (snapshot.recruit) |byte| if (byte & 0xFC != 0) return error.InvalidRecruitByte;
-        _ = self.restore_arena.reset(.retain_capacity);
-        var roster = try roster_mod.roster.Roster.restore(self.restore_arena.allocator(), self.roster_packet.value, snapshot.roster_json);
-        try roster.validate(self.roster_packet.value);
-        self.recruit = snapshot.recruit;
-        self.roster = roster;
-        self.mode_facts = snapshot.mode;
-        self.result_host = try results.Host.init(self.modeProjection(), self.content_sha);
-        self.revision = snapshot.revision;
-        self.room = snapshot.room;
-        self.screen = snapshot.screen;
-        self.tablet = null;
-        if (snapshot.tablet) |stored| {
-            self.tablet = try tablet_mod.View.restore(stored, self.recruit);
-        } else if (snapshot.screen == .tablet) return error.InvalidHqSidecar;
-        try self.validateInitial();
-        try self.rebuild();
-        if (self.cursor != snapshot.cursor) {
-            if (snapshot.cursor < self.interaction_count) self.cursor = snapshot.cursor;
-        }
+        return sidecar_host.restore(self, snapshot);
     }
 
     // -- diagnostics --------------------------------------------------------
@@ -1154,4 +609,9 @@ test {
     _ = tablet_mod;
     _ = service_engines;
     _ = results;
+    _ = population_host;
+    _ = recruit_host;
+    _ = services_host;
+    _ = mode_host;
+    _ = sidecar_host;
 }
