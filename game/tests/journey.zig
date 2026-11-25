@@ -3996,3 +3996,35 @@ test "overload replacement stages compact bags and unequips only the selected wo
     state.combat.progress.party[0].inventory.slots[1] = .{ .id = .failure_urn, .uses = 0, .identified = false };
     try std.testing.expect(try journey.overload.canDrop(&state, 0, 1));
 }
+
+test "journey modalOwner follows strict modal and traversal priority" {
+    const fixtures = try Fixtures.init();
+    defer fixtures.deinit();
+    var members: [6]battle.Member = undefined;
+    var state = try fixtures.session(&members);
+
+    try expect(state.modalOwner(.{}) == .world_or_event);
+
+    state.menu.phase = .root;
+    try expect(state.modalOwner(.{}) == .field_menu);
+
+    state.dice_game = @as(journey.dice.Active, undefined);
+    try expect(state.modalOwner(.{}) == .dice_or_party_selection);
+
+    state.boat_travel = @as(journey.travel.Boat, undefined);
+    state.menu.phase = .closed;
+    try expect(state.modalOwner(.{}) == .boat_travel);
+    try expect(state.modalOwner(.{ .menu = true }) == .dice_or_party_selection);
+
+    state.auto_travel = @as(journey.travel.Active, undefined);
+    try expect(state.modalOwner(.{}) == .auto_travel);
+
+    state.item_overload = @as(journey.overload.Active, undefined);
+    try expect(state.modalOwner(.{}) == .item_overload);
+
+    state.side_game = @as(journey.side_games.Active, undefined);
+    try expect(state.modalOwner(.{}) == .side_game);
+
+    state.teleport_session = @as(journey.travel.teleport.Session, undefined);
+    try expect(state.modalOwner(.{}) == .teleport);
+}
