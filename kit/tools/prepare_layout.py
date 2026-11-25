@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Recreate ignored legacy paths from the durable-data migration map.
+"""Prepare local workspace directories and expose the disc catalogs.
 
 Run after checkout (make prepare). Existing regular files are local outputs and
 are preserved; conflicting symlinks fail rather than redirecting a writer.
 """
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
@@ -32,16 +31,16 @@ def prepare(root: Path = ROOT) -> None:
     for name in ("cache/extracted", "build", "accepted", "scratch"):
         (root / "kit/work" / name).mkdir(parents=True, exist_ok=True)
     for old, new in (
-        ("goals", "archive/goals"),
         ("kit/extracted", "kit/work/cache/extracted"),
         ("kit/work/assets_zig", "kit/work/accepted"),
     ):
         link(root, old, new)
-    mapping = json.loads((root / "kit/data/legacy_paths.json").read_text())
-    for old, new in mapping.items():
-        link(root, old, new)
+    for name in ("iso_files.json", "overlay_lba_table.json"):
+        link(root, f"kit/extracted/{name}", f"kit/data/catalogs/extracted/{name}")
+    if (root / "archive/goals").is_dir():
+        link(root, "goals", "archive/goals")
 
 
 if __name__ == "__main__":
     prepare()
-    print("Legacy paths ready; canonical knowledge lives in kit/data")
+    print("Workspace directories and disc catalogs are ready")

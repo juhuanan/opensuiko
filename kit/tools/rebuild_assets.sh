@@ -49,7 +49,7 @@ if [ -n "${DISC_IMAGE:-}" ]; then
 fi
 
 # Build outputs live under work/build; BUILD_ROOT redirects them for comparison.
-# prepare_layout also restores ignored aliases for historical input paths.
+# prepare_layout exposes the disc catalogs and local output directories.
 if [ -n "${BUILD_ROOT:-}" ]; then
     SRC_ROOT="$BUILD_ROOT/src"
     OUT_SPRITES="$BUILD_ROOT/dump_sprites"
