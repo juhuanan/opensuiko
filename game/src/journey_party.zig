@@ -98,11 +98,9 @@ pub fn begin(state: anytype) !void {
 
 fn resumeSelection(state: anytype, receipt: events.Receipt) !void {
     const owner = state.field_event.?;
-    var next_field = state.field_state;
-    next_field.progress = state.combat.progress;
+    var next_field = state.stageField();
     try owner.session.resumePartySelect(owner.binding.*, &next_field, receipt);
-    state.field_state = next_field;
-    state.combat.progress = next_field.progress;
+    state.commitFieldTransaction(next_field);
     state.party_selection = null;
 }
 
@@ -164,8 +162,8 @@ fn commit(state: anytype, active: *Active) !void {
     rooms.active_binding.party = rooms.party[0..count];
     if (story.castle_tier != state.combat.progress.story.scenario.?.castle_tier)
         state.combat.progress.story.recruitment_tier = story.castle_tier;
-    state.combat.progress.story.scenario = story;
-    state.field_state.progress = state.combat.progress;
+    state.setScenarioStory(story);
+    state.syncProgressToField();
     active.menu = next_menu;
 }
 

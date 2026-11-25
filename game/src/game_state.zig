@@ -77,6 +77,14 @@ pub const Progress = struct {
     party: []Member,
     story: Story = .initial,
 
+    pub fn equal(self: Progress, other: Progress) bool {
+        return self.money == other.money and
+            self.party.ptr == other.party.ptr and
+            self.party.len == other.party.len and
+            std.meta.eql(self.storage, other.storage) and
+            std.meta.eql(self.story, other.story);
+    }
+
     pub fn validate(self: Progress) !void {
         if (self.story.scenario) |story| if (!std.mem.eql(u8, story.schema, "suikoden-event-story/1")) return error.UnsupportedEventStorySchema;
         if (self.story.scenario) |story| if (story.soul_eater_spell_slots < 1 or story.soul_eater_spell_slots > 4) return error.InvalidSoulEaterProgress;

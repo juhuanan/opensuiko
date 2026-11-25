@@ -265,8 +265,7 @@ pub fn finish(state: anytype) !void {
     }
     try next_host.finish();
     var next_event = owner.session.*;
-    var next_field = state.field_state;
-    next_field.progress = state.combat.progress;
+    var next_field = state.stageField();
     next_field.progress.money = next_host.wallet.money;
     if (usesModel(state)) next_field.music = .area_b;
     if (next_host.wallet.dice_flags.fixed_won) next_field.progress.story.scenario.?.scenario[12] |= 1;
@@ -275,8 +274,7 @@ pub fn finish(state: anytype) !void {
     const random = next_host.draws.prng orelse return error.InvalidRandomSource;
     try next_event.resumeFixedDice(owner.binding.*, &next_field, active.receipt);
     owner.session.* = next_event;
-    state.field_state = next_field;
-    state.combat.progress = next_field.progress;
+    state.commitFieldTransaction(next_field);
     state.combat.random = random;
     host.* = next_host;
     state.dice_game = null;

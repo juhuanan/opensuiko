@@ -31,6 +31,7 @@ const dispatch = @import("journey/dispatch.zig");
 const events_host = @import("journey/events_host.zig");
 const exploration = @import("journey/exploration.zig");
 const modes = @import("journey/modes.zig");
+const progress_owner = @import("journey/progress.zig");
 
 pub const Trigger = struct { id: []const u8, room: []const u8, x: i32, y: i32, w: i32, h: i32, encounter: []const u8, flag: Flag };
 pub const Treasure = struct { npc: []const u8, room: []const u8, item: field.items.Id, uses: u16, flag: Flag };
@@ -231,9 +232,56 @@ pub const State = struct {
         if (package.roomIndex(inn.room) != null) try world.configureInn(package, inn);
         world.item_rules = rules;
         members[0] = starting_party[0];
-        combat.progress.party = members[0..1];
-        world.progress = combat.progress;
+        progress_owner.bindInitialParty(&combat.progress, &world.progress, members[0..1]);
         return .{ .package = package, .data = data, .field_state = world, .combat = combat, .route = initialRoute(package), .party_backing = members, .field_encounter_clock = battle_flow.initialFieldEncounterClock(data.field_encounters, world.progress.story.scenario) };
+    }
+
+    pub fn progress(self: *const State) *const field.game_state.Progress {
+        return progress_owner.current(self);
+    }
+
+    pub fn progressInSync(self: *const State) bool {
+        return progress_owner.inSync(self);
+    }
+
+    pub fn syncProgressToField(self: *State) void {
+        progress_owner.publishToField(self);
+    }
+
+    pub fn syncProgressFromField(self: *State) void {
+        progress_owner.commitFromField(self);
+    }
+
+    pub fn commitProgress(self: *State, next: field.game_state.Progress) void {
+        progress_owner.commitProgress(self, next);
+    }
+
+    pub fn stageField(self: *const State) field.State {
+        return progress_owner.stageField(self);
+    }
+
+    pub fn commitFieldTransaction(self: *State, next_field: field.State) void {
+        progress_owner.commitFieldTransaction(self, next_field);
+    }
+
+    pub fn setScenarioStory(self: *State, story: field.game_state.event_runtime.StoryState) void {
+        progress_owner.setScenarioStory(self, story);
+    }
+
+    pub fn completeStoryFlag(self: *State, flag: Flag) void {
+        progress_owner.completeStoryFlag(self, flag);
+    }
+
+    pub fn commitStoryFromField(self: *State) void {
+        progress_owner.commitStoryFromField(self);
+    }
+
+    pub fn recordPahnDuel(self: *State, outcome: u8) void {
+        progress_owner.recordPahnDuel(self, outcome);
+    }
+
+    pub fn replacePartySlice(self: *State, members: []battle.Member) void {
+        progress_owner.replacePartySlice(self, members);
     }
 
     pub fn modalOwner(self: *const State, input: pause.Input) ModalOwner {
@@ -296,9 +344,9 @@ pub const State = struct {
         if (data.recruitment) |definition| try definition.validate(state.combat);
         // Publish owned storage only after the entire checkpoint validates and references rebind.
         @memcpy(members[0..snapshot.party_count], owned[0..snapshot.party_count]);
-        state.combat.progress.party = members[0..snapshot.party_count];
+        state.replacePartySlice(members[0..snapshot.party_count]);
         state.party_backing = members;
-        state.field_state.progress = state.combat.progress;
+        state.syncProgressToField();
         state.menu.combat = null;
         state.world_battle_enabled = true;
         state.updateOpeningPartyMilestone();
@@ -332,8 +380,7 @@ pub const State = struct {
         const owned = try recruitment.prepare(definition, self.combat, draws[0..count]);
         try self.retainReserve(owned);
         self.combat.random = random;
-        self.combat.progress.story.complete(.maas_recruited);
-        self.field_state.progress = self.combat.progress;
+        self.completeStoryFlag(.maas_recruited);
     }
 
     pub fn containsLegacyTrigger(self: *const State, trigger: Trigger) bool {
@@ -504,7 +551,7 @@ pub const State = struct {
         if (self.pendingFieldMusic() != music) return error.InvalidFieldMusicReceipt;
         const owner = self.field_event orelse return error.MissingFieldMusicOwner;
         try owner.session.resumeFieldMusic(owner.binding.*, &self.field_state, music);
-        self.combat.progress = self.field_state.progress;
+        self.syncProgressFromField();
     }
 
     pub fn validateScenePartyChanges(self: *const State) !void {

@@ -61,7 +61,7 @@ fn tickTeleport(state: *journey.State, input: pause.Input) !void {
         .cancelled => state.teleport_session = null,
         .confirmed => |proposal| {
             try journey.travel.commitTeleport(&session, state.package, &state.field_state, proposal);
-            state.combat.progress = state.field_state.progress;
+            state.syncProgressFromField();
             state.teleport_session = null;
             try exploration.onRoomChange(state, false);
         },

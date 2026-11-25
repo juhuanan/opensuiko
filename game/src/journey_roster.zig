@@ -53,7 +53,7 @@ pub fn swapReserve(state: anytype, member_id: []const u8, reserve_id: []const u8
             state.combat.weapon_augments[active_index] = party_session.weaponAugment(state.extras[active_index]);
             entry.* = leaving;
             state.reserve_extras[index] = leaving_extra;
-            state.field_state.progress = state.combat.progress;
+            state.syncProgressToField();
             return;
         };
         return error.UnknownReserve;
@@ -93,7 +93,7 @@ pub fn useWeaponPiece(state: anytype, owner: usize, slot: usize, target: usize, 
     state.combat.progress.party[owner].inventory = session.current.members[owner].?.member.inventory;
     state.extras[target] = session.current.extras[target].?;
     state.combat.weapon_augments[target] = party_session.weaponAugment(state.extras[target]);
-    state.field_state.progress = state.combat.progress;
+    state.syncProgressToField();
 }
 
 pub const Growth = struct {
@@ -155,7 +155,7 @@ pub fn commitGrowth(state: anytype, growth: Growth) void {
         state.reserve_extras[growth.reserve.?] = growth.extra;
     }
     state.combat.random = growth.random;
-    state.field_state.progress = state.combat.progress;
+    state.syncProgressToField();
 }
 
 pub const PartyJoin = struct { member: party_session.catalogue.Materialized, reserve: ?usize = null };
@@ -179,7 +179,7 @@ pub fn commitPartyJoin(state: anytype, backing: []battle.Member, join: PartyJoin
     @memcpy(backing[0..count], active[0..count]);
     backing[count] = materialized.owned.member;
     state.party_backing = backing;
-    state.combat.progress.party = backing[0 .. count + 1];
+    state.replacePartySlice(backing[0 .. count + 1]);
     state.combat.setOwnedMember(count, materialized.owned);
     std.mem.swap(u8, &state.combat.formation[count], &state.combat.formation[state.combat.formationSlot(count)]);
     state.extras[count] = materialized.extra;
@@ -191,7 +191,7 @@ pub fn commitPartyJoin(state: anytype, backing: []battle.Member, join: PartyJoin
         state.reserves[last] = null;
         state.reserve_extras[last] = null;
     }
-    state.field_state.progress = state.combat.progress;
+    state.syncProgressToField();
     state.updateOpeningPartyMilestone();
 }
 
@@ -260,8 +260,8 @@ pub fn commitPartyLeave(state: anytype, leave: PartyLeave) void {
         slot += 1;
     }
     combat.formation[last] = @intCast(last);
-    combat.progress.party = combat.progress.party[0..last];
-    state.field_state.progress = combat.progress;
+    state.replacePartySlice(combat.progress.party[0..last]);
+    state.syncProgressToField();
 }
 
 pub fn joinPartyMember(state: anytype, backing: []battle.Member, catalog: party_session.catalogue.Catalogue, bindings: ?party_session.catalogue.OwnershipBindings, id: []const u8) !void {

@@ -119,7 +119,7 @@ pub fn beginCombat(state: anytype, encounter: usize) !void {
         }
     }
     const old_progress = state.combat.progress;
-    state.combat.progress = state.field_state.progress;
+    state.syncProgressFromField();
     errdefer state.combat.progress = old_progress;
     state.checkpoint = try save.Snapshot.capture(state.*);
     startCombat(state, encounter);
@@ -179,7 +179,7 @@ pub fn returnFromBattle(state: anytype, won: bool) void {
     state.combat.asleep = @splat(0);
     state.combat.clearTemporaryStats();
     state.combat.unbalanced = @splat(0);
-    state.field_state.progress = state.combat.progress;
+    state.syncProgressToField();
     state.encounter_trigger = null;
     state.checkpoint = null;
     state.mode = .field;

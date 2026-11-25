@@ -88,8 +88,7 @@ pub fn tickDuel(state: *journey.State, up: bool, down: bool, confirm: bool) !voi
             if (state.scripted_battle) |*scripted| {
                 if (std.mem.eql(u8, scripted.request.id, "duel:pahn_teo")) {
                     const bit: u8 = if (won) 1 else 2;
-                    if (state.field_state.progress.story.scenario) |*story| roster.recordPahnDuel(story, bit);
-                    if (state.combat.progress.story.scenario) |*story| roster.recordPahnDuel(story, bit);
+                    state.recordPahnDuel(bit);
                 }
                 if (won or state.defeatContinuesScene() or !state.defeatEndsRun()) {
                     scripted.confirmed = if (!won and state.defeatContinuesScene()) .defeat else .victory;

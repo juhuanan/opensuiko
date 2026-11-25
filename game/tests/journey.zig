@@ -4028,3 +4028,60 @@ test "journey modalOwner follows strict modal and traversal priority" {
     state.teleport_session = @as(journey.travel.teleport.Session, undefined);
     try expect(state.modalOwner(.{}) == .teleport);
 }
+
+test "journey single-owner progress API keeps combat and field_state synchronized" {
+    const fixtures = try Fixtures.init();
+    defer fixtures.deinit();
+    var members: [6]battle.Member = undefined;
+    var state = try fixtures.session(&members);
+
+    try expect(state.progressInSync());
+    try equal(state.combat.progress.money, state.progress().money);
+
+    state.field_state.progress.money += 250;
+    try expect(!state.progressInSync());
+    state.syncProgressToField();
+    try expect(state.progressInSync());
+
+    state.field_state.progress.money += 100;
+    try expect(!state.progressInSync());
+    state.syncProgressFromField();
+    try expect(state.progressInSync());
+    try equal(state.combat.progress.money, state.progress().money);
+
+    state.completeStoryFlag(.forest_entered);
+    try expect(state.progressInSync());
+    try expect(state.field_state.progress.story.has(.forest_entered));
+
+    var story: field.game_state.event_runtime.StoryState = .{};
+    story.scenario[10] = 0x55;
+    state.setScenarioStory(story);
+    try expect(state.progressInSync());
+    try equal(@as(u8, 0x55), state.field_state.progress.story.scenario.?.scenario[10]);
+
+    var staged = state.stageField();
+    staged.progress.money += 75;
+    staged.progress.story.complete(.forest_returned);
+    state.commitFieldTransaction(staged);
+    try expect(state.progressInSync());
+    try expect(state.progress().story.has(.forest_returned));
+    try equal(staged.progress.money, state.progress().money);
+
+    state.field_state.progress.story.complete(.vaa_dungeon_rumor);
+    try expect(!state.progressInSync());
+    state.commitStoryFromField();
+    try expect(state.progressInSync());
+    try expect(state.progress().story.has(.vaa_dungeon_rumor));
+
+    state.recordPahnDuel(2);
+    try expect(state.progressInSync());
+    try equal(@as(u8, 2), state.progress().story.scenario.?.scenario[34] & 2);
+
+    const prior_slice = state.progress().party;
+    state.replacePartySlice(prior_slice[0..1]);
+    try expect(state.progressInSync());
+    try equal(@as(usize, 1), state.progress().party.len);
+    state.replacePartySlice(prior_slice);
+    try expect(state.progressInSync());
+    try equal(prior_slice.len, state.progress().party.len);
+}

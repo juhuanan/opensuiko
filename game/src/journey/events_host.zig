@@ -72,8 +72,7 @@ pub fn initializeRoomVisit(state: *journey.State) !void {
     if (rooms.bindingFor(journey.roomId(state.package, world.room))) |binding| {
         var story = world.progress.story.scenario orelse rooms.initial_story;
         if (try rooms.initializeStory(try roomEventBinding(state, rooms, binding), world, &story)) {
-            world.progress.story.scenario = story;
-            state.combat.progress.story.scenario = story;
+            state.setScenarioStory(story);
             state.enterEncounterRoom();
         }
     }
@@ -149,12 +148,10 @@ pub fn resumeScriptedBattle(state: *journey.State, event: *field_events.Session,
         };
         if (state.mode != mode or !has_active) return error.ScriptedBattleNotReady;
         try checkScriptedBattleField(state, event, binding);
-        var next_field = state.field_state;
-        next_field.progress = state.combat.progress;
+        var next_field = state.stageField();
         try event.resumeBattle(binding, &next_field, active.request, result);
         modes.deinitActiveModes(state);
-        state.field_state.progress = next_field.progress;
-        state.combat.progress = next_field.progress;
+        state.commitProgress(next_field.progress);
         state.scripted_battle = null;
         state.mode = .field;
         return;
@@ -166,10 +163,9 @@ pub fn resumeScriptedBattle(state: *journey.State, event: *field_events.Session,
     };
     if (state.mode != (if (result == .defeat) journey.Mode.defeat else journey.Mode.battle) or state.combat.phase != phase) return error.ScriptedBattleNotReady;
     try checkScriptedBattleField(state, event, binding);
-    var next_field = state.field_state;
-    next_field.progress = state.combat.progress;
+    var next_field = state.stageField();
     try event.resumeBattle(binding, &next_field, active.request, result);
-    state.combat.progress = next_field.progress;
+    state.commitProgress(next_field.progress);
     if (result == .victory and active.opening) state.route.noteOpeningBattle(.victory_returned);
     state.scripted_battle = null;
     battle_flow.returnFromBattle(state, result == .victory);
@@ -182,8 +178,7 @@ pub noinline fn admitRoomEvent(state: *journey.State, input: field.Input, select
         world.remaining != 0 or world.dialogue != null or world.rest_ticks != 0) return false;
     const binding = rooms.bindingFor(state.package.rooms[world.room].id) orelse return false;
     if (world.progress.story.scenario == null) {
-        world.progress.story.scenario = rooms.initial_story;
-        state.combat.progress.story.scenario = rooms.initial_story;
+        state.setScenarioStory(rooms.initial_story);
     }
     rooms.active_binding = try roomEventBinding(state, rooms, binding);
     const construction = try rooms.constructActorsForVisit(rooms.active_binding, world.progress.story.scenario.?, world.room_entries);
@@ -351,7 +346,7 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
             try owner.session.acknowledgePartyEdit(binding, true, &story);
             for (0..count) |index| state.combat.setOwnedMember(index, next.ownedMember(index));
             state.combat.random = next.random;
-            state.field_state.progress = state.combat.progress;
+            state.syncProgressToField();
         } else if (effect.kind == .advance_character) {
             var advances = effect.level_advances.?;
             if (effect.add_hero_level == true) {
@@ -399,7 +394,7 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
                     reserve.?.member.inventory = inventory;
                 }
                 state.combat.progress.storage = storage;
-                state.field_state.progress = state.combat.progress;
+                state.syncProgressToField();
             } else try owner.session.acknowledgePartyEdit(binding, true, &story);
         } else if (effect.kind == .shared_inventory_edit) {
             const inventory = try prepareSharedInventory(state, effect.inventory.?);
@@ -438,8 +433,7 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
                 }
             }
         }
-        state.field_state.progress.story.scenario = story;
-        state.combat.progress.story.scenario = story;
+        state.setScenarioStory(story);
         return;
     }
     const change = (try owner.session.pendingPartyChange(binding)) orelse return error.FieldEventBlocked;
@@ -458,8 +452,8 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
         state.field_state.auxiliary_party = auxiliary;
         rooms.party = party_ids;
         rooms.active_binding.party = rooms.party[0..1];
-        state.combat.progress.story.scenario = story;
-        state.field_state.progress = state.combat.progress;
+        state.setScenarioStory(story);
+        state.syncProgressToField();
         return;
     }
     const id = change.character.?;
@@ -505,8 +499,8 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
     rooms.active_binding.party = rooms.party[0..count];
     if (story.castle_tier != state.combat.progress.story.scenario.?.castle_tier)
         state.combat.progress.story.recruitment_tier = story.castle_tier;
-    state.combat.progress.story.scenario = story;
-    state.field_state.progress = state.combat.progress;
+    state.setScenarioStory(story);
+    state.syncProgressToField();
 }
 
 pub fn tickActiveFieldEvent(state: *journey.State, owner: journey.ActiveFieldEvent, input: pause.Input, consumed_action: bool) !pause.Effect {
@@ -519,7 +513,7 @@ pub fn tickActiveFieldEvent(state: *journey.State, owner: journey.ActiveFieldEve
         var field_input = input.field;
         if (consumed_action) field_input.action = false;
         const result = try owner.session.tickField(binding, &state.field_state, field_input);
-        state.combat.progress = state.field_state.progress;
+        state.syncProgressFromField();
         if (owner.session.inn_payment_refused) {
             owner.session.inn_payment_refused = false;
             const message = if (state.field_state.inn_rules) |rules| rules.insufficient_funds else "Not enough bits to stay.";
@@ -535,7 +529,7 @@ pub fn tickActiveFieldEvent(state: *journey.State, owner: journey.ActiveFieldEve
                 if (wheel.startDraws() == 2) _ = random.random().int(u15);
                 try owner.session.acknowledgeWheelSpin(binding, &state.field_state, roll);
                 state.combat.random = random;
-                state.combat.progress = state.field_state.progress;
+                state.syncProgressFromField();
             } else try commitScenePartyEffect(state, owner);
         }
         if (old_entry == state.field_state.room_entries) {
@@ -603,7 +597,7 @@ pub fn tickActiveFieldEvent(state: *journey.State, owner: journey.ActiveFieldEve
             }
         }
         const effect = state.menu.tickWithArrival(state.package, &state.field_state, .{}, .immediate);
-        state.combat.progress = state.field_state.progress;
+        state.syncProgressFromField();
         return effect;
     }
     return .none;
