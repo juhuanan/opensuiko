@@ -55,15 +55,7 @@ pub const max_service_ops = 8;
 pub const flag_slots: usize = 108;
 pub const identity_slots: usize = 108;
 
-/// `gs+0x190` is the base of the 240-byte scenario array (`event_runtime`); the
-/// HQ window predicate contract indexes its story operands by absolute `gs`
-/// offset, so the host bridges the two spaces here instead of re-indexing a
-/// package asset. Every committed window byte is inside `0x190..0x280`.
-pub const story_page_base: u16 = 0x190;
-pub const story_page_bytes: usize = 0x300;
-/// `gs+0x19F & 0x02`, the HQ castle story gate, expressed in scenario
-/// coordinates.
-pub const story_castle_index: u8 = 0x19F - story_page_base;
+pub const story_castle_index: u8 = 15;
 pub const story_castle_mask: u8 = 0x02;
 const arcade_status_story_index: usize = 160;
 
@@ -185,7 +177,6 @@ pub const Host = struct {
     // Reused scratch storage for facts/population; a returned slice borrows it.
     room_buffer: [max_rooms]scene_mod.RoomView = undefined,
     actor_buffer: [max_actors]scene_mod.ActorView = undefined,
-    story_page_buffer: [story_page_bytes]u8 = @splat(0),
     party_bitmap: [identity_slots]u8 = @splat(0),
     level_buffer: [identity_slots]u8 = @splat(0),
 
@@ -297,21 +288,10 @@ pub const Host = struct {
         return stage_mod.recount(&self.recruit);
     }
 
-    /// `gs+0x19F & 0x02` read from the live scenario.
+    /// Return whether the HQ castle story flag is active on the live scenario.
     pub fn storyCastleFlag(self: *const Host) bool {
         const scenario = self.field_state.progress.story.scenario orelse return false;
         return scenario.scenario[story_castle_index] & story_castle_mask != 0;
-    }
-
-    /// The 240-byte scenario in absolute `gs` coordinates, for HQ recruitment windows.  The
-    /// returned slice borrows the host buffer and stays valid until the next
-    /// call.
-    pub fn storyPage(self: *Host) []const u8 {
-        @memset(&self.story_page_buffer, 0);
-        if (self.field_state.progress.story.scenario) |scenario| {
-            @memcpy(self.story_page_buffer[story_page_base .. story_page_base + scenario.scenario.len], &scenario.scenario);
-        }
-        return &self.story_page_buffer;
     }
 
     /// The source record id of a combat member (the `gs+0x1AF4` flag slot).
@@ -600,7 +580,7 @@ pub const Host = struct {
         return .{
             .entity_available = true,
             .interaction = interaction,
-            .story = self.storyPage(),
+            .scenario = if (self.field_state.progress.story.scenario) |*scenario| &scenario.scenario else null,
             .recruit = &self.recruit,
             .party = &self.party_bitmap,
             .money = self.field_state.progress.money,

@@ -1,6 +1,64 @@
 const std = @import("std");
 const camera = @import("battle_camera");
 
+const SourcePreset = struct { address: u32, block: camera.Block };
+const source_presets = [_]SourcePreset{
+    .{ .address = 0x8016B7DC, .block = .{ .focus = .{ 0, 0, 0 }, .angles = .{ -768, 0, 640 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016B848, .block = .{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .translation = .{ 80, 60, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016B878, .block = .{ .focus = .{ 0, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016C7E4, .block = .{ .focus = .{ 0, 0, 0 }, .angles = .{ -864, 0, 512 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 10000, 10000, 10000 } } },
+    .{ .address = 0x8016C9DC, .block = .{ .focus = .{ 0, 0, 0 }, .angles = .{ -832, 0, 512 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016CC1C, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5120, 5120, 5120 } } },
+    .{ .address = 0x8016D2A0, .block = .{ .focus = .{ 0, 0, 0 }, .angles = .{ -768, 0, 448 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016D3DC, .block = .{ .focus = .{ 80, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4864, 4864, 4864 } } },
+    .{ .address = 0x8016D4FC, .block = .{ .focus = .{ -80, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4864, 4864, 4864 } } },
+    .{ .address = 0x8016D52C, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5120, 5120, 5120 } } },
+    .{ .address = 0x8016D55C, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5120, 5120, 5120 } } },
+    .{ .address = 0x8016D58C, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016D5BC, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -704, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016D5EC, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -704, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016D6BC, .block = .{ .focus = .{ 80, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4864, 4864, 4864 } } },
+    .{ .address = 0x8016D71C, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5888, 5888, 5888 } } },
+    .{ .address = 0x8016D74C, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5888, 5888, 5888 } } },
+    .{ .address = 0x8016D77C, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016D7AC, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016D7DC, .block = .{ .focus = .{ -80, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4864, 4864, 4864 } } },
+    .{ .address = 0x8016D80C, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5120, 5120, 5120 } } },
+    .{ .address = 0x8016D97C, .block = .{ .focus = .{ 80, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4864, 4864, 4864 } } },
+    .{ .address = 0x8016DA3C, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016DA6C, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016DACC, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5120, 5120, 5120 } } },
+    .{ .address = 0x8016DC5C, .block = .{ .focus = .{ 80, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4864, 4864, 4864 } } },
+    .{ .address = 0x8016DC8C, .block = .{ .focus = .{ 0, 0, 0 }, .angles = .{ -768, 0, 640 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016DCBC, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5888, 5888, 5888 } } },
+    .{ .address = 0x8016DD7C, .block = .{ .focus = .{ -80, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4864, 4864, 4864 } } },
+    .{ .address = 0x8016DDAC, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5120, 5120, 5120 } } },
+    .{ .address = 0x8016DF80, .block = .{ .focus = .{ 80, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4864, 4864, 4864 } } },
+    .{ .address = 0x8016E0D0, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5120, 5120, 5120 } } },
+    .{ .address = 0x8016E160, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -704, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016E190, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -704, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016E260, .block = .{ .focus = .{ 80, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4864, 4864, 4864 } } },
+    .{ .address = 0x8016E2C0, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5888, 5888, 5888 } } },
+    .{ .address = 0x8016E2F0, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5888, 5888, 5888 } } },
+    .{ .address = 0x8016E320, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016E350, .block = .{ .focus = .{ 112, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016E410, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016E440, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -704, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016E5D0, .block = .{ .focus = .{ 80, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4864, 4864, 4864 } } },
+    .{ .address = 0x8016E810, .block = .{ .focus = .{ 0, 0, 0 }, .angles = .{ -864, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016E840, .block = .{ .focus = .{ -128, 0, 0 }, .angles = .{ -736, 0, 128 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 2304, 2304, 2304 } } },
+    .{ .address = 0x8016E870, .block = .{ .focus = .{ -128, 0, 0 }, .angles = .{ -320, 0, 128 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 2304, 2304, 2304 } } },
+    .{ .address = 0x8016E950, .block = .{ .focus = .{ 0, 0, 0 }, .angles = .{ -768, 0, 640 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 3840, 3840, 3840 } } },
+    .{ .address = 0x8016EA70, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -768, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 5120, 5120, 5120 } } },
+    .{ .address = 0x8016EB00, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -704, 0, 352 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+    .{ .address = 0x8016EB30, .block = .{ .focus = .{ -160, 0, 0 }, .angles = .{ -704, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },
+};
+
+fn sourcePreset(address: u32) ?camera.Block {
+    for (source_presets) |entry| if (entry.address == address) return entry.block;
+    return null;
+}
+
 test "source state-1 camera reproduces the documented party projection" {
     const positions = [_][3]i32{
         .{ 120, 50, 0 }, .{ 112, 0, 0 },   .{ 120, -50, 0 },
@@ -74,50 +132,58 @@ test "camera channels integrate their source delta and duration" {
 }
 
 test "camera channels map to the block fields used by the scripts" {
-    // Tai Ho script 9: op 20 mode 2 changes channel C over 20 frames.
+    // Tai Ho script 9: op 20 mode 2 changes focus channel over 20 frames.
     var channels = camera.default_channels;
-    channels.c.moveTo(.{ 0, 0, 0 }, 20);
-    try std.testing.expectEqual(@as(i32, 0), channels.block().position[0]);
+    channels.focus.moveTo(.{ 0, 0, 0 }, 20);
+    try std.testing.expectEqual(@as(i32, 0), channels.block().focus[0]);
     try std.testing.expectEqual(@as(i32, -768), channels.block().angles[0]);
-    try std.testing.expectEqual(@as(i32, 1024), channels.block().c[2]);
-    try std.testing.expectEqual(@as(i32, 4096), channels.block().d[0]);
+    try std.testing.expectEqual(@as(i32, 1024), channels.block().translation[2]);
+    try std.testing.expectEqual(@as(i32, 4096), channels.block().scale[0]);
 
-    // Kirkis script 10: op 19 sets D to 3328 and op 17 restores the default angles.
-    channels.d.moveTo(.{ 3328 << 12, 3328 << 12, 3328 << 12 }, 20);
-    channels.a.moveTo(.{ -768 << 12, 0, 640 << 12 }, 20);
+    // Kirkis script 10: op 19 sets scale to 3328 and op 17 restores the default angles.
+    channels.scale.moveTo(.{ 3328 << 12, 3328 << 12, 3328 << 12 }, 20);
+    channels.angles.moveTo(.{ -768 << 12, 0, 640 << 12 }, 20);
     for (0..20) |_| channels.tick();
-    try std.testing.expectEqual(@as(i32, 3328), channels.block().d[0]);
+    try std.testing.expectEqual(@as(i32, 3328), channels.block().scale[0]);
     try std.testing.expectEqual(@as(i32, 640), channels.block().angles[2]);
 }
 
-test "all source camera presets are present" {
-    try std.testing.expectEqual(@as(usize, 49), camera.presets.len);
-    const resolver = camera.preset(0x8016D3DC).?;
-    try std.testing.expectEqual(@as(i32, 80), resolver.position[0]);
+test "all source camera presets match the semantic family and cast tables" {
+    try std.testing.expectEqual(@as(usize, 49), source_presets.len);
+    const resolver = sourcePreset(0x8016D3DC).?;
+    try std.testing.expectEqual(@as(i32, 80), resolver.focus[0]);
     try std.testing.expectEqual(@as(i32, -768), resolver.angles[0]);
-    try std.testing.expectEqual(@as(i32, 4864), resolver.d[0]);
+    try std.testing.expectEqual(@as(i32, 4864), resolver.scale[0]);
+
+    try std.testing.expectEqualDeep(sourcePreset(0x8016D3DC).?, camera.presetForFamily(.party_close));
+    try std.testing.expectEqualDeep(sourcePreset(0x8016D4FC).?, camera.presetForFamily(.enemy_close));
+    try std.testing.expectEqualDeep(sourcePreset(0x8016CC1C).?, camera.presetForFamily(.effect_close));
+    try std.testing.expectEqualDeep(sourcePreset(0x8016B7DC).?, camera.presetForFamily(.wide_default));
+    try std.testing.expectEqualDeep(sourcePreset(0x8016E2C0).?, camera.presetForFamily(.special_zoom));
+    try std.testing.expectEqualDeep(sourcePreset(0x8016E160).?, camera.presetForFamily(.enemy_wide));
+    try std.testing.expectEqualDeep(sourcePreset(0x8016D2A0).?, camera.presetForFamily(.other));
 }
 
 test "character camera scripts drive the channels" {
     var tai = camera.default_channels;
     camera.applyOp(&tai, 20, &.{ 2, 20, 0, 0, 0 }, .{ 120 << 12, 50 << 12, 0 });
     for (0..20) |_| tai.tick();
-    try std.testing.expectEqual(@as(i32, 120), tai.block().position[0]);
-    try std.testing.expectEqual(@as(i32, 50), tai.block().position[1]);
+    try std.testing.expectEqual(@as(i32, 120), tai.block().focus[0]);
+    try std.testing.expectEqual(@as(i32, 50), tai.block().focus[1]);
 
     var kirkis = camera.default_channels;
     camera.applyOp(&kirkis, 20, &.{ 0, 20, 0, 0, 0 }, .{ 0, 0, 0 });
     camera.applyOp(&kirkis, 19, &.{ 20, 3328, 3328, 3328 }, .{ 0, 0, 0 });
     camera.applyOp(&kirkis, 17, &.{ 20, -768, 0, 640 }, .{ 0, 0, 0 });
     for (0..20) |_| kirkis.tick();
-    try std.testing.expectEqual(@as(i32, 3328), kirkis.block().d[0]);
+    try std.testing.expectEqual(@as(i32, 3328), kirkis.block().scale[0]);
     try std.testing.expectEqual(@as(i32, 640), kirkis.block().angles[2]);
 }
 
 test "camera block families cover the source tables" {
-    try std.testing.expectEqual(camera.Family.party_close, camera.family(camera.preset(0x8016D3DC).?));
-    try std.testing.expectEqual(camera.Family.enemy_close, camera.family(camera.preset(0x8016D4FC).?));
-    try std.testing.expectEqual(camera.Family.effect_close, camera.family(camera.preset(0x8016CC1C).?));
+    try std.testing.expectEqual(camera.Family.party_close, camera.family(sourcePreset(0x8016D3DC).?));
+    try std.testing.expectEqual(camera.Family.enemy_close, camera.family(sourcePreset(0x8016D4FC).?));
+    try std.testing.expectEqual(camera.Family.effect_close, camera.family(sourcePreset(0x8016CC1C).?));
 }
 
 test "every family has a source preset" {
@@ -127,24 +193,27 @@ test "every family has a source preset" {
 
 test "known spells select their source final camera block" {
     const firestorm = camera.castPreset("Firestorm").?;
-    try std.testing.expectEqual(@as(i32, -160), firestorm.position[0]);
-    try std.testing.expectEqual(@as(i32, 5120), firestorm.d[0]);
+    try std.testing.expectEqualDeep(sourcePreset(0x8016D55C).?, firestorm);
+    try std.testing.expectEqual(@as(i32, -160), firestorm.focus[0]);
+    try std.testing.expectEqual(@as(i32, 5120), firestorm.scale[0]);
+    try std.testing.expectEqualDeep(sourcePreset(0x8016E870).?, camera.castPreset("Hell").?);
+    try std.testing.expectEqualDeep(sourcePreset(0x8016EB30).?, camera.castPreset("Judgment").?);
     try std.testing.expectEqual(@as(usize, 28), camera.cast_presets.len);
     try std.testing.expect(camera.castPreset("Unknown Spell") == null);
 }
 
 test "actor camera focus keeps Q12 remainders until the update after its timer ends" {
-    var initial = camera.state0;
-    initial.position = .{ 80, -3, 7 };
+    var initial = camera.intro_wide;
+    initial.focus = .{ 80, -3, 7 };
     var controller = try camera.ActorController.init(initial);
     const event = camera.ActorRequest{ .at = 61, .updates = 20, .channel = .focus, .binding = .target, .target_q12 = .{ 1, -3, 0 } };
     try controller.request(event, .{ -128 * 4096 + 13, 40 * 4096 - 5, 12345 });
-    try std.testing.expectEqualDeep(initial.position, controller.sample().position);
+    try std.testing.expectEqualDeep(initial.focus, controller.sample().focus);
     try std.testing.expectEqualDeep([3]i32{ -524274, 163832, 0 }, controller.target[0]);
     try std.testing.expectEqualDeep([3]i32{ -42597, 8806, -1433 }, controller.velocity[0]);
     controller.advance();
     try std.testing.expectEqualDeep([3]i32{ 285083, -3482, 27239 }, controller.current[0]);
-    try std.testing.expectEqualDeep([3]i32{ 69, -1, 6 }, controller.sample().position);
+    try std.testing.expectEqualDeep([3]i32{ 69, -1, 6 }, controller.sample().focus);
     for (1..20) |_| controller.advance();
     try std.testing.expectEqual(@as(u16, 0), controller.remaining[0]);
     try std.testing.expectEqualDeep([3]i32{ -524260, 163832, 12 }, controller.current[0]);
@@ -153,22 +222,22 @@ test "actor camera focus keeps Q12 remainders until the update after its timer e
 }
 
 test "same-update actor focus scale and angle requests keep independent camera channels" {
-    var controller = try camera.ActorController.init(camera.state1);
+    var controller = try camera.ActorController.init(camera.standard_battle);
     try controller.request(.{ .at = 1, .updates = 20, .channel = .focus, .binding = .absolute, .target_q12 = .{ 0, 0, 0 } }, .{ 0, 0, 0 });
     try controller.request(.{ .at = 1, .updates = 20, .channel = .scale, .binding = .absolute, .target_q12 = @splat(3328 * 4096) }, .{ 0, 0, 0 });
     try controller.request(.{ .at = 1, .updates = 20, .channel = .angles, .binding = .absolute, .target_q12 = .{ -768 * 4096, 0, 640 * 4096 } }, .{ 0, 0, 0 });
     for (0..20) |_| controller.advance();
     try std.testing.expectEqual(@as(i32, 639), controller.sample().angles[2]);
-    try std.testing.expectEqualDeep([3]i32{ 3328, 3328, 3328 }, controller.sample().d);
-    try std.testing.expectEqualDeep(camera.state1.c, controller.sample().c);
+    try std.testing.expectEqualDeep([3]i32{ 3328, 3328, 3328 }, controller.sample().scale);
+    try std.testing.expectEqualDeep(camera.standard_battle.translation, controller.sample().translation);
     controller.advance();
     try std.testing.expectEqualDeep([3]i32{ -768, 0, 640 }, controller.sample().angles);
-    try std.testing.expectEqualDeep([3]i32{ 0, 0, 0 }, controller.sample().position);
+    try std.testing.expectEqualDeep([3]i32{ 0, 0, 0 }, controller.sample().focus);
 }
 
 test "actor camera rejects invalid clocks bindings and units before changing its state" {
     const event = camera.ActorRequest{ .at = 1, .updates = 20, .channel = .focus, .binding = .absolute, .target_q12 = .{ 1, -3, 7 } };
-    var controller = try camera.ActorController.init(camera.state0);
+    var controller = try camera.ActorController.init(camera.intro_wide);
     const before = controller;
     var bad = event;
     bad.at = 0;
@@ -187,13 +256,13 @@ test "actor camera rejects invalid clocks bindings and units before changing its
 }
 
 test "Critical camera Q12 transition keeps fractional target focus and rejects unsafe input" {
-    var controller = try camera.ActorController.init(camera.state2);
+    var controller = try camera.ActorController.init(camera.settled_pan);
     const initial = controller.current;
-    const target = camera.Q12Block{ .position = .{ -128 * 4096 + 1024, -50 * 4096 - 512, -20 * 4096 }, .angles = .{ -864 * 4096, 0, 512 * 4096 }, .c = .{ 0, 0, 1024 * 4096 }, .d = @splat(10000 * 4096) };
+    const target = camera.Q12Block{ .focus = .{ -128 * 4096 + 1024, -50 * 4096 - 512, -20 * 4096 }, .angles = .{ -864 * 4096, 0, 512 * 4096 }, .translation = .{ 0, 0, 1024 * 4096 }, .scale = @splat(10000 * 4096) };
     try controller.requestQ12(target, 20);
     const before = controller;
     var bad = target;
-    bad.d[0] = std.math.maxInt(i32);
+    bad.scale[0] = std.math.maxInt(i32);
     try std.testing.expectError(error.InvalidActorCamera, controller.requestQ12(bad, 20));
     try std.testing.expectError(error.InvalidActorCamera, controller.requestQ12(target, 0));
     try std.testing.expectEqualDeep(before, controller);
@@ -204,7 +273,7 @@ test "Critical camera Q12 transition keeps fractional target focus and rejects u
             try std.testing.expectEqual(wanted, controller.current[channel][axis]);
         };
     }
-    try std.testing.expectEqualDeep(target.position, controller.current[0]);
+    try std.testing.expectEqualDeep(target.focus, controller.current[0]);
 }
 
 test "dice source model preserves integer projection and face depth keys" {

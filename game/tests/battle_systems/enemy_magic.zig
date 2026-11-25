@@ -388,10 +388,10 @@ test "Enemy magic normal AI and shared native frame use source C formation and a
         without_pulse.enemy_magic_pulse = null;
         var expected_camera = battle.layout.currentCamera(without_pulse);
         if (combat.enemy_magic_pulse) |pulse| if (combat.camera_ticks -% pulse.issued_at == 1) {
-            expected_camera.position[2] += 5;
+            expected_camera.focus[2] += 5;
         };
         try std.testing.expectEqualDeep(expected_camera, block);
-        const scene_scale = @divTrunc(block.d[0] << 10, block.c[2]);
+        const scene_scale = @divTrunc(block.scale[0] << 10, block.translation[2]);
         for (graphics.values[0..graphics.count], frame.commands[0..frame.count]) |graphic, command| {
             try std.testing.expectEqual(@as(?u16, graphic.entry), command.texture);
             const entry = scenes.value.entries[graphic.entry];

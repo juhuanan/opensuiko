@@ -71,9 +71,9 @@ test "Fisherman action camera inherits the selected round block for either owner
         } else return error.MissingUniteImpact;
 
         const camera = battle.layout.currentCamera(combat);
-        try std.testing.expectEqual([3]i32{ -168, 60, 0 }, camera.position);
+        try std.testing.expectEqual([3]i32{ -168, 60, 0 }, camera.focus);
         try std.testing.expectEqual(angles, camera.angles);
-        try std.testing.expectEqual([3]i32{ scale, scale, scale }, camera.d);
+        try std.testing.expectEqual([3]i32{ scale, scale, scale }, camera.scale);
         if (choice == 0) for ([_]usize{ 0, 4 }) |member| {
             const layout = battle.layout.actorLayout(combat, member);
             const left = layout.point.x - @as(f32, @floatFromInt(layout.sprite.anchor_x)) * layout.scale;
@@ -725,8 +725,7 @@ test "Master pupil source programs claim targets and repeat independently" {
                 handoff_at = combat.camera_ticks + (finish - combat.effectTicks());
                 saw_return = true;
             };
-            if (combat.uniteBoundaryFor(owner)) |boundary| for (boundary.sequence.?.targets) |maybe| if (maybe) |target| {
-                const enemy: usize = @intCast(target - @as(i16, @intCast(combat.partyCount())) - 1);
+            if (combat.uniteBoundaryFor(owner)) |boundary| for (boundary.sequence.?.targets) |maybe| if (maybe) |enemy| {
                 if (claim_ticks[enemy] == 0) claim_ticks[enemy] = combat.camera_ticks - selection_tick;
             };
         }
@@ -1260,7 +1259,7 @@ test "live Unite auxiliary sweep retains actual Elf child lifetimes and checkpoi
             };
             var aligned = combat;
             const Controller = @TypeOf(combat.actor_camera.?);
-            aligned.actor_camera = try Controller.init(.{ .position = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .c = .{ 0, 0, 1024 }, .d = .{ 4096, 4096, 4096 } });
+            aligned.actor_camera = try Controller.init(.{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } });
             const slot = playback.auxiliary_capacity - 1;
             const aligned_child = &aligned.unite_vm.auxiliary[slot].?;
             aligned_child.position_q12 = .{ 0, 0, 0 };

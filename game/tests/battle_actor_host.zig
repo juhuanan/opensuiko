@@ -1041,7 +1041,7 @@ test "Physical rune airborne callback keeps signed draw offsets and untouched st
     actors[0].screen_offset = .{ 17, 9 };
     actors[0].offset_destination = .{ 45, -67 };
     actors[0].draw_angles[0] = 123;
-    var controller = try @import("battle_camera").ActorController.init(@import("battle_camera").state1);
+    var controller = try @import("battle_camera").ActorController.init(@import("battle_camera").standard_battle);
     var runtime = host.Runtime{ .actors = &actors, .camera_controller = &controller };
     const code = [_]vm.Instruction{ .{ .command = .{ .effect = .{ .binding = .shared, .id = "airborne_recipient" } } }, .{ .halt = {} } };
     try runtime.dispatch(0, null, .{ .id = "airborne_states", .instructions = &code });
@@ -1082,7 +1082,7 @@ test "Physical rune callbacks agree with independent fractional and wrapped Q12 
         current.shared_value = case.state;
         if (decoy) actors[0].position_q12 = case.owner;
         var observer = DecoyObserver{};
-        var controller = try @import("battle_camera").ActorController.init(@import("battle_camera").state1);
+        var controller = try @import("battle_camera").ActorController.init(@import("battle_camera").standard_battle);
         var runtime = host.Runtime{ .actors = &actors, .auxiliary = &children, .camera_controller = &controller, .library = .{ .programs = parsed.value.programs, .resources = parsed.value.animations }, .external = .{ .context = &observer, .command = DecoyObserver.command, .decoy_contact = DecoyObserver.contact } };
         const code = [_]vm.Instruction{ .{ .command = .{ .effect = .{ .binding = .shared, .id = if (decoy) "decoy_retaliation" else "airborne_recipient" } } }, .{ .halt = {} } };
         try runtime.dispatch(id, if (decoy) @as(u16, 0) else 1, .{ .id = "callback", .instructions = &code });
@@ -1113,7 +1113,7 @@ test "Physical rune Shrike recipient preserves flip camera pulses hit and cleanu
     actors[1].highlights = 8;
     var children: [17]?host.Actor = @splat(null);
     var observer = Observer{};
-    var controller = try @import("battle_camera").ActorController.init(@import("battle_camera").state1);
+    var controller = try @import("battle_camera").ActorController.init(@import("battle_camera").standard_battle);
     controller.velocity[0][0] = 7;
     controller.velocity[0][1] = -11;
     const original_target = controller.target;
@@ -2220,8 +2220,8 @@ test "Cleo and Ted ranged scripts spawn their source projectile and signal conta
 
 const camera = @import("battle_camera");
 test "actor camera commands share the existing Q12 controller and advance before the actor sweep" {
-    var initial = camera.state0;
-    initial.position = .{ 80, -3, 7 };
+    var initial = camera.intro_wide;
+    initial.focus = .{ 80, -3, 7 };
     var controller = try camera.ActorController.init(initial);
     var actors = [_]host.Actor{ try host.Actor.init(resource, .{ 0, 0, 0 }), try host.Actor.init(resource, .{ -128 * 4096 + 13, 40 * 4096 - 5, 12345 }), try host.Actor.init(resource, .{ 0, 0, 0 }) };
     actors[1].owner = 2;
@@ -2250,8 +2250,8 @@ test "actor camera commands share the existing Q12 controller and advance before
     try runtime.stepActor(0);
     try std.testing.expectEqual(controller.target[0], controller.current[0]);
     try std.testing.expectEqual(@as(i16, 640), actors[0].draw_angles[2]);
-    try std.testing.expectEqual([3]i32{ 0, 0, 900 }, controller.sample().c);
-    try std.testing.expectEqual([3]i32{ 3328, 3328, 3328 }, controller.sample().d);
+    try std.testing.expectEqual([3]i32{ 0, 0, 900 }, controller.sample().translation);
+    try std.testing.expectEqual([3]i32{ 3328, 3328, 3328 }, controller.sample().scale);
     actors[0].position_q12 = .{ 11 * 4096 + 3, -9 * 4096 - 2, 999 };
     const retarget = [_]vm.Instruction{ .{ .command = .{ .camera = .{ .channel = .focus, .anchor = .self, .updates = 3, .value_q12 = .{ -1, 2, 0 } } } }, .{ .halt = {} } };
     const before = controller.current;
@@ -2261,9 +2261,9 @@ test "actor camera commands share the existing Q12 controller and advance before
 }
 
 test "overlapping actor camera requests replace only the claimed channel" {
-    var initial = camera.state0;
-    initial.position = @splat(0);
-    initial.d = @splat(1000);
+    var initial = camera.intro_wide;
+    initial.focus = @splat(0);
+    initial.scale = @splat(1000);
     var controller = try camera.ActorController.init(initial);
     var actors = [_]host.Actor{
         try host.Actor.init(resource, @splat(0)),
@@ -2306,7 +2306,7 @@ test "actor camera refuses missing controllers and invalid requests before camer
     var code = [_]vm.Instruction{ .{ .command = .{ .camera = .{ .channel = .focus, .updates = 20, .value_q12 = .{ 0, 0, 0 } } } }, .{ .halt = {} } };
     const program = vm.Program{ .id = "camera", .instructions = &code };
     try std.testing.expectError(error.MissingActorCamera, runtime.dispatch(0, null, program));
-    var controller = try camera.ActorController.init(camera.state0);
+    var controller = try camera.ActorController.init(camera.intro_wide);
     runtime.camera_controller = &controller;
     const before = controller;
     for ([_]vm.Camera{
@@ -2326,7 +2326,7 @@ test "exported Fisherman and Wild Arrow camera requests retain their dispatch an
     const parsed = try std.json.parseFromSlice(Fixture, a, @embedFile("fixtures/unite_actor_vm.json"), .{});
     defer parsed.deinit();
     for ([_]struct { member: []const u8, program: []const u8, at: usize }{ .{ .member = "tai_ho", .program = "tai_ho/unite_9", .at = 62 }, .{ .member = "kirkis", .program = "kirkis/unite_10", .at = 2 } }) |case| {
-        var controller = try camera.ActorController.init(camera.state0);
+        var controller = try camera.ActorController.init(camera.intro_wide);
         var actors = [_]host.Actor{ try host.Actor.init(parsed.value.animations.find(case.member).?, .{ 0, 0, 0 }), try host.Actor.init(resource, .{ -128 * 4096 + 13, 40 * 4096 - 5, 12345 }) };
         var observer = Observer{};
         var runtime = host.Runtime{ .actors = &actors, .camera_controller = &controller, .external = .{ .context = &observer, .command = Observer.command, .previous_screen_position = Observer.previousScreen } };
@@ -2349,7 +2349,7 @@ test "exported Fisherman and Wild Arrow camera requests retain their dispatch an
             try std.testing.expectEqual([3]i32{ -524275, 163835, 0 }, controller.target[0]);
         } else {
             try std.testing.expectEqual([3]i32{ -768, 0, 640 }, controller.sample().angles);
-            try std.testing.expectEqual([3]i32{ 3328, 3328, 3328 }, controller.sample().d);
+            try std.testing.expectEqual([3]i32{ 3328, 3328, 3328 }, controller.sample().scale);
         }
     }
 }
@@ -2666,10 +2666,10 @@ test "Bumpy actor controls preserve delayed entry phase motion and secondary dam
             if (playback.allReady(owner) and ready == null) ready = @intCast(age);
             for (0..2) |actor| {
                 const q = playback.actors[actor].position_q12;
-                const point = camera.projectScene(camera.state2, .{ q[0] >> 12, q[1] >> 12, q[2] >> 12 }, .{}).?;
+                const point = camera.projectScene(camera.settled_pan, .{ q[0] >> 12, q[1] >> 12, q[2] >> 12 }, .{}).?;
                 playback.previous_points[actor] = .{ .x = point.x * 2, .y = point.y * 2, .depth = point.depth };
             }
-            try playback.update(&scene, camera.state2);
+            try playback.update(&scene, camera.settled_pan);
             if (age >= 144 and age < 164) try std.testing.expectEqual(host.Palette{ .shared = 0 }, playback.actors[0].palette);
             if (age == 164) try std.testing.expectEqual(host.Palette{ .resource = {} }, playback.actors[0].palette);
             try std.testing.expectEqual(age >= 81, playback.members[1].?.initialized);
@@ -2768,10 +2768,10 @@ test "Fatal actor controls wait for partner signal and retain independent return
             if (playback.allReady(owner) and ready == null) ready = @intCast(age);
             for (0..2) |actor| {
                 const q = playback.actors[actor].position_q12;
-                const point = camera.projectScene(camera.state2, .{ q[0] >> 12, q[1] >> 12, q[2] >> 12 }, .{}).?;
+                const point = camera.projectScene(camera.settled_pan, .{ q[0] >> 12, q[1] >> 12, q[2] >> 12 }, .{}).?;
                 playback.previous_points[actor] = .{ .x = point.x * 2, .y = point.y * 2, .depth = point.depth };
             }
-            try playback.update(&scene, camera.state2);
+            try playback.update(&scene, camera.settled_pan);
             if ((age >= 15 and age <= 35) or (age >= 194 and age <= 214)) {
                 const trail = playback.actors[1].blue_trail.?;
                 try std.testing.expectEqual(@as(u16, 4), trail.pose);
@@ -2916,7 +2916,7 @@ test "Beat callback child survives normal playback rebind and preserves its disp
             self.recovery[actor] = value;
         }
     };
-    const block = camera.Block{ .position = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .c = .{ 0, 0, 1024 }, .d = .{ 1024, 1024, 1024 } };
+    const block = camera.Block{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 1024, 1024, 1024 } };
     const homes = [_][3]i32{ .{ 0, 0, 0 }, .{ 0, 40 * 4096, 0 }, .{ 120 * 4096 + 17, 25 * 4096 + 23, 0 } };
     for (0..2) |order| {
         const party: [2][]const u8 = if (order == 0) .{ "pahn", "ronnie" } else .{ "ronnie", "pahn" };
@@ -3104,11 +3104,11 @@ test "actor status reaches the live playback bridge at its own script clock" {
         var draws = Rules.Draws{ .values = if (turtle) &.{} else &values };
         state.replay_draws = &draws;
         state.camera_ticks = 1;
-        try state.unite_vm.update(&state, @import("battle_camera").state2);
+        try state.unite_vm.update(&state, @import("battle_camera").settled_pan);
         try std.testing.expectEqual(Field.game_state.Status.healthy, members[1].status);
         try std.testing.expectEqual(@as(usize, 0), draws.cursor);
         state.camera_ticks = 2;
-        try state.unite_vm.update(&state, @import("battle_camera").state2);
+        try state.unite_vm.update(&state, @import("battle_camera").settled_pan);
         try std.testing.expectEqual(if (!turtle and kind == .poison) Field.game_state.Status.poisoned else Field.game_state.Status.healthy, members[1].status);
         try std.testing.expectEqual(@as(u8, @intFromBool(!turtle and kind == .balloon)), members[1].balloons);
         try std.testing.expectEqual(@as(u8, @intFromBool(!turtle and kind == .sleep)), state.asleep[1]);
@@ -3116,7 +3116,7 @@ test "actor status reaches the live playback bridge at its own script clock" {
         try std.testing.expectEqual(@as(usize, if (turtle) 0 else 1), draws.cursor);
         try std.testing.expect(!state.accuracy_reduced[6] and !state.rune_blocked[6]);
         state.camera_ticks = 3;
-        try state.unite_vm.update(&state, @import("battle_camera").state2);
+        try state.unite_vm.update(&state, @import("battle_camera").settled_pan);
         try std.testing.expectEqual(@as(usize, if (turtle) 0 else 1), draws.cursor);
     };
 }

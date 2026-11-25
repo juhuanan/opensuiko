@@ -138,7 +138,7 @@ test "Item actor frozen body copies share source positions scale tint and opacit
                     try std.testing.expectEqualDeep(effect.particle_tint, quad.light);
                     try std.testing.expectEqualDeep(battle.Position{ .x = origin.x + offset[0], .y = origin.y + offset[1], .z = origin.z + offset[2] }, quad.position);
                     const block = battle.layout.currentCamera(combat);
-                    const scale = @as(f32, @floatFromInt(@divTrunc(block.d[0] << 10, block.c[2]))) / 2048;
+                    const scale = @as(f32, @floatFromInt(@divTrunc(block.scale[0] << 10, block.translation[2]))) / 2048;
                     try std.testing.expectApproxEqAbs(scale, quad.scale, 0.001);
                     count += 1;
                 }

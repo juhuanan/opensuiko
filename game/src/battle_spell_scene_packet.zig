@@ -392,8 +392,8 @@ pub const Packet = struct {
                 var previous: u16 = 0;
                 for (program.cameras) |event| {
                     if (event.at <= previous or event.at >= program.duration or event.updates == 0 or event.updates > 4096) return error.InvalidSpellScenes;
-                    for (event.target.position ++ event.target.angles ++ event.target.c ++ event.target.d) |v| if (@abs(v) > 32767) return error.InvalidSpellScenes;
-                    if (event.target.c[2] < 256 or @abs(event.target.d[0]) > 16384 or @abs(event.target.d[1]) > 16384 or @abs(event.target.d[2]) > 16384 or @abs(@divTrunc(event.target.d[0] << 10, event.target.c[2])) > 16384) return error.InvalidSpellScenes;
+                    for (event.target.focus ++ event.target.angles ++ event.target.translation ++ event.target.scale) |v| if (@abs(v) > 32767) return error.InvalidSpellScenes;
+                    if (event.target.translation[2] < 256 or @abs(event.target.scale[0]) > 16384 or @abs(event.target.scale[1]) > 16384 or @abs(event.target.scale[2]) > 16384 or @abs(@divTrunc(event.target.scale[0] << 10, event.target.translation[2])) > 16384) return error.InvalidSpellScenes;
                     previous = event.at;
                 }
                 if (program.screen_washes.len > 8) return error.InvalidSpellScenes;

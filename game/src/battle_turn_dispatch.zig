@@ -5,6 +5,7 @@ const presentation_flow = @import("battle_presentation_flow");
 const turn = @import("battle_turn");
 const battle_systems = @import("battle_systems");
 const technique_systems = battle_systems.techniques;
+const unite_systems = battle_systems.unite;
 const combat_effects = @import("combat_systems").effects;
 const layout = @import("battle_layout.zig");
 const drops = @import("battle_drops.zig");
@@ -256,12 +257,12 @@ pub fn startUniteAction(self: *State, actor: usize, target_index: usize) ActionS
         }
         if (self.unite_boundaries[actor]) |*started| {
             if (record.target_rule == .individual) {
-                const target_id: i16 = @intCast(target + 1);
-                if (started.target != target_id) {
+                const resolved_target = unite_systems.Target.fromCombatantIndex(self.partyCount(), target);
+                if (!started.target.eql(resolved_target)) {
                     started.retargeted_from = started.retargeted_from orelse started.target;
-                    started.target = target_id;
+                    started.target = resolved_target;
                 }
-                self.last_targets[actor] = @intCast(target_id);
+                self.last_targets[actor] = @intCast(resolved_target.toSourceIndex(self.partyCount()));
             }
             if (started.sequence) |*queue| {
                 // The source snapshots target eligibility when the Unite starts.

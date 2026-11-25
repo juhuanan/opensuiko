@@ -108,7 +108,7 @@ test "Item status art retains poison phase and bursts only the highest balloon t
                         const z = origin.z - @as(f32, @floatFromInt(@as(u32, age) * (age - 1))) / 16;
                         const block = battle.layout.currentCamera(combat);
                         const point = battle.drops.project(block, .{ @intFromFloat(@floor(origin.x)), @intFromFloat(@floor(origin.y)), @intFromFloat(@floor(z)) });
-                        const scale = @divTrunc(block.d[0] << 10, block.c[2]);
+                        const scale = @divTrunc(block.scale[0] << 10, block.translation[2]);
                         const anchors = parsed.value.statusAnchors(combat.progress.party[target].id).?;
                         const offset = anchors.offsets[anchors.idle_pose];
                         const entry = parsed.value.entries[command.texture.?];

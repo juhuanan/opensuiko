@@ -155,7 +155,7 @@ test "all nine ordinary action formulas match source measurements" {
     defer packet.deinit();
     var scenario = packet.value.scenarios[1];
     var attacks: [3]war.Attack = undefined;
-    for (&attacks, 0..) |*attack, enemy_type| attack.* = .{ .offset = 0, .flags = 0xC00 | @as(u32, @intCast(enemy_type)), .name = "", .parameter0 = 0, .parameter1 = 0 };
+    for (&attacks, 0..) |*attack, enemy_type| attack.* = .{ .flags = 0xC00 | @as(u32, @intCast(enemy_type)), .name = "", .parameter0 = 0, .parameter1 = 0 };
     scenario.attacks = &attacks;
     const expected = [3][3][2]i32{
         .{ .{ 1370, 3170 }, .{ 2530, 4130 }, .{ 2400, 0 } },

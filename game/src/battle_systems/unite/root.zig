@@ -31,6 +31,10 @@ pub const Family = catalogue.Family;
 pub const Blocker = catalogue.Blocker;
 pub const Outcome = catalogue.Outcome;
 
+pub const StatusFlags = lifecycle.StatusFlags;
+pub const ActorFlags = lifecycle.ActorFlags;
+pub const SlotCommand = lifecycle.SlotCommand;
+pub const Target = lifecycle.Target;
 pub const Slot = lifecycle.Slot;
 pub const SlotState = lifecycle.SlotState;
 pub const CommandWrite = lifecycle.CommandWrite;

@@ -170,7 +170,7 @@ test "Dagon actor special preserves half damage poison spin return and primary-c
     const data = try content(alloc);
     const items = try field.items.load(alloc, field.items.json);
     const request = actors.counterPacket().?.meleeEnemy("dagon").?.special.?.return_camera.?;
-    const desired = [4][3]i32{ request.target.position, request.target.angles, request.target.c, request.target.d };
+    const desired = [4][3]i32{ request.target.focus, request.target.angles, request.target.translation, request.target.scale };
     for (0..6) |target| for (0..6) |mode| {
         var members: [6]battle.Member = undefined;
         var state = try battle.State.init(data, items.value, &members, 1234);

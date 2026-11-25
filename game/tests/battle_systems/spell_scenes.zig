@@ -91,7 +91,7 @@ test "imported Firestorm shares the action camera and drives group damage withou
     combat.nextAction();
     combat.replay_draws = null;
     try std.testing.expectEqualDeep(initial_camera, combat.active.?.scene.?.initial_camera);
-    try std.testing.expectEqual(initial_camera.position[2] + 5, battle.layout.currentCamera(combat).position[2]);
+    try std.testing.expectEqual(initial_camera.focus[2] + 5, battle.layout.currentCamera(combat).focus[2]);
     try std.testing.expectEqual(@as(u8, 2), combat.active.?.scene.?.target_count);
     const program = packet.value.spells[combat.active.?.scene.?.spell].program.?;
     while (combat.active != null) {
@@ -117,8 +117,8 @@ test "imported Firestorm shares the action camera and drives group damage withou
             const base = controller.sample();
             try std.testing.expectEqualDeep(base, battle.layout.cameraForTransition(&combat));
             var visible = base;
-            visible.position[0] -= 3;
-            visible.position[2] += 5;
+            visible.focus[0] -= 3;
+            visible.focus[2] += 5;
             try std.testing.expectEqualDeep(visible, battle.layout.currentCamera(combat));
             const projected = battle.spell_scene.frameWithCamera(&packet.value, &combat.active.?.scene.?, 258, visible);
             const frame = combat.spellSceneFrame();
@@ -136,7 +136,7 @@ test "imported Firestorm shares the action camera and drives group damage withou
             const request = program.cameras[2];
             try std.testing.expectEqual(request.at, combat.effectTicks());
             try std.testing.expectEqual(request.updates - 1, controller.remaining[0]);
-            try std.testing.expectEqual(before + @divTrunc(request.target.position[0] * 4096 - before, request.updates), controller.current[0][0]);
+            try std.testing.expectEqual(before + @divTrunc(request.target.focus[0] * 4096 - before, request.updates), controller.current[0][0]);
             try std.testing.expectEqualDeep(controller.sample(), battle.layout.currentCamera(combat));
             continue;
         }
@@ -1834,13 +1834,13 @@ test "generated Final Flame keeps staged draws KO gaps protection damage584 and 
             const expected = battle.spell_scene.instanceCameraAt(packet.value.spells[instance.spell].program.?, instance, age);
             try std.testing.expectEqualDeep(expected, battle.layout.currentCamera(combat));
             const base = battle.spell_scene.cameraAt(packet.value.spells[instance.spell].program.?, age, instance.initial_camera);
-            try std.testing.expectEqual(base.position[2] + 5, expected.position[2]);
+            try std.testing.expectEqual(base.focus[2] + 5, expected.focus[2]);
             try std.testing.expectEqualDeep(base, battle.layout.cameraForTransition(&combat));
             if (focus_impulses == 0) {
                 var overlap = combat;
                 overlap.enemy_magic_pulse = .{ .issued_at = overlap.camera_ticks -% 1, .delta_q12 = 7 * 4096 };
                 var visible = expected;
-                visible.position[2] += 7;
+                visible.focus[2] += 7;
                 try std.testing.expectEqualDeep(visible, battle.layout.currentCamera(overlap));
                 const frame = overlap.spellSceneFrame();
                 const projected = battle.spell_scene.frameWithCamera(&packet.value, instance, age, visible);

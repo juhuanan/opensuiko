@@ -120,6 +120,7 @@ pub fn build(b: *std.Build) !void {
         .{ "war_data", "assets/war/resources.zig" },
         .{ "war_scenarios_data", "assets/war/scenarios.zig" },
         .{ "war_manifest_data", "assets/war/content_manifest.zig" },
+        .{ "battle_sin_cos_data", "assets/battle_sin_cos.zig" },
     };
     for (data_modules) |pair| r.addData(pair[0], pair[1]);
 
@@ -137,7 +138,7 @@ pub fn build(b: *std.Build) !void {
         .{ "area_host", "src/area_host/root.zig", &.{ "field_effect_data", "wheel_data", "event_runtime" } },
         .{ "fade", "src/opening/fade.zig", &.{} },
         .{ "opening_save_policy", "src/opening/save_policy.zig", &.{} },
-        .{ "battle_camera", "src/battle_camera.zig", &.{} },
+        .{ "battle_camera", "src/battle_camera.zig", &.{"battle_sin_cos_data"} },
         .{ "hq_state", "src/hq_state.zig", &.{} },
         .{ "campaign_state", "src/campaign_state.zig", &.{} },
         .{ "war", "src/war.zig", &.{} },

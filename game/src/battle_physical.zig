@@ -20,7 +20,7 @@ pub const InitialCamera = struct {
             position[0] +%= recipient[0];
             position[1] +%= recipient[1];
         }
-        return .{ .position = position, .angles = self.angles_q12, .c = if (self.preserve_translation) controller.target[2] else self.translation_q12.?, .d = self.scale_q12 };
+        return .{ .focus = position, .angles = self.angles_q12, .translation = if (self.preserve_translation) controller.target[2] else self.translation_q12.?, .scale = self.scale_q12 };
     }
 };
 pub const Auxiliary = struct {
@@ -93,7 +93,7 @@ pub const Packet = struct {
             }
             if (binding.initial_camera) |request| {
                 if (request.updates == 0 or request.updates > 1000 or request.preserve_translation == (request.translation_q12 != null)) return error.InvalidPhysicalBindings;
-                const controller = try camera.ActorController.init(camera.state1);
+                const controller = try camera.ActorController.init(camera.standard_battle);
                 try request.target(controller, .{ 0, 0, 0 }).validate();
             }
             if (binding.auxiliary) |child| {

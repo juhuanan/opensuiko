@@ -416,6 +416,7 @@ pub const Facts = struct {
     entity_available: bool = true,
     interaction: bool = false,
     story: []const u8 = &.{},
+    scenario: ?[]const u8 = null,
     recruit: []const u8 = &.{},
     party: []const u8 = &.{},
     money: i64 = 0,
@@ -536,9 +537,19 @@ fn either(facts: Facts, cid: u8) ?bool {
     return (byte & 3) != 0;
 }
 
+const scenario_wire_base: u16 = 0x190;
+
 fn storyHolds(facts: Facts, byte: u16, mask: u32, set: bool) ?bool {
-    if (byte >= facts.story.len) return null;
-    const hit = (@as(u32, facts.story[byte]) & mask) != 0;
+    const value: u8 = if (facts.scenario) |scenario| blk: {
+        if (byte < scenario_wire_base) return null;
+        const index = byte - scenario_wire_base;
+        if (index >= scenario.len) return null;
+        break :blk scenario[index];
+    } else blk: {
+        if (byte >= facts.story.len) return null;
+        break :blk facts.story[byte];
+    };
+    const hit = (@as(u32, value) & mask) != 0;
     return if (set) hit else !hit;
 }
 

@@ -73,6 +73,15 @@ pub const Direction = enum {
             else => null,
         };
     }
+
+    pub fn toPadMask(self: Direction) u16 {
+        return switch (self) {
+            .up => 0x1000,
+            .right => 0x2000,
+            .down => 0x4000,
+            .left => 0x8000,
+        };
+    }
 };
 pub const TrackCommand = struct {
     kind: enum { move, advance, set_motion, finish, hold, hop },

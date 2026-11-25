@@ -42,23 +42,23 @@ pub const UniteContext = struct {
 fn uniteWriteSlot(context: *anyopaque, slot: usize, write: unite_systems.CommandWrite) void {
     const ctx: *UniteContext = @ptrCast(@alignCast(context));
     if (slot >= ctx.state.partyCount()) return;
-    if (write.command == unite_systems.rules.unite_command) {
+    if (write.command == .unite) {
         if (slot == ctx.leader) {
             ctx.state.actions[slot] = .{ .unite = ctx.target_enemy };
         } else {
             ctx.state.actions[slot] = .{ .assist = ctx.leader };
         }
         // shortcut: timed playback supplies flags here; live scripts clear them at startup.
-        ctx.state.unite_flags[slot] = unite_systems.rules.hit_flag | unite_systems.rules.ready_flag;
+        ctx.state.unite_flags[slot] = (unite_systems.ActorFlags{ .hit_ready = true, .return_ready = true }).toMask();
     } else {
         ctx.state.actions[slot] = null;
     }
 }
 
-fn uniteWriteStatus(context: *anyopaque, slot: usize, mask: u16, counter: u8) void {
+fn uniteWriteStatus(context: *anyopaque, slot: usize, status_flags: unite_systems.StatusFlags, counter: u8) void {
     const ctx: *UniteContext = @ptrCast(@alignCast(context));
     if (slot >= ctx.state.partyCount()) return;
-    if (mask & unite_systems.rules.recovery_mask != 0) {
+    if (status_flags.recovering) {
         if (ctx.state.unite_vm.owns(slot) and ctx.state.unite_vm.members[slot].?.recovery_applied) return;
         ctx.state.requestUniteRecovery(slot, counter +| 1) catch |err| switch (err) {
             error.RandomInputExhausted => {}, // tickReplay restores the failed update and draw cursor.
@@ -69,16 +69,16 @@ fn uniteWriteStatus(context: *anyopaque, slot: usize, mask: u16, counter: u8) vo
     }
 }
 
-fn uniteWriteFlags(context: *anyopaque, slot: usize, flags: u16) void {
+fn uniteWriteFlags(context: *anyopaque, slot: usize, flags: unite_systems.ActorFlags) void {
     const ctx: *UniteContext = @ptrCast(@alignCast(context));
-    if (slot < ctx.state.unite_flags.len) ctx.state.unite_flags[slot] = flags;
-    if (ctx.state.unite_vm.owns(slot)) ctx.state.unite_vm.actors[slot].signals = flags;
+    const mask = flags.toMask();
+    if (slot < ctx.state.unite_flags.len) ctx.state.unite_flags[slot] = mask;
+    if (ctx.state.unite_vm.owns(slot)) ctx.state.unite_vm.actors[slot].signals = mask;
 }
 
-fn uniteApplyDamage(context: *anyopaque, target: i16, amount: u32) void {
+fn uniteApplyDamage(context: *anyopaque, target: unite_systems.Target, amount: u32) void {
     const ctx: *UniteContext = @ptrCast(@alignCast(context));
-    if (target < 1) return;
-    const index: usize = @intCast(target - 1);
+    const index = target.toCombatantIndex(ctx.state.partyCount()) orelse return;
     if (index >= ctx.state.partyCount() + ctx.state.enemyCount()) return;
     const before_hp = ctx.state.hp(index);
     const applied = if (ctx.state.protection[index] > 0) 0 else amount;
@@ -132,10 +132,9 @@ pub fn startUniteReaction(self: *State, index: usize, record: u8, variant: u8, o
     } else self.unite_reactions[index] = null;
 }
 
-fn unitePhysical(context: *anyopaque, slot: usize, target: i16, draws: *systems.Draws) anyerror!u32 {
+fn unitePhysical(context: *anyopaque, slot: usize, target: unite_systems.Target, draws: *systems.Draws) anyerror!u32 {
     const ctx: *UniteContext = @ptrCast(@alignCast(context));
-    if (target < 1) return error.InvalidTarget;
-    const index: usize = @intCast(target - 1);
+    const index = target.toCombatantIndex(ctx.state.partyCount()) orelse return error.InvalidTarget;
     if (index < ctx.state.partyCount() or index >= ctx.state.partyCount() + ctx.state.enemyCount()) return error.InvalidTarget;
     return ctx.state.resolvePhysicalDamage(slot, index, try draws.next(), false);
 }
@@ -143,7 +142,7 @@ fn unitePhysical(context: *anyopaque, slot: usize, target: i16, draws: *systems.
 fn uniteHitReady(context: *anyopaque, slot: usize) bool {
     const ctx: *UniteContext = @ptrCast(@alignCast(context));
     if (ctx.state.unite_vm.owns(slot)) return ctx.state.unite_vm.hitReady(slot);
-    return slot < ctx.state.unite_flags.len and ctx.state.unite_flags[slot] & unite_systems.rules.hit_flag != 0;
+    return slot < ctx.state.unite_flags.len and unite_systems.ActorFlags.fromMask(ctx.state.unite_flags[slot]).hit_ready;
 }
 
 pub fn uniteHost(ctx: *UniteContext) unite_systems.Host {
@@ -161,40 +160,41 @@ pub fn uniteHost(ctx: *UniteContext) unite_systems.Host {
 pub fn uniteView(self: *const State, party: *[6]unite_systems.Slot, enemies: *[6]unite_systems.Slot) unite_systems.View {
     for (0..self.partyCount()) |index| {
         const member = self.progress.party[index];
-        var mask: u16 = 0;
-        if (member.status == .poisoned) mask |= 0x0001;
-        if (self.asleep[index] > 0) mask |= 0x0020;
-        if (self.unbalanced[index] > 0) mask |= unite_systems.rules.recovery_mask;
+        const slot_status: unite_systems.StatusFlags = .{
+            .down = member.status == .poisoned,
+            .asleep = self.asleep[index] > 0,
+            .recovering = self.unbalanced[index] > 0,
+        };
         party[index] = .{
             .character_id = self.characterId(index) orelse 0,
             .active = self.participates(index),
-            .status_mask = mask,
+            .status = slot_status,
             .hp = @intCast(@min(member.hp, 9999)),
             .status_byte = 0,
             .available = self.actions[index] == null,
             .command = if (self.actions[index]) |action| switch (action) {
-                .unite => unite_systems.rules.unite_command,
-                else => 1,
-            } else 0,
-            .unite_ordinal = 0,
-            .target = self.last_targets[index],
+                .unite => .unite,
+                else => .attack,
+            } else .none,
+            .unite_record = null,
+            .target = unite_systems.Target.fromSourceIndex(self.partyCount(), self.last_targets[index]),
             .recovery_counter = self.unbalanced[index] -| 1,
-            .actor_flags = self.unite_flags[index],
+            .actor_flags = unite_systems.ActorFlags.fromMask(self.unite_flags[index]),
         };
     }
     for (0..self.enemyCount()) |index| {
         enemies[index] = .{
             .character_id = 0,
             .active = self.enemy_hp[index] > 0,
-            .status_mask = 0,
+            .status = .{},
             .hp = @intCast(self.enemy_hp[index]),
             .status_byte = 0,
             .available = true,
-            .command = 0,
-            .unite_ordinal = 0,
-            .target = 0,
+            .command = .none,
+            .unite_record = null,
+            .target = .none,
             .recovery_counter = 0,
-            .actor_flags = 0,
+            .actor_flags = .{},
         };
     }
     return .{ .party = party[0..self.partyCount()], .enemies = enemies[0..self.enemyCount()] };
@@ -221,7 +221,7 @@ pub fn unitePlan(self: *const State, actor: usize, target_enemy: usize) ?unite_s
         const result = unite_systems.plan(catalogue, view, .{
             .actor = actor,
             .record = @intCast(record_index),
-            .target = @intCast(self.partyCount() + 1 + target_enemy),
+            .target = .{ .enemy = target_enemy },
         });
         switch (result) {
             .boundary => return result,
@@ -310,7 +310,7 @@ pub fn clearUniteFlags(self: *State, boundary: *const unite_systems.Boundary) vo
 /// Reject before initialization without undoing the other participants' queued turns.
 pub fn discardUnite(self: *State, actor: usize) void {
     const boundary = self.uniteBoundaryFor(actor) orelse return;
-    for (boundary.participantsSlice(), 0..) |member, index| self.unite_flags[member] = boundary.prior[index].actor_flags;
+    for (boundary.participantsSlice(), 0..) |member, index| self.unite_flags[member] = boundary.prior[index].actor_flags.toMask();
     self.unite_boundaries[actor] = null;
 }
 
@@ -382,7 +382,7 @@ fn resolveLiveUniteSequence(self: *State, boundary: *unite_systems.Boundary) voi
         } else null;
         if (enemy) |index| {
             queue.pending[index] = false;
-            queue.targets[ordinal] = @intCast(self.partyCount() + index + 1);
+            queue.targets[ordinal] = index;
         } else {
             queue.targets[ordinal] = null;
             queue.return_at[ordinal] = self.effectTicks();
@@ -405,7 +405,7 @@ fn resolveLiveUniteSequence(self: *State, boundary: *unite_systems.Boundary) voi
         var ctx = UniteContext{ .state = self, .boundary = boundary, .leader = boundary.command_owner, .target_enemy = 0 };
         var empty_draws = systems.Draws{};
         const draws = self.replay_draws orelse &empty_draws;
-        switch (unite_systems.impactSequenceTarget(boundary, host.uniteCatalogue(), view, uniteHost(&ctx), draws, target)) {
+        switch (unite_systems.impactSequenceTarget(boundary, host.uniteCatalogue(), view, uniteHost(&ctx), draws, .{ .enemy = target })) {
             .applied => |amount| {
                 boundary.amount +|= amount;
                 boundary.stage = .impacted;
@@ -464,8 +464,7 @@ fn resolveTrickWave(self: *State, boundary: *unite_systems.Boundary) void {
     var empty = systems.Draws{};
     const draws = self.replay_draws orelse &empty;
     for (0..self.enemyCount()) |enemy| if (events.hits & (@as(u6, 1) << @as(u3, @intCast(enemy))) != 0) {
-        const target: i16 = @intCast(self.partyCount() + enemy + 1);
-        switch (unite_systems.impactSequenceTarget(boundary, host.uniteCatalogue(), view, uniteHost(&ctx), draws, target)) {
+        switch (unite_systems.impactSequenceTarget(boundary, host.uniteCatalogue(), view, uniteHost(&ctx), draws, .{ .enemy = enemy })) {
             .applied => |amount| {
                 boundary.stage = .impacted;
                 boundary.amount +|= amount;

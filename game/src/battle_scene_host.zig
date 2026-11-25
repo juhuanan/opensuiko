@@ -478,7 +478,7 @@ fn appendEnemyMagic(self: *const State, result: *spell_scene.Frame) void {
     const art = packet.enemy_magic_art orelse return;
     const bundle = self.unite_actors orelse return;
     const block = layout.currentCamera(self.*);
-    const scene_scale = @divTrunc(block.d[0] << 10, block.c[2]);
+    const scene_scale = @divTrunc(block.scale[0] << 10, block.translation[2]);
     for (self.unite_vm.enemy_magic_actions) |maybe| if (maybe) |action| {
         if (action.area != null) {
             const area_binding = bundle.areaMagicFor(self.enemy(action.owner - self.partyCount()).id) orelse continue;
@@ -495,7 +495,7 @@ fn appendEnemyMagic(self: *const State, result: *spell_scene.Frame) void {
                     anchor.x += @floatFromInt(art.center(id, pose) orelse continue);
                 }
                 const size = @divTrunc(scene_scale * graphic.size, 4096);
-                const node = @import("battle_camera").Block{ .position = .{ 0, 0, 0 }, .angles = .{ 0, 0, graphic.node_angle_z }, .c = .{ 0, 0, 1024 }, .d = @splat(size) };
+                const node = @import("battle_camera").Block{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, graphic.node_angle_z }, .translation = .{ 0, 0, 1024 }, .scale = @splat(size) };
                 const entry = packet.entries[graphic.entry];
                 const corners = [4][3]i32{ .{ entry.dx, entry.dy, 0 }, .{ entry.dx + entry.w - 1, entry.dy, 0 }, .{ entry.dx, entry.dy + entry.h - 1, 0 }, .{ entry.dx + entry.w - 1, entry.dy + entry.h - 1, 0 } };
                 var command = spell_scene.Command{ .vertices = undefined, .texture = graphic.entry, .tint = graphic.tint, .depth = std.math.clamp(@as(i32, @intFromFloat(anchor.depth)) >> 2, 5, 379) };
@@ -537,7 +537,7 @@ fn appendEnemyMagic(self: *const State, result: *spell_scene.Frame) void {
                 anchor.x += @floatFromInt(art.center(id, pose) orelse continue);
             }
             const size = @divTrunc(scene_scale * graphic.size, 4096);
-            const node = @import("battle_camera").Block{ .position = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .c = .{ 0, 0, 1024 }, .d = @splat(size) };
+            const node = @import("battle_camera").Block{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .translation = .{ 0, 0, 1024 }, .scale = @splat(size) };
             const entry = packet.entries[graphic.entry];
             const corners = [4][3]i32{ .{ entry.dx, entry.dy, 0 }, .{ entry.dx + entry.w - 1, entry.dy, 0 }, .{ entry.dx, entry.dy + entry.h - 1, 0 }, .{ entry.dx + entry.w - 1, entry.dy + entry.h - 1, 0 } };
             var command = spell_scene.Command{ .vertices = undefined, .texture = graphic.entry, .tint = @splat(127), .depth = std.math.clamp(@as(i32, @intFromFloat(anchor.depth)) >> 2, 5, 379) };
@@ -584,7 +584,7 @@ fn appendStatusIcons(self: *const State, result: *spell_scene.Frame) void {
                     const block = layout.currentCamera(self.*);
                     const projected = @import("battle_camera").projectScene(block, position_q0, .{}) orelse continue;
                     point = .{ .x = projected.x * 2, .y = projected.y * 2, .depth = projected.depth };
-                    scale = @divTrunc(block.d[0] << 10, block.c[2]);
+                    scale = @divTrunc(block.scale[0] << 10, block.translation[2]);
                     offset = anchors.offsets[anchors.idle_pose];
                     entry_id = icon.entryAt(self.camera_ticks -% clock.started_at[index]);
                     opacity = 128;

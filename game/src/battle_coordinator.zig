@@ -536,8 +536,8 @@ fn startPartyStrike(self: *State, actor: usize, requested: usize, origin: ?battl
         };
         var destination = request.target;
         const anchor = battle.layout.worldPosition(self, target);
-        destination.position[0] = @intFromFloat(@round(anchor.x * 4096));
-        destination.position[1] = @intFromFloat(@round(anchor.y * 4096));
+        destination.focus[0] = @intFromFloat(@round(anchor.x * 4096));
+        destination.focus[1] = @intFromFloat(@round(anchor.y * 4096));
         self.actor_camera.?.requestQ12(destination, request.updates) catch {
             self.replay_unsupported = .coordinator_action;
             return false;
@@ -595,8 +595,8 @@ fn startActorStrike(self: *State, actor: usize, requested: usize, melee: bool) b
         };
         var destination = request.target;
         const anchor = battle.layout.worldPosition(self, target);
-        destination.position[0] = @intFromFloat(@round(anchor.x * 4096));
-        destination.position[1] = @intFromFloat(@round(anchor.y * 4096));
+        destination.focus[0] = @intFromFloat(@round(anchor.x * 4096));
+        destination.focus[1] = @intFromFloat(@round(anchor.y * 4096));
         self.actor_camera.?.requestQ12(destination, request.updates) catch {
             self.replay_unsupported = .coordinator_action;
             return false;

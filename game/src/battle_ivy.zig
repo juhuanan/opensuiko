@@ -25,22 +25,22 @@ pub fn segmentBasis(delta: [2]i32) ?[4]i32 {
 }
 
 pub fn quad(points: [13][3]i32, block: camera.Block, index: usize, anchor: [2]i16, extent: [2]u16) ?Quad {
-    if (index >= 18 or block.c[2] <= 0) return null;
-    const bias = @divTrunc(block.d[0] *% 16384, block.c[2] *% 4096);
+    if (index >= 18 or block.translation[2] <= 0) return null;
+    const bias = @divTrunc(block.scale[0] *% 16384, block.translation[2] *% 4096);
     var result: Quad = undefined;
     if (index < 12) {
         const basis = segmentBasis(.{ points[index + 1][0] - points[index][0], points[index + 1][1] - points[index][1] }) orelse return null;
         var matrix = [9]i32{ basis[0], basis[1], 0, basis[2], basis[3], 0, 0, 0, 4096 };
-        for (&matrix, 0..) |*value, component| value.* = @as(i16, @truncate((value.* *% block.d[component % 3]) >> 12));
+        for (&matrix, 0..) |*value, component| value.* = @as(i16, @truncate((value.* *% block.scale[component % 3]) >> 12));
         result.depth = (points[index][2] >> 2) * 4;
         for (&result.vertices, 0..) |*vertex, corner| {
-            const local = camera.rawProjectMatrix(matrix, block.c, .{ if (corner & 1 != 0) 16 else 0, if (corner >= 2) 8 else 0, 0 });
+            const local = camera.rawProjectMatrix(matrix, block.translation, .{ if (corner & 1 != 0) 16 else 0, if (corner >= 2) 8 else 0, 0 });
             vertex.* = .{ @as(i16, @truncate(points[index][0] + local[0] + bias)), @as(i16, @truncate(points[index][1] + local[1])) };
         }
     } else {
         const group = (index - 12) / 3;
         const sample = 10 - group - 2 * ((index - 12) % 3);
-        const scale = [2]i32{ @divTrunc(block.d[0] *% 1024, block.c[2]), @divTrunc(block.d[1] *% 1024, block.c[2]) };
+        const scale = [2]i32{ @divTrunc(block.scale[0] *% 1024, block.translation[2]), @divTrunc(block.scale[1] *% 1024, block.translation[2]) };
         result.depth = 0;
         for (&result.vertices, 0..) |*vertex, corner| {
             const x = -@as(i32, anchor[0]) + (if (corner & 1 != 0) extent[0] else @as(i32, 0));

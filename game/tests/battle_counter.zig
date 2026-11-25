@@ -251,8 +251,8 @@ test "ranged attacks use the live battle scheduler for hit miss protection and k
                         const anchor = battle.layout.worldPosition(&combat, combat.partyCount());
                         try std.testing.expectEqualDeep([3]i32{ @intFromFloat(@round(anchor.x * 4096)), @intFromFloat(@round(anchor.y * 4096)), -81920 }, camera_state.target[0]);
                         try std.testing.expectEqualDeep(ranged.value.critical_camera.target.angles, camera_state.target[1]);
-                        try std.testing.expectEqualDeep(ranged.value.critical_camera.target.c, camera_state.target[2]);
-                        try std.testing.expectEqualDeep(ranged.value.critical_camera.target.d, camera_state.target[3]);
+                        try std.testing.expectEqualDeep(ranged.value.critical_camera.target.translation, camera_state.target[2]);
+                        try std.testing.expectEqualDeep(ranged.value.critical_camera.target.scale, camera_state.target[3]);
                         try std.testing.expectEqualDeep([4]u16{ 19, 19, 19, 19 }, camera_state.remaining);
                         critical_camera = true;
                     }
@@ -401,7 +401,7 @@ test "Wild boar source attack dust spin camera and return complete for all party
         };
         var children: [17]?host.Actor = @splat(null);
         var sounds = Sounds{};
-        var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").state1);
+        var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").standard_battle);
         var runtime = host.Runtime{ .actors = &actors, .auxiliary = &children, .library = packet.library(), .camera_controller = &camera, .external = .{ .context = &sounds, .command = Sounds.command, .previous_screen_position = Sounds.previous } };
         var action = try counter.Action.beginFor(packet, &runtime, 1, 0, kind);
         var contacts: usize = 0;

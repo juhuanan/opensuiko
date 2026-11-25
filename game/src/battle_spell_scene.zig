@@ -99,7 +99,7 @@ fn variationValue(term: ?Variation, instance: *const Instance) i32 {
     return v.bias + @as(i32, instance.draws[v.draw] % v.modulus) * v.multiplier;
 }
 pub fn vectorTransform(p: [3]i32, angles: [3]i32, scale: [3]i32, translation: [3]i32) [3]i32 {
-    const r = camera.scaledRot(.{ .position = .{ 0, 0, 0 }, .angles = angles, .d = scale, .c = translation });
+    const r = camera.scaledRot(.{ .focus = .{ 0, 0, 0 }, .angles = angles, .scale = scale, .translation = translation });
     var result: [3]i32 = undefined;
     for (0..3) |i| {
         var sum: i64 = @as(i64, translation[i]) << 12;
@@ -127,7 +127,7 @@ pub fn withCameraPulses(program: Program, instance: *const Instance, update: u16
     if (update < program.focus_samples.len) if (program.focus_samples[update]) |focus| {
         // Exported samples bake the impulse into the uninterrupted spell camera.
         const reference = instance_mod.baseCameraAt(program, update, instance.initial_camera);
-        for (0..3) |axis| result.position[axis] += focus[axis] - reference.position[axis];
+        for (0..3) |axis| result.focus[axis] += focus[axis] - reference.focus[axis];
     };
     return withLandingKick(program, instance, update, result);
 }
@@ -135,7 +135,7 @@ fn withLandingKick(program: Program, instance: *const Instance, update: u16, bas
     var result = base;
     if (update != 0 and instance.last_landing == update and instance.last_landing_emitter < program.emitterCount()) {
         const emitter = program.emitterAt(instance.last_landing_emitter);
-        result.position[2] += emitter.focus_kick;
+        result.focus[2] += emitter.focus_kick;
     }
     return result;
 }
@@ -146,7 +146,7 @@ pub fn frameAt(packet: *const Packet, instance: *const Instance, update: u16) Fr
 }
 pub fn frameWithCamera(packet: *const Packet, instance: *const Instance, update: u16, block: camera.Block) Frame {
     const program = instance.sceneProgram(packet);
-    const scene_scale = @divTrunc(block.d[0] << 10, block.c[2]);
+    const scene_scale = @divTrunc(block.scale[0] << 10, block.translation[2]);
     var frame = Frame{ .wash = program.wash[@min(update, program.wash.len - 1)], .wash_blend = program.wash_blend };
     for (program.objects) |object| {
         const object_emitter = if (object.particle_index) |index| program.emitterForParticle(index) else null;
@@ -212,7 +212,7 @@ pub fn frameWithCamera(packet: *const Packet, instance: *const Instance, update:
             for (0..3) |axis| node_angles[axis] += variationValue(object.random_node_angles[axis], instance);
             if (object.particle_index != null and object_emitter.?.kind == .bouncing_sprites and object.particle_part == .primary) node_angles[2] += instance.particles[object.particle_index.?].node_rotation;
             if (lightning and object.particle_part == .spark) node_angles[1] += instance.particles[object.particle_index.?].spark_angle;
-            const node = camera.Block{ .position = .{ 0, 0, 0 }, .angles = node_angles, .d = @splat(size), .c = .{ 0, 0, 1024 } };
+            const node = camera.Block{ .focus = .{ 0, 0, 0 }, .angles = node_angles, .scale = @splat(size), .translation = .{ 0, 0, 1024 } };
             for (packet.pieces[piece]) |entry_id| {
                 const entry = packet.entries[entry_id];
                 if (sample.quad_offsets) |offsets| {

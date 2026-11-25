@@ -343,7 +343,7 @@ pub const PartyAttackTiming = struct {
             }
         }
         if (self.critical_camera) |request| {
-            if (request.updates == 0 or request.updates > 1000 or request.target.position[0] != 0 or request.target.position[1] != 0) return error.InvalidPartyAttackTiming;
+            if (request.updates == 0 or request.updates > 1000 or request.target.focus[0] != 0 or request.target.focus[1] != 0) return error.InvalidPartyAttackTiming;
             request.target.validate() catch return error.InvalidPartyAttackTiming;
         }
         if (self.impacts) |impacts| for ([_][]const spell_scene.UniteImpactSpawn{ impacts.ordinary, impacts.critical }) |spawns| {

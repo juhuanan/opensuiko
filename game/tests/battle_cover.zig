@@ -64,7 +64,7 @@ test "Cover source callbacks complete all 78 protectors in both party orders" {
         actors[2] = try host.Actor.init(packet.animations.find(enemy.id).?, .{ -160 * 4096, -20 * 4096, 0 });
         var children: [16]?host.Actor = @splat(null);
         var context = Sounds{};
-        var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").state1);
+        var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").standard_battle);
         var runtime = host.Runtime{ .actors = &actors, .auxiliary = &children, .library = packet.library(), .camera_controller = &camera, .external = .{ .context = &context, .command = Sounds.command, .previous_screen_position = Sounds.previous } };
         var action = try counter.Action.beginCovered(packet, &runtime, 2, ward, guard);
         var contacts: usize = 0;

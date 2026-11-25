@@ -28,7 +28,9 @@ test "a prototype slot label is not presented as a stored save name" {
 test "the tablet reveal joins a FACE page and a 64x64 quadrant" {
     var flags: [host.frontiers.data.tablet_entry_count]u8 = @splat(1);
     const portrait = (try host.tabletPortrait(flags, 0)).?;
-    try std.testing.expectEqualStrings("DATA/03_SHIRO/DATA/FACE_01.BIN", portrait.path);
+    try std.testing.expectEqual(@as(u8, 0), portrait.page);
+    try std.testing.expectEqual(@as(u8, 0), portrait.cell);
+    try std.testing.expectEqual(@as(u8, 0), portrait.portrait_index);
     try std.testing.expectEqual(@as(u16, 64), portrait.width);
     try std.testing.expectEqual(@as(u16, 64), portrait.height);
     flags = @splat(0);

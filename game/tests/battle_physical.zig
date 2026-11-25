@@ -31,7 +31,7 @@ test "Physical rune ordinary auxiliary sprites impacts and frozen trails share n
     var combat = try battle.State.init(parsed.value, items.value, &members, 17);
     try combat.attachUniteActors(&actors.value);
     try combat.attachSpellScenes(&scenes.value);
-    combat.actor_camera = try @import("battle_camera").ActorController.init(.{ .position = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .c = .{ 0, 0, 1024 }, .d = @splat(4096) });
+    combat.actor_camera = try @import("battle_camera").ActorController.init(.{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .translation = .{ 0, 0, 1024 }, .scale = @splat(4096) });
     const resource = actors.value.animations.find("ronnie").?;
     const frozen = resource.find(18).?.frames[0].pose;
     const sprite = battle.Pose{ .rect = .{ .x = 2, .y = 4, .w = 10, .h = 20 }, .anchor_x = 3, .anchor_y = 5 };
@@ -224,7 +224,7 @@ test "Physical rune camera handoff keeps a one-frame focus pulse out of its tran
     try std.testing.expect(combat.actor_camera != null and control.actor_camera != null);
     try std.testing.expectEqualDeep(control.actor_camera, combat.actor_camera);
     var visible = battle.layout.currentCamera(control);
-    visible.position[2] += 5;
+    visible.focus[2] += 5;
     try std.testing.expectEqualDeep(visible, battle.layout.currentCamera(combat));
 
     try combat.tickReplay(.{}, &draws);
@@ -682,7 +682,7 @@ test "Physical rune Hate retries a full child pool and preserves independent dam
     actors[0].position_q12 = .{ 450123, -990123, 5123 };
     actors[1].position_q12 = .{ -715123, 7715, -3123 };
     var children = [_]?host.Actor{try host.Actor.init(packet.animations.find("hero").?, .{ 0, 0, 0 })};
-    var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").state1);
+    var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").standard_battle);
     var context = Context{};
     var runtime = host.Runtime{ .actors = &actors, .auxiliary = &children, .library = packet.library(), .camera_controller = &camera, .external = .{ .context = &context, .command = Context.command, .decoy_contact = Context.decoy, .previous_screen_position = Context.previous } };
     var action = try physical.Action.begin(packet, &runtime, .hate, 0, 1);
@@ -749,7 +749,7 @@ test "Physical rune controller matches source clocks for all owner choices and t
         const target_home = [3]i32{ -150 * 4096, 27 * 4096, 0 };
         var actors = [_]host.Actor{ try host.Actor.init(packet.animations.find(owner_id).?, owner_home), try host.Actor.init(packet.animations.find(enemy_id).?, target_home) };
         var children: [17]?host.Actor = @splat(null);
-        var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").state1);
+        var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").standard_battle);
         var context = Context{};
         var runtime = host.Runtime{ .actors = &actors, .auxiliary = &children, .library = packet.library(), .camera_controller = &camera, .external = .{ .context = &context, .command = Context.command, .decoy_contact = Context.decoy, .previous_screen_position = Context.previous } };
         var action = try physical.Action.begin(packet, &runtime, binding.id, 0, 1);

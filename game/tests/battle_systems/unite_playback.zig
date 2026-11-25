@@ -41,11 +41,11 @@ test "Unite return poses resolve through the world actor atlas after controller 
     combat.issueUniteCameraRequests(62);
     for (0..21) |_| combat.advanceActorCamera();
     const block = battle.layout.currentCamera(combat);
-    try std.testing.expectEqual(@as(i32, @intFromFloat(target.x)), block.position[0]);
-    try std.testing.expectEqual(@as(i32, @intFromFloat(target.y)), block.position[1]);
-    try std.testing.expectEqual(@as(i32, 0), block.position[2]);
+    try std.testing.expectEqual(@as(i32, @intFromFloat(target.x)), block.focus[0]);
+    try std.testing.expectEqual(@as(i32, @intFromFloat(target.y)), block.focus[1]);
+    try std.testing.expectEqual(@as(i32, 0), block.focus[2]);
     const scene = battle.layout.sceneArt(combat);
-    const center = battle.presentation.project(scene.camera, .{ .x = @floatFromInt(block.position[0]), .y = @floatFromInt(block.position[1]), .z = 0 });
+    const center = battle.presentation.project(scene.camera, .{ .x = @floatFromInt(block.focus[0]), .y = @floatFromInt(block.focus[1]), .z = 0 });
     try std.testing.expectApproxEqAbs(@as(f32, 320), center.x, 0.01);
     try std.testing.expectApproxEqAbs(@as(f32, 240), center.y, 0.01);
 }

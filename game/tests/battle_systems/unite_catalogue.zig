@@ -23,8 +23,8 @@ const TestBattle = struct {
     status_writes: u32 = 0,
     flag_writes: u32 = 0,
     damage_calls: u32 = 0,
-    damage_targets: [12]i16 = @splat(0),
-    damage_target: i16 = 0,
+    damage_targets: [12]unite_mod.Target = @splat(.none),
+    damage_target: unite_mod.Target = .none,
     damage_amount: u32 = 0,
     physical_calls: u32 = 0,
     hit_ready: [6]bool = @splat(true),
@@ -63,25 +63,25 @@ fn writeSlot(context: *anyopaque, slot: usize, state: unite_mod.CommandWrite) vo
     const battle = cast(context);
     battle.writes += 1;
     battle.party[slot].command = state.command;
-    battle.party[slot].unite_ordinal = state.unite_ordinal;
+    battle.party[slot].unite_record = state.unite_record;
     battle.party[slot].target = state.target;
     battle.party[slot].available = state.available;
 }
 
-fn writeStatus(context: *anyopaque, slot: usize, mask: u16, counter: u8) void {
+fn writeStatus(context: *anyopaque, slot: usize, status: unite_mod.StatusFlags, counter: u8) void {
     const battle = cast(context);
     battle.status_writes += 1;
-    battle.party[slot].status_mask = mask;
+    battle.party[slot].status = status;
     battle.party[slot].recovery_counter = counter;
 }
 
-fn writeFlags(context: *anyopaque, slot: usize, flags: u16) void {
+fn writeFlags(context: *anyopaque, slot: usize, flags: unite_mod.ActorFlags) void {
     const battle = cast(context);
     battle.flag_writes += 1;
     battle.party[slot].actor_flags = flags;
 }
 
-fn applyDamage(context: *anyopaque, target: i16, amount: u32) void {
+fn applyDamage(context: *anyopaque, target: unite_mod.Target, amount: u32) void {
     const battle = cast(context);
     battle.damage_targets[battle.damage_calls] = target;
     battle.damage_calls += 1;
@@ -89,7 +89,7 @@ fn applyDamage(context: *anyopaque, target: i16, amount: u32) void {
     battle.damage_amount = amount;
 }
 
-fn physical(context: *anyopaque, slot: usize, target: i16, draws: *rng.Draws) anyerror!u32 {
+fn physical(context: *anyopaque, slot: usize, target: unite_mod.Target, draws: *rng.Draws) anyerror!u32 {
     const battle = cast(context);
     _ = slot;
     _ = target;
@@ -250,16 +250,17 @@ test "membership follows record order, not party order" {
     var battle = TestBattle.init(&.{ 2, 90, 6 }); // Gremio first, Pahn last
     battle.draws = .{ .values = &values_two };
 
-    var boundary = try planOk(&cat, &battle, .{ .actor = 2, .record = 0, .target = 4 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 2, .record = 0, .target = .{ .enemy = 0 } });
     try std.testing.expectEqualSlices(usize, &.{ 2, 0 }, boundary.participantsSlice());
-    try std.testing.expectEqual(@as(i16, 4), boundary.target);
+    try std.testing.expectEqual(unite_mod.Target{ .enemy = 0 }, boundary.target);
+    try std.testing.expectEqual(@as(u8, 1), boundary.wireOrdinal());
     try boundary.commit(battle.host());
 
-    // The commit writes command 4, the one-based ordinal and the target.
+    // The commit writes .unite, the record index and the target.
     for (boundary.participantsSlice()) |slot| {
-        try std.testing.expectEqual(unite_mod.rules.unite_command, battle.party[slot].command);
-        try std.testing.expectEqual(@as(u8, 1), battle.party[slot].unite_ordinal);
-        try std.testing.expectEqual(@as(i8, 4), battle.party[slot].target);
+        try std.testing.expectEqual(unite_mod.SlotCommand.unite, battle.party[slot].command);
+        try std.testing.expectEqual(@as(?u8, 0), battle.party[slot].unite_record);
+        try std.testing.expectEqual(unite_mod.Target{ .enemy = 0 }, battle.party[slot].target);
         try std.testing.expect(!battle.party[slot].available);
     }
 }
@@ -270,7 +271,7 @@ test "three participants are reserved and combined" {
     var battle = TestBattle.init(&.{ 4, 75, 9 });
     battle.draws = .{ .values = &values_three };
 
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 3, .target = 4 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 3, .target = .{ .enemy = 0 } });
     try std.testing.expectEqual(@as(u8, 3), boundary.count);
     try boundary.commit(battle.host());
     switch (unite_mod.impact(&boundary, &cat, battle.view(), battle.host(), &battle.draws)) {
@@ -278,13 +279,13 @@ test "three participants are reserved and combined" {
         else => return error.ExpectedApplied,
     }
     try std.testing.expectEqual(@as(u32, 1), battle.damage_calls);
-    try std.testing.expectEqual(@as(i16, 4), battle.damage_target);
+    try std.testing.expectEqual(unite_mod.Target{ .enemy = 0 }, battle.damage_target);
     try std.testing.expectEqual(@as(u32, 18), battle.damage_amount);
     try std.testing.expectEqual(@as(usize, 3), battle.physical_calls);
 
     try boundary.finish(battle.view(), battle.host());
     for (boundary.participantsSlice()) |slot| {
-        try std.testing.expectEqual(@as(u16, 0), battle.party[slot].status_mask);
+        try std.testing.expectEqual(@as(u16, 0), battle.party[slot].status.toMask());
         try std.testing.expectEqual(@as(u8, 0), battle.party[slot].recovery_counter);
     }
 }
@@ -295,7 +296,7 @@ test "four participants are reserved and combined" {
     var battle = TestBattle.init(&.{ 70, 72, 69, 71 });
     battle.draws = .{ .values = &values_four };
 
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 5, .target = 5 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 5, .target = .{ .enemy = 0 } });
     try std.testing.expectEqual(@as(u8, 4), boundary.count);
     try boundary.commit(battle.host());
     switch (unite_mod.impact(&boundary, &cat, battle.view(), battle.host(), &battle.draws)) {
@@ -311,10 +312,10 @@ test "double booking is refused and writes nothing" {
     var battle = TestBattle.init(&.{ 6, 2 });
     battle.party[1].available = false; // already assigned a command
 
-    try expectRefusal(unite_mod.plan(&cat, battle.view(), .{ .actor = 0, .record = 0, .target = 4 }), .participant_assigned);
+    try expectRefusal(unite_mod.plan(&cat, battle.view(), .{ .actor = 0, .record = 0, .target = .{ .enemy = 1 } }), .participant_assigned);
     try std.testing.expectEqual(@as(u32, 0), battle.writes);
-    try std.testing.expectEqual(@as(u8, 0), battle.party[0].command);
-    try std.testing.expectEqual(@as(u8, 0), battle.party[1].command);
+    try std.testing.expectEqual(unite_mod.SlotCommand.none, battle.party[0].command);
+    try std.testing.expectEqual(unite_mod.SlotCommand.none, battle.party[1].command);
 }
 
 test "membership and reservation refusals are typed" {
@@ -322,20 +323,20 @@ test "membership and reservation refusals are typed" {
     defer cat.deinit(std.testing.allocator);
 
     var missing = TestBattle.init(&.{ 6, 91 });
-    try expectRefusal(unite_mod.plan(&cat, missing.view(), .{ .actor = 0, .record = 0, .target = 4 }), .missing_member);
+    try expectRefusal(unite_mod.plan(&cat, missing.view(), .{ .actor = 0, .record = 0, .target = .{ .enemy = 1 } }), .missing_member);
 
     var outsider = TestBattle.init(&.{ 6, 2, 91 });
-    try expectRefusal(unite_mod.plan(&cat, outsider.view(), .{ .actor = 2, .record = 0, .target = 4 }), .actor_not_member);
+    try expectRefusal(unite_mod.plan(&cat, outsider.view(), .{ .actor = 2, .record = 0, .target = .{ .enemy = 0 } }), .actor_not_member);
 
     var asleep = TestBattle.init(&.{ 6, 2 });
-    asleep.party[1].status_mask = 0x20;
-    try expectRefusal(unite_mod.plan(&cat, asleep.view(), .{ .actor = 0, .record = 0, .target = 4 }), .participant_unavailable);
+    asleep.party[1].status.asleep = true;
+    try expectRefusal(unite_mod.plan(&cat, asleep.view(), .{ .actor = 0, .record = 0, .target = .{ .enemy = 1 } }), .participant_unavailable);
 
     var down = TestBattle.init(&.{ 6, 2 });
     down.party[1].active = false;
-    try expectRefusal(unite_mod.plan(&cat, down.view(), .{ .actor = 0, .record = 0, .target = 4 }), .participant_down);
+    try expectRefusal(unite_mod.plan(&cat, down.view(), .{ .actor = 0, .record = 0, .target = .{ .enemy = 1 } }), .participant_down);
 
-    try expectRefusal(unite_mod.plan(&cat, missing.view(), .{ .actor = 0, .record = 32, .target = 4 }), .unknown_record);
+    try expectRefusal(unite_mod.plan(&cat, missing.view(), .{ .actor = 0, .record = 32, .target = .{ .enemy = 1 } }), .unknown_record);
 }
 
 // ---------------------------------------------------------------------------
@@ -349,11 +350,11 @@ test "an invalid individual target is repaired by the source scan" {
     battle.enemies[1] = .{ .character_id = 101, .hp = 5 };
     battle.enemies[2] = .{ .character_id = 102, .hp = 5 };
 
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = 3 });
-    try std.testing.expectEqual(@as(i16, 4), boundary.target);
-    try std.testing.expectEqual(@as(?i16, 3), boundary.retargeted_from);
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = .{ .enemy = 0 } });
+    try std.testing.expectEqual(unite_mod.Target{ .enemy = 1 }, boundary.target);
+    try std.testing.expectEqual(@as(?unite_mod.Target, .{ .enemy = 0 }), boundary.retargeted_from);
     try boundary.commit(battle.host());
-    try std.testing.expectEqual(@as(i8, 4), battle.party[0].target);
+    try std.testing.expectEqual(unite_mod.Target{ .enemy = 1 }, battle.party[0].target);
 }
 
 test "no repair candidate refuses the boundary" {
@@ -362,7 +363,7 @@ test "no repair candidate refuses the boundary" {
     var battle = TestBattle.init(&.{ 6, 2 });
     for (0..3) |i| battle.enemies[i] = .{ .character_id = 100 + @as(u8, @intCast(i)), .active = false };
 
-    try expectRefusal(unite_mod.plan(&cat, battle.view(), .{ .actor = 0, .record = 0, .target = 3 }), .no_replacement);
+    try expectRefusal(unite_mod.plan(&cat, battle.view(), .{ .actor = 0, .record = 0, .target = .{ .enemy = 0 } }), .no_replacement);
     try std.testing.expectEqual(@as(u32, 0), battle.writes);
 }
 
@@ -370,23 +371,23 @@ test "group bypass records require living enemies and accept a fresh command" {
     var cat = try catalogue();
     defer cat.deinit(std.testing.allocator);
     var battle = TestBattle.init(&.{ 4, 9 }); // Wild arrow attack, bypass
-    battle.party[0].target = 5; // existing B+0x49 (an enemy source index)
+    battle.party[0].target = .{ .enemy = 2 }; // existing enemy target
 
-    const boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 2, .target = 0 });
-    try std.testing.expectEqual(@as(i16, 5), boundary.target);
-    try std.testing.expectEqual(@as(?i16, null), boundary.retargeted_from);
+    const boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 2, .target = .none });
+    try std.testing.expectEqual(unite_mod.Target{ .enemy = 2 }, boundary.target);
+    try std.testing.expectEqual(@as(?unite_mod.Target, null), boundary.retargeted_from);
 
     for (0..3) |i| battle.enemies[i].active = false;
-    try expectRefusal(unite_mod.plan(&cat, battle.view(), .{ .actor = 0, .record = 2, .target = 0 }), .bypass_without_living_enemy);
+    try expectRefusal(unite_mod.plan(&cat, battle.view(), .{ .actor = 0, .record = 2, .target = .none }), .bypass_without_living_enemy);
 
     battle.enemies[0].active = true;
-    battle.party[0].target = 0; // stale index: the source does not validate it
-    const fresh = try planOk(&cat, &battle, .{ .actor = 0, .record = 2, .target = 0 });
-    try std.testing.expectEqual(@as(i16, 3), fresh.target);
+    battle.party[0].target = .none; // stale index: the source does not validate it
+    const fresh = try planOk(&cat, &battle, .{ .actor = 0, .record = 2, .target = .none });
+    try std.testing.expectEqual(unite_mod.Target{ .enemy = 0 }, fresh.target);
 
     battle.enemies[0].active = true;
-    battle.party[0].target = 1; // a party index, not an enemy
-    _ = try planOk(&cat, &battle, .{ .actor = 0, .record = 2, .target = 0 });
+    battle.party[0].target = .{ .party = 0 }; // a party index, not an enemy
+    _ = try planOk(&cat, &battle, .{ .actor = 0, .record = 2, .target = .none });
 }
 
 test "second-stage Unite callbacks resolve Warriors Couple and both Beauty records" {
@@ -397,7 +398,7 @@ test "second-stage Unite callbacks resolve Warriors Couple and both Beauty recor
         var battle = TestBattle.init(record.membersSlice());
         const values: [12]u15 = @splat(10);
         battle.draws = .{ .values = &values };
-        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = index, .target = @intCast(battle.party_count + 1) });
+        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = index, .target = .{ .enemy = 0 } });
         try boundary.commit(battle.host());
         switch (boundary.impact(&cat, battle.view(), battle.host(), &battle.draws)) {
             .applied => {},
@@ -417,7 +418,7 @@ test "a group Unite stages all targets before a late draw failure" {
     var battle = TestBattle.init(record.membersSlice());
     const values: [4]u15 = @splat(10);
     battle.draws = .{ .values = &values };
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 9, .target = 4 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 9, .target = .{ .enemy = 0 } });
     try boundary.commit(battle.host());
     switch (boundary.impact(&cat, battle.view(), battle.host(), &battle.draws)) {
         .failed => {},
@@ -436,7 +437,7 @@ test "partial draw exhaustion rolls back the whole boundary" {
     var battle = TestBattle.init(&.{ 4, 75, 9 }); // needs three contributions
     battle.draws = .{ .values = &values_two }; // only two draws are available
 
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 3, .target = 4 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 3, .target = .{ .enemy = 0 } });
     try boundary.commit(battle.host());
     switch (unite_mod.impact(&boundary, &cat, battle.view(), battle.host(), &battle.draws)) {
         .failed => |failure| try std.testing.expectEqual(error.RandomInputExhausted, failure.random),
@@ -447,8 +448,8 @@ test "partial draw exhaustion rolls back the whole boundary" {
     // The cursor is restored, so the coordinator can retry another action.
     try std.testing.expectEqual(@as(usize, 0), battle.draws.cursor);
     for (boundary.participantsSlice()) |slot| {
-        try std.testing.expectEqual(@as(u8, 0), battle.party[slot].command);
-        try std.testing.expectEqual(@as(u8, 0), battle.party[slot].unite_ordinal);
+        try std.testing.expectEqual(unite_mod.SlotCommand.none, battle.party[slot].command);
+        try std.testing.expectEqual(@as(?u8, null), battle.party[slot].unite_record);
         try std.testing.expect(battle.party[slot].available);
     }
 }
@@ -458,7 +459,7 @@ test "a participant down after initialization remains in the fixed combined dama
     defer cat.deinit(std.testing.allocator);
     var battle = TestBattle.init(&.{ 6, 2 });
     battle.draws = .{ .values = &values_five };
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = 4 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = .{ .enemy = 1 } });
     try boundary.commit(battle.host());
     battle.party[1].active = false;
     battle.party[1].hp = 0;
@@ -469,7 +470,7 @@ test "a participant down after initialization remains in the fixed combined dama
     try std.testing.expectEqual(@as(u32, 1), battle.damage_calls);
     try std.testing.expectEqual(@as(u32, 2), battle.physical_calls);
     try std.testing.expectEqual(@as(usize, 2), battle.draws.cursor);
-    try std.testing.expectEqual(@as(u8, 4), battle.party[0].command);
+    try std.testing.expectEqual(unite_mod.SlotCommand.unite, battle.party[0].command);
     try std.testing.expect(!battle.party[1].available);
 }
 
@@ -477,17 +478,17 @@ test "cancel and retarget restore the prior command bytes" {
     var cat = try catalogue();
     defer cat.deinit(std.testing.allocator);
     var battle = TestBattle.init(&.{ 6, 2 });
-    battle.party[0] = .{ .character_id = 6, .command = 1, .unite_ordinal = 0, .target = 4, .actor_flags = 0x0002 };
-    battle.party[1] = .{ .character_id = 2, .available = true, .command = 3, .target = 0, .actor_flags = 0 };
+    battle.party[0] = .{ .character_id = 6, .command = .attack, .unite_record = null, .target = .{ .enemy = 1 }, .actor_flags = .{ .hit_ready = true } };
+    battle.party[1] = .{ .character_id = 2, .available = true, .command = .item, .target = .none, .actor_flags = .{} };
 
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = 5 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = .{ .enemy = 2 } });
     try boundary.commit(battle.host());
-    try std.testing.expectEqual(@as(u8, 4), battle.party[0].command);
+    try std.testing.expectEqual(unite_mod.SlotCommand.unite, battle.party[0].command);
 
     unite_mod.undo(&boundary, battle.host());
-    try std.testing.expectEqual(@as(u8, 1), battle.party[0].command);
-    try std.testing.expectEqual(@as(u8, 3), battle.party[1].command);
-    try std.testing.expectEqual(@as(u16, 0x0002), battle.party[0].actor_flags);
+    try std.testing.expectEqual(unite_mod.SlotCommand.attack, battle.party[0].command);
+    try std.testing.expectEqual(unite_mod.SlotCommand.item, battle.party[1].command);
+    try std.testing.expectEqual(@as(u16, 0x0002), battle.party[0].actor_flags.toMask());
     try std.testing.expectEqual(unite_mod.Stage.rolled_back, boundary.stage);
 
     // Undo is idempotent.
@@ -496,9 +497,9 @@ test "cancel and retarget restore the prior command bytes" {
     try std.testing.expectEqual(writes, battle.writes);
 
     // A fresh plan after the rollback is available again.
-    var again = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = 5 });
+    var again = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = .{ .enemy = 2 } });
     try again.commit(battle.host());
-    try std.testing.expectEqual(@as(u8, 4), battle.party[0].command);
+    try std.testing.expectEqual(unite_mod.SlotCommand.unite, battle.party[0].command);
 }
 
 test "damage consumes hit flags without inventing return readiness" {
@@ -506,16 +507,16 @@ test "damage consumes hit flags without inventing return readiness" {
     defer cat.deinit(std.testing.allocator);
     var battle = TestBattle.init(&.{ 6, 2 });
     battle.draws = .{ .values = &values_five };
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = 4 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = .{ .enemy = 1 } });
     try boundary.commit(battle.host());
-    battle.party[0].actor_flags = 2;
-    battle.party[1].actor_flags = 6;
+    battle.party[0].actor_flags = unite_mod.ActorFlags.fromMask(2);
+    battle.party[1].actor_flags = unite_mod.ActorFlags.fromMask(6);
     switch (unite_mod.impact(&boundary, &cat, battle.view(), battle.host(), &battle.draws)) {
         .applied => {},
         else => return error.ExpectedApplied,
     }
-    try std.testing.expectEqual(@as(u16, 0), battle.party[0].actor_flags);
-    try std.testing.expectEqual(@as(u16, 4), battle.party[1].actor_flags);
+    try std.testing.expectEqual(@as(u16, 0), battle.party[0].actor_flags.toMask());
+    try std.testing.expectEqual(@as(u16, 4), battle.party[1].actor_flags.toMask());
 }
 
 test "a clear leader hit flag skips damage but the action still completes" {
@@ -525,7 +526,7 @@ test "a clear leader hit flag skips damage but the action still completes" {
     battle.draws = .{ .values = &values_five };
     battle.hit_ready[0] = false;
 
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = 4 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 0, .target = .{ .enemy = 1 } });
     try boundary.commit(battle.host());
     switch (unite_mod.impact(&boundary, &cat, battle.view(), battle.host(), &battle.draws)) {
         .skipped => |skip| try std.testing.expectEqual(unite_mod.Skip.leader_hit_flag_clear, skip),
@@ -542,10 +543,10 @@ test "a group Unite skips an inactive enemy and hits the remaining enemies" {
     var cat = try catalogue();
     defer cat.deinit(std.testing.allocator);
     var battle = TestBattle.init(&.{ 4, 9 });
-    battle.party[0].target = 4;
+    battle.party[0].target = .{ .enemy = 1 };
     battle.draws = .{ .values = &values_five };
 
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 2, .target = 0 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 2, .target = .none });
     try boundary.commit(battle.host());
     battle.enemies[1].active = false;
     switch (unite_mod.impact(&boundary, &cat, battle.view(), battle.host(), &battle.draws)) {
@@ -569,21 +570,21 @@ test "recovery retains one round, then clears, and only item/defend stay availab
     var slot = unite_mod.Slot{ .character_id = 6 };
     try std.testing.expectEqual(unite_mod.RecoveryTick.idle, unite_mod.tickRecovery(&slot));
 
-    slot.status_mask = unite_mod.rules.recovery_mask;
+    slot.status.recovering = true;
     slot.recovery_counter = 1;
     try std.testing.expectEqual(unite_mod.RecoveryTick.retained, unite_mod.tickRecovery(&slot));
-    try std.testing.expectEqual(@as(u16, unite_mod.rules.recovery_mask), slot.status_mask);
+    try std.testing.expect(slot.status.recovering);
     try std.testing.expectEqual(@as(u8, 0), slot.recovery_counter);
     try std.testing.expectEqual(unite_mod.RecoveryTick.cleared, unite_mod.tickRecovery(&slot));
-    try std.testing.expectEqual(@as(u16, 0), slot.status_mask);
+    try std.testing.expect(!slot.status.recovering);
     try std.testing.expectEqual(unite_mod.RecoveryTick.idle, unite_mod.tickRecovery(&slot));
 }
 
 test "round reset clears command, ordinal and target" {
     const state = unite_mod.roundReset();
-    try std.testing.expectEqual(@as(u8, 0), state.command);
-    try std.testing.expectEqual(@as(u8, 0), state.unite_ordinal);
-    try std.testing.expectEqual(@as(i8, 0), state.target);
+    try std.testing.expectEqual(unite_mod.SlotCommand.none, state.command);
+    try std.testing.expectEqual(@as(?u8, null), state.unite_record);
+    try std.testing.expectEqual(unite_mod.Target.none, state.target);
     try std.testing.expect(state.available);
     try std.testing.expectEqual(@as(u8, 1), unite_mod.memberMark());
 }
@@ -594,7 +595,7 @@ test "the successful path reports one HP commit and the boundary schema" {
     var battle = TestBattle.init(&.{ 14, 65, 80 }); // Kobold ?1 attack, three members
     battle.draws = .{ .values = &values_three };
 
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 26, .target = 4 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 26, .target = .{ .enemy = 0 } });
     try boundary.commit(battle.host());
     switch (unite_mod.impact(&boundary, &cat, battle.view(), battle.host(), &battle.draws)) {
         .applied => |amount| try std.testing.expectEqual(@as(u32, 27), amount), // (2+3+4)*30/10
@@ -614,7 +615,7 @@ test "Unite recovery follows each member script instead of a universal penalty" 
     for ([_]u8{ 0, 1, 8, 27 }) |index| {
         const record = cat.recordAt(index).?;
         var battle = TestBattle.init(record.membersSlice());
-        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = index, .target = @intCast(battle.party_count + 1) });
+        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = index, .target = .{ .enemy = 0 } });
         try boundary.commit(battle.host());
         try boundary.finish(battle.view(), battle.host());
         for (boundary.participantsSlice(), 0..) |slot, member| {
@@ -625,7 +626,7 @@ test "Unite recovery follows each member script instead of a universal penalty" 
                 27 => member == 0,
                 else => unreachable,
             };
-            try std.testing.expectEqual(@as(u16, if (expected) unite_mod.rules.recovery_mask else 0), battle.party[slot].status_mask);
+            try std.testing.expectEqual(expected, battle.party[slot].status.recovering);
             try std.testing.expectEqual(@as(u8, if (expected) 1 else 0), battle.party[slot].recovery_counter);
         }
     }
@@ -637,7 +638,7 @@ test "Master pupil claims each eligible enemy once using two independent member 
     var battle = TestBattle.init(&.{ 8, 91 });
     const values: [6]u15 = .{ 1, 2, 3, 4, 5, 6 };
     battle.draws = .{ .values = &values };
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 31, .target = 0 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 31, .target = .none });
     try boundary.commit(battle.host());
     var hit_ticks: [3]u16 = undefined;
     var hits: usize = 0;
@@ -652,7 +653,7 @@ test "Master pupil claims each eligible enemy once using two independent member 
     }
     try std.testing.expectEqual(@as(usize, 3), hits);
     try std.testing.expectEqualSlices(u16, &.{ 142, 146, 261 }, &hit_ticks);
-    try std.testing.expectEqualSlices(i16, &.{ 3, 4, 5 }, battle.damage_targets[0..3]);
+    try std.testing.expectEqualSlices(unite_mod.Target, &.{ .{ .enemy = 0 }, .{ .enemy = 1 }, .{ .enemy = 2 } }, battle.damage_targets[0..3]);
     try std.testing.expectEqual(@as(usize, 6), battle.draws.cursor);
     try std.testing.expectEqual(@as(u32, 21), boundary.amount);
     try std.testing.expectEqual(@as(?u16, 332), boundary.sequence.?.finish_at);
@@ -667,7 +668,7 @@ test "Master pupil excludes initially inactive or hidden enemies and does not re
     battle.enemies[2].status_byte = 1;
     const values: [2]u15 = .{ 5, 5 };
     battle.draws = .{ .values = &values };
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 31, .target = 0 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 31, .target = .none });
     try boundary.commit(battle.host());
     for (0..230) |tick| {
         if (tick == 100) battle.enemies[1].active = false;
@@ -677,7 +678,7 @@ test "Master pupil excludes initially inactive or hidden enemies and does not re
         };
     }
     try std.testing.expectEqual(@as(u32, 1), battle.damage_calls);
-    try std.testing.expectEqual(@as(i16, 3), battle.damage_target);
+    try std.testing.expectEqual(unite_mod.Target{ .enemy = 0 }, battle.damage_target);
     try std.testing.expectEqual(@as(usize, 2), battle.draws.cursor);
 }
 
@@ -699,7 +700,7 @@ test "individual returns apply recovery once and leave unfinished participants r
     var cat = try catalogue();
     defer cat.deinit(std.testing.allocator);
     var battle = TestBattle.init(&.{ 32, 38 });
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 1, .target = 3 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 1, .target = .{ .enemy = 0 } });
     try boundary.commit(battle.host());
     try std.testing.expectError(error.NotParticipant, boundary.finishMember(battle.view(), battle.host(), 4));
     battle.party_count = 1;
@@ -708,8 +709,8 @@ test "individual returns apply recovery once and leave unfinished participants r
     try boundary.finishMember(battle.view(), battle.host(), 1);
     try std.testing.expectEqual(unite_mod.Stage.committed, boundary.stage);
     try std.testing.expectEqual(@as(u32, 1), battle.status_writes);
-    try std.testing.expectEqual(@as(u16, 0), battle.party[0].status_mask);
-    try std.testing.expectEqual(unite_mod.rules.recovery_mask, battle.party[1].status_mask);
+    try std.testing.expect(!battle.party[0].status.recovering);
+    try std.testing.expect(battle.party[1].status.recovering);
     try std.testing.expectError(error.MemberAlreadyFinished, boundary.finishMember(battle.view(), battle.host(), 1));
     try std.testing.expectEqual(@as(u32, 1), battle.status_writes);
     try boundary.finish(battle.view(), battle.host());
@@ -749,7 +750,7 @@ test "Unite hit gates select the command owner or the source member ordinal" {
         for (record.membersSlice(), 0..) |id, i| ids[record.member_count - i - 1] = id;
         var battle = TestBattle.init(ids[0..record.member_count]);
         battle.draws = .{ .values = &values_five };
-        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = index, .target = @intCast(battle.party_count + 1) });
+        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = index, .target = .{ .enemy = 0 } });
         try boundary.commit(battle.host());
         const selected: usize = if (record.hit_actor.?.member) |ordinal| record.member_count - ordinal - 1 else 0;
         try std.testing.expectEqual(selected, boundary.hitActor(record).?);
@@ -792,11 +793,11 @@ test "participant status changes after initialization do not cancel a later comb
     defer cat.deinit(std.testing.allocator);
     for ([_]u16{ 0, unite_mod.rules.recovery_mask, 0x20, 0x21 }) |mask| {
         var battle = TestBattle.init(&.{ 3, 33, 23 });
-        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 8, .target = 4 });
+        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 8, .target = .{ .enemy = 0 } });
         try boundary.commit(battle.host());
         try boundary.finishMember(battle.view(), battle.host(), 2);
-        try std.testing.expectEqual(unite_mod.rules.recovery_mask, battle.party[2].status_mask);
-        battle.party[2].status_mask |= mask;
+        try std.testing.expect(battle.party[2].status.recovering);
+        battle.party[2].status = unite_mod.StatusFlags.fromMask(battle.party[2].status.toMask() | mask);
         var draws = rng.Draws{ .values = &.{ 0, 0, 0 } };
         const result = boundary.impact(&cat, battle.view(), battle.host(), &draws);
         switch (result) {
@@ -807,11 +808,11 @@ test "participant status changes after initialization do not cancel a later comb
     }
     for ([_]bool{ false, true }) |returned| {
         var battle = TestBattle.init(&.{ 3, 33, 23 });
-        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 8, .target = 4 });
+        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 8, .target = .{ .enemy = 0 } });
         try boundary.commit(battle.host());
         const member: usize = if (returned) 0 else 2;
         if (returned) try boundary.finishMember(battle.view(), battle.host(), member);
-        battle.party[member].status_mask = unite_mod.rules.recovery_mask;
+        battle.party[member].status = .{ .recovering = true };
         var draws = rng.Draws{ .values = &.{ 0, 0, 0 } };
         switch (boundary.impact(&cat, battle.view(), battle.host(), &draws)) {
             .applied => try std.testing.expectEqual(@as(usize, 3), draws.cursor),
@@ -828,36 +829,36 @@ test "Trick sequence contacts hit only the selected enemy without clearing parti
     var battle = TestBattle.init(record.membersSlice());
     const values = [_]u15{ 10, 20, 30, 40 };
     battle.draws = .{ .values = &values };
-    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 14, .target = 3 });
+    var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = 14, .target = .{ .enemy = 0 } });
     try boundary.commit(battle.host());
     const flags = battle.party[0].actor_flags;
-    switch (unite_mod.impactSequenceTarget(&boundary, &cat, battle.view(), battle.host(), &battle.draws, 4)) {
+    switch (unite_mod.impactSequenceTarget(&boundary, &cat, battle.view(), battle.host(), &battle.draws, .{ .enemy = 1 })) {
         .applied => |amount| try std.testing.expectEqual(@as(u32, 30), amount),
         else => return error.ExpectedApplied,
     }
     try std.testing.expectEqual(@as(u32, 1), battle.damage_calls);
-    try std.testing.expectEqual(@as(i16, 4), battle.damage_target);
+    try std.testing.expectEqual(unite_mod.Target{ .enemy = 1 }, battle.damage_target);
     try std.testing.expectEqual(@as(usize, 2), battle.draws.cursor);
     try std.testing.expectEqual(flags, battle.party[0].actor_flags);
     battle.enemies[0].active = false;
-    switch (unite_mod.impactSequenceTarget(&boundary, &cat, battle.view(), battle.host(), &battle.draws, 3)) {
+    switch (unite_mod.impactSequenceTarget(&boundary, &cat, battle.view(), battle.host(), &battle.draws, .{ .enemy = 0 })) {
         .skipped => {},
         else => return error.ExpectedSkipped,
     }
     battle.enemies[0].active = true;
     battle.enemies[0].status_byte = 1;
-    switch (unite_mod.impactSequenceTarget(&boundary, &cat, battle.view(), battle.host(), &battle.draws, 3)) {
+    switch (unite_mod.impactSequenceTarget(&boundary, &cat, battle.view(), battle.host(), &battle.draws, .{ .enemy = 0 })) {
         .skipped => {},
         else => return error.ExpectedSkipped,
     }
     try std.testing.expectEqual(@as(usize, 2), battle.draws.cursor);
     try std.testing.expectEqual(@as(u32, 1), battle.damage_calls);
-    switch (unite_mod.impactSequenceTarget(&boundary, &cat, battle.view(), battle.host(), &battle.draws, 5)) {
+    switch (unite_mod.impactSequenceTarget(&boundary, &cat, battle.view(), battle.host(), &battle.draws, .{ .enemy = 2 })) {
         .applied => |amount| try std.testing.expectEqual(@as(u32, 70), amount),
         else => return error.ExpectedApplied,
     }
     try std.testing.expectEqual(@as(u32, 2), battle.damage_calls);
-    try std.testing.expectEqual(@as(i16, 5), battle.damage_target);
+    try std.testing.expectEqual(unite_mod.Target{ .enemy = 2 }, battle.damage_target);
     try std.testing.expectEqual(@as(usize, 4), battle.draws.cursor);
 }
 
@@ -874,20 +875,20 @@ test "Talisman and Fisherman retain migrated combined-damage vectors and one com
         const record = cat.recordAt(@intCast(record_index)).?;
         var battle = TestBattle.init(record.membersSlice());
         battle.draws = .{ .values = &case.values };
-        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = @intCast(record_index), .target = 4 });
+        var boundary = try planOk(&cat, &battle, .{ .actor = 0, .record = @intCast(record_index), .target = .{ .enemy = 1 } });
         try boundary.commit(battle.host());
-        battle.party[0].actor_flags = 10;
-        battle.party[1].actor_flags = 6;
+        battle.party[0].actor_flags = unite_mod.ActorFlags.fromMask(10);
+        battle.party[1].actor_flags = unite_mod.ActorFlags.fromMask(6);
         switch (unite_mod.impact(&boundary, &cat, battle.view(), battle.host(), &battle.draws)) {
             .applied => |amount| try std.testing.expectEqual(case.amounts[record_index], amount),
             else => return error.ExpectedApplied,
         }
         try std.testing.expectEqual(@as(u32, 2), battle.physical_calls);
         try std.testing.expectEqual(@as(u32, 1), battle.damage_calls);
-        try std.testing.expectEqual(@as(i16, 4), battle.damage_target);
+        try std.testing.expectEqual(unite_mod.Target{ .enemy = 1 }, battle.damage_target);
         try std.testing.expectEqual(case.amounts[record_index], battle.damage_amount);
-        try std.testing.expectEqual(@as(u16, 8), battle.party[0].actor_flags);
-        try std.testing.expectEqual(@as(u16, 4), battle.party[1].actor_flags);
+        try std.testing.expectEqual(@as(u16, 8), battle.party[0].actor_flags.toMask());
+        try std.testing.expectEqual(@as(u16, 4), battle.party[1].actor_flags.toMask());
         switch (unite_mod.impact(&boundary, &cat, battle.view(), battle.host(), &battle.draws)) {
             .failed => |failure| switch (failure) {
                 .refusal => |reason| try std.testing.expectEqual(unite_mod.Refusal.not_committed, reason),
@@ -900,7 +901,7 @@ test "Talisman and Fisherman retain migrated combined-damage vectors and one com
         try std.testing.expectEqual(@as(u32, 1), battle.damage_calls);
         try boundary.finish(battle.view(), battle.host());
         for (battle.party[0..2]) |slot| {
-            try std.testing.expectEqual(@as(u16, if (record_index == 1) 0x40 else 0), slot.status_mask);
+            try std.testing.expectEqual(record_index == 1, slot.status.recovering);
             try std.testing.expectEqual(@as(u8, if (record_index == 1) 1 else 0), slot.recovery_counter);
         }
     };

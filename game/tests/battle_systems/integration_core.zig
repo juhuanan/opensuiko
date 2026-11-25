@@ -584,7 +584,7 @@ test "Critical and ordinary B C hits retain source impact births damage and came
             var draws = rules.Draws{ .values = &values };
             var initial: [4][3]i32 = undefined;
             const launch_camera = battle.layout.currentCamera(combat);
-            inline for (.{ "position", "angles", "c", "d" }, 0..) |name, channel| {
+            inline for (.{ "focus", "angles", "translation", "scale" }, 0..) |name, channel| {
                 for (0..3) |axis| initial[channel][axis] = @field(launch_camera, name)[axis] * 4096;
             }
             for (1..timing.release_tick + 1) |tick| {
@@ -1883,7 +1883,7 @@ test "queued Unite retargets presentation and damage after a knockout reaction r
     try queueRound(&combat, .unite);
     const owner: usize = 1;
     const original = combat.partyCount();
-    try std.testing.expectEqual(@as(i16, @intCast(original + 1)), combat.uniteBoundaryFor(owner).?.target);
+    try std.testing.expectEqual(@import("battle_systems").unite.Target{ .enemy = 0 }, combat.uniteBoundaryFor(owner).?.target);
 
     combat.enemy_hp[0] = 0;
     combat.enemy_hp[1] = 1;
@@ -1895,7 +1895,7 @@ test "queued Unite retargets presentation and damage after a knockout reaction r
     const coordinator = combat.coordinator;
     combat.advanceCoordinator();
     try std.testing.expectEqualDeep(coordinator, combat.coordinator);
-    try std.testing.expectEqual(@as(i16, @intCast(original + 1)), combat.uniteBoundaryFor(owner).?.target);
+    try std.testing.expectEqual(@import("battle_systems").unite.Target{ .enemy = 0 }, combat.uniteBoundaryFor(owner).?.target);
     combat.active = null;
 
     var tape = Tape{};
@@ -1904,7 +1904,7 @@ test "queued Unite retargets presentation and damage after a knockout reaction r
     const replacement = original + 1;
     try std.testing.expectEqual(replacement, combat.active.?.target);
     try std.testing.expectEqual(@as(?usize, original), combat.active.?.retargeted_from);
-    try std.testing.expectEqual(@as(i16, @intCast(replacement + 1)), combat.uniteBoundaryFor(owner).?.target);
+    try std.testing.expectEqual(@import("battle_systems").unite.Target{ .enemy = 1 }, combat.uniteBoundaryFor(owner).?.target);
     try std.testing.expectEqual(@as(i8, @intCast(replacement + 1)), combat.last_targets[owner]);
     try std.testing.expectEqual(@as(usize, 0), draws.cursor);
     for (0..500) |_| {
@@ -2072,7 +2072,7 @@ test "imported Unite tracks preserve member clocks for either command owner" {
                     const expected: i32 = if (tick >= 83) -128 * 4096 else 80 * 4096 + @divTrunc(-208 * @as(i32, 4096), 20) * n;
                     try std.testing.expectEqual(expected, controller.current[0][0]);
                     try std.testing.expectEqual(@as(u16, @intCast(20 - n)), controller.remaining[0]);
-                    try std.testing.expectEqual(expected >> 12, battle.layout.currentCamera(combat).position[0]);
+                    try std.testing.expectEqual(expected >> 12, battle.layout.currentCamera(combat).focus[0]);
                 }
             } else try std.testing.expect(combat.actor_camera == null);
 

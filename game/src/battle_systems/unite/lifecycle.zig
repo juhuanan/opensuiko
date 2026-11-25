@@ -5,19 +5,19 @@
 //!
 //!   plan      match the record's members, validate the target (with the source
 //!             repair scan), require every participant to be selectable
-//!   commit    write command 4, the one-based record ordinal and the target to
-//!             every participant; clear their selectable words
+//!   commit    book `.unite`, the selected record and the target on every
+//!             participant; clear their selectable flags
 //!   impact    one physical result per participant in record order, combined as
 //!             `sum * multiplier / 10`, applied once to the target
-//!   finish    apply recovery (status mask 0x40, counter 1) to living members
-//!   undo      restore the prior command bytes/flags and the draw cursor
+//!   finish    apply recovery (counter 1) to living members
+//!   undo      restore the prior command state, flags and availability
 //!
 //! Source rules that shape the code (MAIN.EXE):
 //!   * matcher `0x800F91C0` marks `B+0x46 = 1`, clears `A+0x40`, writes `B+0x49`,
 //!     and iterates `m = 0 .. count-1` in record order;
 //!   * commit `0x800EDE58` writes `B+0x47 = 4`, `B+0x48 = index + 1`,
 //!     `B+0x49 = target` and clears `UI+0xB4+4*slot`;
-//!   * availability `0x800EF104` accepts a member only when that word is 1,
+//!   * availability `0x800EF104` accepts a member only when selectable,
 //!     `0x800F8680` accepts the index, and `B+0x4A & 0x61` is clear;
 //!   * validator `0x800F5x8C` dispatches on the record's low flag bits;
 //!     `0x800F8680` validates and `0x800F6344` repairs an individual target;
@@ -63,50 +63,123 @@ pub const rules = struct {
     pub const recovery_counter: u8 = 1;
 };
 
+pub const StatusFlags = packed struct(u16) {
+    down: bool = false,
+    _unused1: u4 = 0,
+    asleep: bool = false,
+    recovering: bool = false,
+    _unused7: u9 = 0,
+
+    pub fn isIneligible(self: StatusFlags) bool {
+        return self.down or self.asleep or self.recovering;
+    }
+
+    pub fn fromMask(mask: u16) StatusFlags {
+        return @bitCast(mask);
+    }
+
+    pub fn toMask(self: StatusFlags) u16 {
+        return @bitCast(self);
+    }
+};
+
+pub const ActorFlags = packed struct(u16) {
+    _unused0: bool = false,
+    hit_ready: bool = false,
+    return_ready: bool = false,
+    _unused3: u13 = 0,
+
+    pub fn fromMask(mask: u16) ActorFlags {
+        return @bitCast(mask);
+    }
+
+    pub fn toMask(self: ActorFlags) u16 {
+        return @bitCast(self);
+    }
+};
+
+pub const SlotCommand = enum(u8) {
+    none = 0,
+    attack = 1,
+    rune = 2,
+    item = 3,
+    unite = 4,
+    defend = 5,
+    _,
+};
+
+pub const Target = union(enum) {
+    none,
+    party: usize,
+    enemy: usize,
+
+    pub fn fromSourceIndex(party_count: usize, raw: i16) Target {
+        if (raw <= 0) return .none;
+        const index: usize = @intCast(raw - 1);
+        return if (index < party_count) .{ .party = index } else .{ .enemy = index - party_count };
+    }
+
+    pub fn toSourceIndex(self: Target, party_count: usize) i16 {
+        return switch (self) {
+            .none => 0,
+            .party => |slot| @intCast(slot + 1),
+            .enemy => |slot| @intCast(party_count + 1 + slot),
+        };
+    }
+
+    pub fn fromCombatantIndex(party_count: usize, index: usize) Target {
+        return if (index < party_count) .{ .party = index } else .{ .enemy = index - party_count };
+    }
+
+    pub fn toCombatantIndex(self: Target, party_count: usize) ?usize {
+        return switch (self) {
+            .none => null,
+            .party => |slot| slot,
+            .enemy => |slot| party_count + slot,
+        };
+    }
+
+    pub fn eql(a: Target, b: Target) bool {
+        return switch (a) {
+            .none => b == .none,
+            .party => |slot| b == .party and b.party == slot,
+            .enemy => |slot| b == .enemy and b.enemy == slot,
+        };
+    }
+};
+
 pub const Slot = struct {
-    /// `A+0x00`, the character id the matcher compares against `+0x1A+m`.
     character_id: u8,
-    /// `B+0x45 == 0`: alive/eligible (`0x800F8680`).
     active: bool = true,
-    /// `B+0x4A`: status word; `& rules.eligibility_mask` excludes a participant.
-    status_mask: u16 = 0,
-    /// `B+0x12 - B+0x4E`: `>= 0` for an eligible participant, `> 0` for a
-    /// repair candidate.
+    status: StatusFlags = .{},
     hp: i16 = 1,
-    /// `A+0x05`: repair candidates require zero (`0x800F8628`).
     status_byte: u8 = 0,
-    /// `UI+0xB4+4*slot == 1`: still selectable, i.e. not already booked.
     available: bool = true,
-    /// `B+0x47`: command byte (4 = Unite after a commit).
-    command: u8 = 0,
-    /// `B+0x48`: one-based unite record ordinal (0 = none).
-    unite_ordinal: u8 = 0,
-    /// `B+0x49`: chosen target source index (negative = none).
-    target: i8 = 0,
-    /// `B+0x4D`: recovery counter.
+    command: SlotCommand = .none,
+    unite_record: ?u8 = null,
+    target: Target = .none,
     recovery_counter: u8 = 0,
-    /// `A+0x40`: per-actor flag word (bit 1 hit gate, bit 2 completion slot).
-    actor_flags: u16 = 0,
+    actor_flags: ActorFlags = .{},
 };
 
 pub const CommandWrite = struct {
-    command: u8,
-    unite_ordinal: u8,
-    target: i8,
+    command: SlotCommand,
+    unite_record: ?u8,
+    target: Target,
     available: bool,
 };
 
 pub const SlotState = struct {
-    command: u8 = 0,
-    unite_ordinal: u8 = 0,
-    target: i8 = 0,
+    command: SlotCommand = .none,
+    unite_record: ?u8 = null,
+    target: Target = .none,
     available: bool = true,
-    actor_flags: u16 = 0,
+    actor_flags: ActorFlags = .{},
 
     pub fn of(slot: Slot) SlotState {
         return .{
             .command = slot.command,
-            .unite_ordinal = slot.unite_ordinal,
+            .unite_record = slot.unite_record,
             .target = slot.target,
             .available = slot.available,
             .actor_flags = slot.actor_flags,
@@ -116,15 +189,15 @@ pub const SlotState = struct {
     pub fn write(self: SlotState) CommandWrite {
         return .{
             .command = self.command,
-            .unite_ordinal = self.unite_ordinal,
+            .unite_record = self.unite_record,
             .target = self.target,
             .available = self.available,
         };
     }
 
     pub fn eql(a: SlotState, b: SlotState) bool {
-        return a.command == b.command and a.unite_ordinal == b.unite_ordinal and
-            a.target == b.target and a.available == b.available and
+        return a.command == b.command and a.unite_record == b.unite_record and
+            a.target.eql(b.target) and a.available == b.available and
             a.actor_flags == b.actor_flags;
     }
 };
@@ -133,37 +206,13 @@ pub const View = struct {
     party: []const Slot,
     enemies: []const Slot,
 
-    /// Source actor indices are one-based; `A[0]`/`B[0]` are unused dummies.
-    pub fn total(self: View) i16 {
-        return @intCast(self.party.len + self.enemies.len);
+    pub fn enemySlot(self: View, target: Target) ?usize {
+        return switch (target) {
+            .enemy => |slot| if (slot < self.enemies.len) slot else null,
+            else => null,
+        };
     }
 
-    pub fn partySource(self: View, slot: usize) i16 {
-        _ = self;
-        return @intCast(slot + 1);
-    }
-
-    pub fn enemySource(self: View, slot: usize) i16 {
-        return @intCast(self.party.len + 1 + slot);
-    }
-
-    pub fn enemySlot(self: View, source: i16) ?usize {
-        const first: i16 = @intCast(self.party.len + 1);
-        if (source < first) return null;
-        const index: usize = @intCast(source - first);
-        if (index >= self.enemies.len) return null;
-        return index;
-    }
-
-    pub fn partyOf(self: View, source: i16) ?usize {
-        if (source < 1) return null;
-        const index: usize = @intCast(source - 1);
-        if (index >= self.party.len) return null;
-        return index;
-    }
-
-    /// `battle state +0x2C` = number of enemy records with `B+0x45 == 0`
-    /// (written by the completion scan at `0x800F74DC..0x800F752C`).
     pub fn livingEnemies(self: View) u8 {
         var n: u8 = 0;
         for (self.enemies) |enemy| if (enemy.active) {
@@ -176,10 +225,10 @@ pub const View = struct {
 pub const Request = struct {
     /// Zero-based party slot of the actor whose command selected Unite.
     actor: usize,
-    /// Catalogue index of the selected record.
+    /// Zero-based catalogue index of the selected record.
     record: u8,
-    /// Source actor index confirmed in the target picker (ignored for bypass).
-    target: i8 = 0,
+    /// Chosen target (ignored for bypass).
+    target: Target = .none,
 };
 
 pub const CommandKind = enum { attack, rune, unite, item, defend };
@@ -224,7 +273,7 @@ pub const Stage = enum { planned, committed, impacted, finished, rolled_back };
 
 pub const TargetQueue = struct {
     pending: [max_party]bool = @splat(false),
-    targets: [max_members]?i16 = @splat(null),
+    targets: [max_members]?usize = @splat(null),
     ready_at: [max_members]u16 = @splat(0),
     impact_at: [max_members]?u16 = @splat(null),
     return_at: [max_members]?u16 = @splat(null),
@@ -236,10 +285,9 @@ pub const Boundary = struct {
     command_owner: usize,
     sequence: ?TargetQueue = null,
     recovery: [max_members]bool = @splat(false),
-    ordinal: u8,
-    target: i16,
+    target: Target,
     /// `0x800F6344` replaced an invalid individual target.
-    retargeted_from: ?i16 = null,
+    retargeted_from: ?Target = null,
     participants: [max_members]usize = undefined,
     count: u8 = 0,
     prior: [max_members]SlotState = undefined,
@@ -247,6 +295,10 @@ pub const Boundary = struct {
     finished_members: u8 = 0,
     saved_draws: ?rng.Draws = null,
     amount: u32 = 0,
+
+    pub fn wireOrdinal(self: Boundary) u8 {
+        return self.record_index + rules.ordinal_bias;
+    }
 
     pub fn hitActor(self: *const Boundary, record: *const catalogue.Record) ?usize {
         const actor = record.hit_actor orelse return null;
@@ -286,7 +338,7 @@ pub const Boundary = struct {
                 } else null;
                 if (chosen) |enemy| {
                     queue.pending[enemy] = false;
-                    queue.targets[member] = view.enemySource(enemy);
+                    queue.targets[member] = enemy;
                     queue.impact_at[member] = tick + timing.members[member].impact;
                     queue.ready_at[member] = tick + timing.members[member].ready;
                 } else {
@@ -301,7 +353,7 @@ pub const Boundary = struct {
             var hit = self.*;
             hit.sequence = null;
             hit.stage = .committed;
-            hit.target = queue.targets[member].?;
+            hit.target = .{ .enemy = queue.targets[member].? };
             const result = impactBoundary(&hit, cat, view, host, draws);
             switch (result) {
                 .applied => |amount| {
@@ -339,7 +391,11 @@ pub const Boundary = struct {
         const bit = @as(u8, 1) << @intCast(member);
         if (self.finished_members & bit != 0) return error.MemberAlreadyFinished;
         const state = view.party[slot];
-        if (state.active and self.recovery[member]) host.write_status(host.context, slot, state.status_mask | rules.recovery_mask, rules.recovery_counter);
+        if (state.active and self.recovery[member]) {
+            var next_status = state.status;
+            next_status.recovering = true;
+            host.write_status(host.context, slot, next_status, rules.recovery_counter);
+        }
         self.finished_members |= bit;
         if (self.finished_members == (@as(u8, 1) << @intCast(self.count)) - 1) self.stage = .finished;
     }
@@ -351,23 +407,16 @@ pub const Boundary = struct {
 
 pub const Host = struct {
     context: *anyopaque,
-    /// Write `B+0x47/0x48/0x49` and the selectable word for one participant.
     write_slot: *const fn (context: *anyopaque, slot: usize, state: CommandWrite) void,
-    /// Write `B+0x4A` and `B+0x4D`.
-    write_status: *const fn (context: *anyopaque, slot: usize, mask: u16, counter: u8) void,
-    /// Write `A+0x40`.
-    write_flags: *const fn (context: *anyopaque, slot: usize, flags: u16) void,
-    /// One combined HP commit (source `0x800E1654`).
-    apply_damage: *const fn (context: *anyopaque, target: i16, amount: u32) void,
-    /// The existing physical routine: one draw-consuming result for `slot`
-    /// against `target`.  It must be the coordinator's shared routine.
-    physical: *const fn (context: *anyopaque, slot: usize, target: i16, draws: *rng.Draws) anyerror!u32,
-    /// `A+0x40 & rules.hit_flag` for the leader (the `0x800F9488` gate).
+    write_status: *const fn (context: *anyopaque, slot: usize, status: StatusFlags, counter: u8) void,
+    write_flags: *const fn (context: *anyopaque, slot: usize, flags: ActorFlags) void,
+    apply_damage: *const fn (context: *anyopaque, target: Target, amount: u32) void,
+    physical: *const fn (context: *anyopaque, slot: usize, target: Target, draws: *rng.Draws) anyerror!u32,
     hit_ready: *const fn (context: *anyopaque, slot: usize) bool,
 };
 
 const TargetResult = union(enum) {
-    target: i16,
+    target: Target,
     refusal: Refusal,
 };
 
@@ -376,26 +425,19 @@ fn resolveTarget(record: *const catalogue.Record, view: View, request: Request) 
         .individual => {
             if (view.enemySlot(request.target)) |slot| {
                 const enemy = view.enemies[slot];
-                // 0x800F8680: B+0x45 == 0 and B+0x12-B+0x4E >= 0.
                 if (enemy.active and enemy.hp >= 0) return .{ .target = request.target };
             }
-            // 0x800F6344: ascending enemy scan, A+0x05 == 0, B+0x45 == 0 and a
-            // strictly positive HP difference.
             for (view.enemies, 0..) |enemy, i| {
                 if (enemy.status_byte == 0 and enemy.active and enemy.hp > 0) {
-                    return .{ .target = view.enemySource(i) };
+                    return .{ .target = .{ .enemy = i } };
                 }
             }
             return .{ .refusal = .no_replacement };
         },
         .bypass => {
-            // 0x800F58C0: state+0x2C (living enemy count) must be positive.
             if (view.livingEnemies() == 0) return .{ .refusal = .bypass_without_living_enemy };
-            // 0x800EDE58 reuses the actor's existing B+0x49; the source does not
-            // validate it.  The port refuses a stale or non-enemy target
-            // instead of letting an index-0 dummy record receive the hit.
             if (record.sequence != null) for (view.enemies, 0..) |enemy, i| {
-                if (enemy.active) return .{ .target = view.enemySource(i) };
+                if (enemy.active) return .{ .target = .{ .enemy = i } };
             };
             const existing = view.party[request.actor].target;
             if (view.enemySlot(existing)) |slot| {
@@ -403,7 +445,7 @@ fn resolveTarget(record: *const catalogue.Record, view: View, request: Request) 
                 if (enemy.active and enemy.hp >= 0) return .{ .target = existing };
             }
             if (record.all_enemies) for (view.enemies, 0..) |enemy, i| {
-                if (enemy.active and enemy.hp > 0) return .{ .target = view.enemySource(i) };
+                if (enemy.active and enemy.hp > 0) return .{ .target = .{ .enemy = i } };
             };
             return .{ .refusal = .invalid_target };
         },
@@ -421,8 +463,7 @@ pub fn plan(cat: *const catalogue.Catalogue, view: View, request: Request) PlanR
         .record_index = record.index,
         .command_owner = request.actor,
         .recovery = record.recovery,
-        .ordinal = record.ordinal(),
-        .target = 0,
+        .target = .none,
     };
 
     var used: [max_party]bool = @splat(false);
@@ -444,11 +485,10 @@ pub fn plan(cat: *const catalogue.Catalogue, view: View, request: Request) PlanR
     }
     if (!actor_found) return .{ .refusal = .actor_not_member };
 
-    // Reservation and eligibility: the availability enumerator's complete gate.
     for (boundary.participantsSlice()) |index| {
         const slot = view.party[index];
         if (!slot.active or slot.hp < 0) return .{ .refusal = .participant_down };
-        if (slot.status_mask & rules.eligibility_mask != 0) return .{ .refusal = .participant_unavailable };
+        if (slot.status.isIneligible()) return .{ .refusal = .participant_unavailable };
         if (!slot.available) return .{ .refusal = .participant_assigned };
     }
 
@@ -458,7 +498,7 @@ pub fn plan(cat: *const catalogue.Catalogue, view: View, request: Request) PlanR
         .target => |target| {
             // Only the individual rule can be repaired (0x800F6344); a bypass
             // record reuses its existing target and reports no retarget.
-            if (record.target_rule == .individual and target != request.target)
+            if (record.target_rule == .individual and !target.eql(request.target))
                 boundary.retargeted_from = request.target;
             boundary.target = target;
         },
@@ -473,24 +513,21 @@ pub fn plan(cat: *const catalogue.Catalogue, view: View, request: Request) PlanR
     return .{ .boundary = boundary };
 }
 
-/// Apply every pending write in one pass.  The caller has already validated
-/// them, so this cannot fail part-way: the reservations either all exist or the
-/// plan was refused.
+/// Apply every pending write in one pass.
 pub fn commitBoundary(boundary: *Boundary, host: Host) !void {
     if (boundary.stage != .planned) return error.InvalidBoundaryStage;
     for (boundary.participantsSlice()) |slot| {
         host.write_slot(host.context, slot, .{
-            .command = rules.unite_command,
-            .unite_ordinal = boundary.ordinal,
-            .target = @intCast(boundary.target),
+            .command = .unite,
+            .unite_record = boundary.record_index,
+            .target = boundary.target,
             .available = false,
         });
     }
     boundary.stage = .committed;
 }
 
-/// Compute the combined hit and apply it once.  Any failure restores the draw
-/// cursor and undoes the boundary, so no partial combination survives.
+/// Compute the combined hit and apply it once.
 pub fn impactBoundary(
     boundary: *Boundary,
     cat: *const catalogue.Catalogue,
@@ -502,7 +539,7 @@ pub fn impactBoundary(
 }
 
 /// A repeating member calls the shared target helper without clearing its partner's signals.
-pub fn impactSequenceTarget(boundary: *const Boundary, cat: *const catalogue.Catalogue, view: View, host: Host, draws: *rng.Draws, target: i16) Impact {
+pub fn impactSequenceTarget(boundary: *const Boundary, cat: *const catalogue.Catalogue, view: View, host: Host, draws: *rng.Draws, target: Target) Impact {
     var hit = boundary.*;
     hit.stage = .committed;
     hit.sequence = null;
@@ -549,7 +586,7 @@ fn impactBoundaryImpl(
     var total: u64 = 0;
     for (0..target_count) |target_index| {
         if (all_targets and !view.enemies[target_index].active) continue;
-        const target: i16 = if (all_targets) @intCast(view.party.len + 1 + target_index) else boundary.target;
+        const target: Target = if (all_targets) .{ .enemy = target_index } else boundary.target;
         var sum: u64 = 0;
         for (boundary.participantsSlice()) |slot| {
             const contribution = host.physical(host.context, slot, target, draws) catch |err| {
@@ -573,13 +610,14 @@ fn impactBoundaryImpl(
     // Stage every target before publishing HP, so a late draw failure is atomic.
     for (0..target_count) |target_index| {
         if (all_targets and !view.enemies[target_index].active) continue;
-        const target: i16 = if (all_targets) @intCast(view.party.len + 1 + target_index) else boundary.target;
+        const target: Target = if (all_targets) .{ .enemy = target_index } else boundary.target;
         host.apply_damage(host.context, target, amounts[target_index]);
     }
     const amount: u32 = @intCast(total);
     // Damage consumes hit flags; each member's script supplies its own return-ready flag.
     if (clear_member_signals) for (boundary.participantsSlice()) |slot| {
-        const flags = view.party[slot].actor_flags & ~rules.hit_flag;
+        var flags = view.party[slot].actor_flags;
+        flags.hit_ready = false;
         host.write_flags(host.context, slot, flags);
     };
     boundary.amount = amount;
@@ -589,8 +627,6 @@ fn impactBoundaryImpl(
 
 /// Apply recovery only to members whose selected source scripts carry op40(7,100).
 pub fn finishBoundary(boundary: *Boundary, view: View, host: Host) !void {
-    // The source return descriptor runs whether or not the effect gate accepted
-    // the hit, so a committed-but-skipped action still applies recovery.
     if (boundary.stage != .impacted and boundary.stage != .committed)
         return error.InvalidBoundaryStage;
     for (boundary.participantsSlice(), 0..) |slot, member| {
@@ -606,8 +642,7 @@ fn restoreBoundary(boundary: *Boundary, host: Host) void {
     boundary.stage = .rolled_back;
 }
 
-/// Cancel or abort a boundary.  Idempotent: undoing already-restored state is a
-/// no-op.  A committed boundary restores its writes; a planned one wrote none.
+/// Cancel or abort a boundary.  Idempotent: undoing already-restored state is a no-op.
 pub fn undoBoundaryPublic(boundary: *Boundary, host: Host) void {
     switch (boundary.stage) {
         .planned, .impacted, .committed => restoreBoundary(boundary, host),
@@ -615,23 +650,19 @@ pub fn undoBoundaryPublic(boundary: *Boundary, host: Host) void {
     }
 }
 
-/// The source boundary order for the recovery class: a set flag is retained for
-/// one round (counter 1 -> 0) and cleared on the following boundary.
 pub const RecoveryTick = enum { idle, retained, cleared };
 
 pub fn tickRecovery(slot: *Slot) RecoveryTick {
-    if (slot.status_mask & rules.recovery_mask == 0) return .idle;
+    if (!slot.status.recovering) return .idle;
     if (slot.recovery_counter != 0) {
         slot.recovery_counter -= 1;
         return .retained;
     }
-    slot.status_mask &= ~rules.recovery_mask;
+    slot.status.recovering = false;
     slot.recovery_counter = 0;
     return .cleared;
 }
 
-/// Command availability while a participant carries the recovery class.  The
-/// source excludes Attack, Rune and Unite; Item and Defend remain available.
 pub fn allows(kind: CommandKind) bool {
     return switch (kind) {
         .attack, .rune, .unite => false,
@@ -639,14 +670,10 @@ pub fn allows(kind: CommandKind) bool {
     };
 }
 
-/// The source round reset (`0x800F6BF8..0x800F6C2C`): command, ordinal and
-/// target cleared for every combatant.  Exposed as a per-slot value so the
-/// coordinator can apply it without a second state model.
 pub fn roundReset() SlotState {
-    return .{ .command = 0, .unite_ordinal = 0, .target = 0, .available = true, .actor_flags = 0 };
+    return .{ .command = .none, .unite_record = null, .target = .none, .available = true, .actor_flags = .{} };
 }
 
-/// The source matcher's mark byte for a participant (`B+0x46 = 1`).
 pub fn memberMark() u8 {
     return 1;
 }

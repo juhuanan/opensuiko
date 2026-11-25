@@ -30,7 +30,6 @@ pub const sidecar_schema = host.sidecar_schema;
 pub const flag_slots = host.flag_slots;
 pub const story_castle_index = host.story_castle_index;
 pub const story_castle_mask = host.story_castle_mask;
-pub const story_page_base = host.story_page_base;
 
 test {
     _ = host;

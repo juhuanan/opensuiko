@@ -1243,7 +1243,7 @@ test "native Drops geometry agrees with independently exported source vectors" {
     try std.testing.expectError(error.InvalidDropsArt, invalid.validate(128, 64));
     for (vectors.value.cases) |case| {
         const block = battle.drops.cameraAt(case.update);
-        const flat = block.position ++ block.angles ++ block.c ++ block.d;
+        const flat = block.focus ++ block.angles ++ block.translation ++ block.scale;
         try std.testing.expectEqualDeep(case.camera, flat);
         const frame = battle.drops.frameAt(art, case.update, vectors.value.draws, vectors.value.caster, vectors.value.target);
         try std.testing.expectEqual(case.command_count, frame.count);
@@ -1296,7 +1296,7 @@ test "review Drops spends its visual draws at start and heals only at callback30
             const original = state.dropsFrame();
             state.enemy_magic_pulse = .{ .issued_at = state.camera_ticks -% 1, .delta_q12 = 5 * 4096 };
             var pulsed = base;
-            pulsed.position[2] += 5;
+            pulsed.focus[2] += 5;
             try std.testing.expectEqualDeep(pulsed, battle.layout.worldProjection(&state).drops);
             try std.testing.expectEqualDeep(base, battle.layout.cameraForTransition(&state));
             try std.testing.expect(!std.meta.eql(original.commands[0].vertices, state.dropsFrame().commands[0].vertices));
@@ -1378,7 +1378,7 @@ test "portable scene programs match independent Python geometry and BIOS draws" 
         try instance.?.advance(packet, case.update, &draws);
         try std.testing.expectEqual(case.draw_count, draws.cursor);
         const cam = battle.spell_scene.instanceCameraAt(packet.spells[index].program.?, &instance.?, case.update);
-        try std.testing.expectEqualDeep(case.camera, cam.position ++ cam.angles ++ cam.c ++ cam.d);
+        try std.testing.expectEqualDeep(case.camera, cam.focus ++ cam.angles ++ cam.translation ++ cam.scale);
         const frame = battle.spell_scene.frameAt(packet, &instance.?, case.update);
         try std.testing.expectEqual(case.count, frame.count);
         try std.testing.expectEqualDeep(case.wash, frame.wash);
@@ -1419,9 +1419,9 @@ test "scene parser rejects bad atlas paths dimensions and unsafe program data" {
     spells[0] = parsed.value.spells[0];
     var events = [_]battle.spell_scene.CameraEvent{spells[0].program.?.cameras[0]};
     spells[0].program.?.cameras = &events;
-    events[0].target.c[2] = 0;
+    events[0].target.translation[2] = 0;
     try std.testing.expectError(error.InvalidSpellScenes, packet.validate(4096, 4096));
-    events[0].target.c[2] = 1;
+    events[0].target.translation[2] = 1;
     try std.testing.expectError(error.InvalidSpellScenes, packet.validate(4096, 4096));
 }
 
@@ -1927,7 +1927,7 @@ test "scheduled sprites delay zero until clock reset and stop respawning at the 
 
 test "scene projection keeps exact rational boundaries and floors negative coordinates" {
     const camera = @import("battle_camera");
-    const block = camera.Block{ .position = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .c = .{ 0, 0, 0 }, .d = @splat(4096) };
+    const block = camera.Block{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .translation = .{ 0, 0, 0 }, .scale = @splat(4096) };
     try std.testing.expectEqualDeep([3]i32{ 128, -128, 1040 }, camera.rawProject(block, .{ 130, -130, 1040 }));
     try std.testing.expectEqualDeep([3]i32{ 127, -128, 1041 }, camera.rawProject(block, .{ 130, -130, 1041 }));
     try std.testing.expectEqualDeep([3]i32{ 1023, -1024, 0 }, camera.rawProject(block, .{ 1000, -1000, 0 }));
@@ -2579,7 +2579,7 @@ test "Earthquake opaque rocks bounce retain active impact positions and bound so
     try std.testing.expectEqualDeep([3]i32{ -387736, 126976, 0 }, first_impact);
     const program = packet.spells[id].program.?;
     const base = battle.spell_scene.cameraAt(program, 157, battle.drops.initial_camera);
-    try std.testing.expectEqual(base.position[2] + 5, battle.spell_scene.instanceCameraAt(program, &instance, 157).position[2]);
+    try std.testing.expectEqual(base.focus[2] + 5, battle.spell_scene.instanceCameraAt(program, &instance, 157).focus[2]);
     try instance.advance(&packet, 159, &draws);
     try std.testing.expectEqual(@as(u16, 157), instance.last_landing);
     try instance.advance(&packet, 187, &draws);
@@ -3966,7 +3966,7 @@ test "Martial arts controller drives source actors through target queue and dela
         for (3..9) |i| actors[i] = battle.actor_host.Actor.anchor(.{ 120 * 4096, @as(i32, @intCast(i)) * 20 * 4096, 0 }, .{ 120 * 4096, 0, 0 }, .{ 0, 0 });
         var children: [10]?battle.actor_host.Actor = @splat(null);
         var observer: u8 = 0;
-        var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").state2);
+        var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").settled_pan);
         var runtime = battle.actor_host.Runtime{ .actors = &actors, .auxiliary = &children, .camera_controller = &camera, .library = .{ .programs = parsed.value.programs, .resources = parsed.value.animations }, .external = .{ .context = &observer, .command = Observer.command, .previous_screen_position = Observer.previous } };
         var playback = try controller.State.init(&runtime, parsed.value.bindings, .{ 0, 1, 2 }, .{ 3, 4, 5, 6, 7, 8 }, pending, timing.value);
         try std.testing.expectError(error.InvalidActorBinding, controller.State.init(&runtime, parsed.value.bindings, .{ 0, 0, 2 }, .{ 3, 4, 5, 6, 7, 8 }, pending, timing.value));
@@ -4042,7 +4042,7 @@ test "Martial arts shared strike runs against all three member resources" {
         };
         var children: [8]?battle.actor_host.Actor = @splat(null);
         var observer = Observer{};
-        var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").state2);
+        var camera = try @import("battle_camera").ActorController.init(@import("battle_camera").settled_pan);
         var runtime = battle.actor_host.Runtime{ .actors = &actors, .auxiliary = &children, .camera_controller = &camera, .library = .{ .programs = parsed.value.programs, .resources = parsed.value.animations }, .external = .{ .context = &observer, .command = Observer.command, .previous_screen_position = Observer.previous } };
         try runtime.dispatch(0, 1, parsed.value.programs.find(binding.strike).?);
         var saw_animation = false;
@@ -4165,7 +4165,7 @@ test "Warriors source scene and recipient use the shared players" {
     packet.unite_reactions = &reactions;
     try packet.validate(4096, 4096);
     var draws = battle.systems.Draws{ .values = &.{} };
-    var instance = try battle.spell_scene.Instance.beginUnite(&packet, 0, @import("battle_camera").state2, &draws);
+    var instance = try battle.spell_scene.Instance.beginUnite(&packet, 0, @import("battle_camera").settled_pan, &draws);
     instance.caster = .{ 40, 20, -60 };
     instance.target = .{ -120, -20, 0 };
     for ([_]struct { update: u16, commands: usize }{
@@ -4203,7 +4203,7 @@ test "Beauty shared scene seeds thirty hearts with one hundred fifty draws and r
         value.* = @intCast((seed >> 16) & 32767);
     }
     var draws = battle.systems.Draws{ .values = &values };
-    var instance = try battle.spell_scene.Instance.beginUnite(&packet, index, @import("battle_camera").state2, &draws);
+    var instance = try battle.spell_scene.Instance.beginUnite(&packet, index, @import("battle_camera").settled_pan, &draws);
     try std.testing.expect(instance.unite_scene);
     try std.testing.expectEqual(@as(usize, 150), draws.cursor);
     try std.testing.expectEqual(@as(usize, 0), battle.spell_scene.frameAt(&packet, &instance, 0).count);
@@ -4278,7 +4278,7 @@ test "Beauty shared scene matches independent particle camera and packet witness
             inline for (@typeInfo(Particle).@"struct".field_names) |name| try std.testing.expectEqualDeep(@field(expected, name), @field(actual, name));
         }
         const block = battle.spell_scene.instanceCameraAt(instance.?.sceneProgram(packet), &instance.?, case.update);
-        try std.testing.expectEqualDeep(case.camera, block.position ++ block.angles ++ block.c ++ block.d);
+        try std.testing.expectEqualDeep(case.camera, block.focus ++ block.angles ++ block.translation ++ block.scale);
         const frame = battle.spell_scene.frameAt(packet, &instance.?, case.update);
         try std.testing.expectEqual(case.count, frame.count);
         for (case.commands) |expected| {

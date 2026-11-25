@@ -15,12 +15,14 @@ pub const camera_push = game_state.event_runtime.camera_push;
 
 pub const Direction = enum { down, up, left, right };
 pub fn directionPadMask(direction: ?Direction) u16 {
-    return if (direction) |held| switch (held) {
-        .up => 0x1000,
-        .right => 0x2000,
-        .down => 0x4000,
-        .left => 0x8000,
-    } else 0;
+    const held = direction orelse return 0;
+    const runtime_dir: game_state.event_runtime.Direction = switch (held) {
+        .up => .up,
+        .right => .right,
+        .down => .down,
+        .left => .left,
+    };
+    return runtime_dir.toPadMask();
 }
 
 pub fn editAuxiliaryParty(list: *[6]u8, add: bool, character: u8) void {

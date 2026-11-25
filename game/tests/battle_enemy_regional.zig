@@ -375,7 +375,7 @@ test "F2 Shadow Man front scan camera shake 80-tick fade tail_return on Hero and
             }
         };
         var tail_ctx = TailCtx{ .packet_ptr = &packet };
-        var cam = try @typeInfo(@FieldType(battle.State, "actor_camera")).optional.child.init(.{ .position = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .c = .{ 0, 0, 1024 }, .d = .{ 4096, 4096, 4096 } });
+        var cam = try @typeInfo(@FieldType(battle.State, "actor_camera")).optional.child.init(.{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } });
         var children: [4]?host.Actor = @splat(null);
         var rt = host.Runtime{
             .actors = &actors_buf,
@@ -467,8 +467,8 @@ test "F3 Mirage vs H2 Mirage separate qualification any_row front ordinary rear 
                         });
                         try std.testing.expectEqual(mid.depth, center.vertices[0].depth);
                         const camera = battle.layout.currentCamera(s.state.*);
-                        const scale_x = @divTrunc(camera.d[0] << 10, camera.c[2]);
-                        const scale_y = @divTrunc(camera.d[1] << 10, camera.c[2]);
+                        const scale_x = @divTrunc(camera.scale[0] << 10, camera.translation[2]);
+                        const scale_y = @divTrunc(camera.scale[1] << 10, camera.translation[2]);
                         try std.testing.expectEqual(mid.x + @as(f32, @floatFromInt(2 * @divTrunc(-28 * scale_x, 4096))), center.vertices[0].x);
                         try std.testing.expectEqual(mid.y + @as(f32, @floatFromInt(2 * @divTrunc(-54 * scale_y, 4096))), center.vertices[0].y);
                         if (stage == 3) {

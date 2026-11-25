@@ -12,7 +12,7 @@ const Packet = packet_mod.Packet;
 pub fn transition(from: camera.Block, target: camera.Block, elapsed: u16, duration: u16) camera.Block {
     var result = from;
     const n: i32 = @min(elapsed, duration);
-    inline for (.{ "position", "angles", "c", "d" }) |field| for (0..3) |i| {
+    inline for (.{ "focus", "angles", "translation", "scale" }) |field| for (0..3) |i| {
         const a = @field(from, field)[i] << 12;
         const b = @field(target, field)[i] << 12;
         @field(result, field)[i] = (if (n == duration) b else a + @divTrunc(b - a, duration) * n) >> 12;
@@ -32,7 +32,7 @@ pub fn baseCameraAt(program: Program, update: u16, initial: camera.Block) camera
 pub fn cameraAt(program: Program, update: u16, initial: camera.Block) camera.Block {
     var result = baseCameraAt(program, update, initial);
     if (update < program.focus_samples.len) if (program.focus_samples[update]) |focus| {
-        result.position = focus;
+        result.focus = focus;
     };
     return result;
 }

@@ -23,12 +23,12 @@ pub fn parameters(update: u16) Parameters {
     const e = std.math.clamp(n - 246, 0, 60);
     return .{ .caster_visible = n > 0 and n < 96, .targets_visible = n > 96 and n < 306, .caster_scale = 1 + 64 * a + 128 * b, .intensity = @truncate(@as(u32, @bitCast((8192 * a - 16384 * b + 5779 * c - 8669 * e) >> 12))), .spread = (1 + 186413 * c - 279620 * e) >> 12, .column_top = -5 - 3 * d, .wash = .{ 0, @intCast(@max(0, (2048 * a - 2184 * e) >> 12)), @intCast(@max(0, (4096 * a - 4369 * e) >> 12)) }, .orbit_updates = @max(n - 96, 0), .healed = n == 306 };
 }
-pub const initial_camera = camera.Block{ .position = .{ 0, 0, 0 }, .angles = .{ -768, 0, 608 }, .c = .{ 0, 0, 1024 }, .d = .{ 4096, 4096, 4096 } };
+pub const initial_camera = camera.Block{ .focus = .{ 0, 0, 0 }, .angles = .{ -768, 0, 608 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } };
 pub fn cameraAt(update: u16) camera.Block {
     var result = initial_camera;
     const target = camera.attack_party;
     const n: i32 = @min(update, 60);
-    inline for (.{ "position", "angles", "c", "d" }) |field| {
+    inline for (.{ "focus", "angles", "translation", "scale" }) |field| {
         for (0..3) |i| {
             const a = @field(initial_camera, field)[i] << 12;
             const b = @field(target, field)[i] << 12;
@@ -42,7 +42,7 @@ pub fn project(block: camera.Block, p: [3]i32) camera.Screen {
     return camera.projectScene(block, p, .{}).?;
 }
 fn transform(p: [3]i32, angle: i32, scale: [3]i32, translation: [3]i32) [3]i32 {
-    const block = camera.Block{ .position = .{ 0, 0, 0 }, .angles = .{ 0, 0, angle }, .c = translation, .d = scale };
+    const block = camera.Block{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, angle }, .translation = translation, .scale = scale };
     const r = camera.scaledRot(block);
     var out: [3]i32 = undefined;
     for (0..3) |i| {
@@ -82,7 +82,7 @@ pub fn frameAt(art: Art, update: u16, draws: [18]u15, caster: [3]i32, target: [3
 
 pub fn frameWithCamera(art: Art, update: u16, draws: [18]u15, caster: [3]i32, target: [3]i32, block: camera.Block) Frame {
     const p = parameters(update);
-    const scene_scale = @divTrunc(block.d[0] << 10, block.c[2]);
+    const scene_scale = @divTrunc(block.scale[0] << 10, block.translation[2]);
     var frame = Frame{ .wash = if (update < 306) p.wash else .{ 0, 0, 0 } };
     if (p.caster_visible) sprite(&frame, art, 0, project(block, .{ caster[0], caster[1], caster[2] - 70 }), @divTrunc(scene_scale * p.caster_scale, 4096), p.intensity);
     if (p.targets_visible) for (0..6) |i| {

@@ -150,7 +150,7 @@ fn selectCamera(state: *const battle.State, include_pulse: bool) camera.Block {
 fn withEnemyMagicPulse(state: *const battle.State, block: camera.Block, include_pulse: bool) camera.Block {
     var result = block;
     if (include_pulse) if (state.enemy_magic_pulse) |pulse| if (state.camera_ticks -% pulse.issued_at == 1) {
-        result.position[2] += pulse.delta_q12 >> 12;
+        result.focus[2] += pulse.delta_q12 >> 12;
     };
     return result;
 }
@@ -209,7 +209,7 @@ pub fn sceneArt(state: battle.State) battle.world_art.Data {
     data.camera.center_x = 320;
     data.camera.center_y = 240;
     const zero = presentation.project(data.camera, .{ .x = 0, .y = 0, .z = 0 });
-    const focus = presentation.project(data.camera, .{ .x = @floatFromInt(block.position[0]), .y = @floatFromInt(block.position[1]), .z = @floatFromInt(block.position[2]) });
+    const focus = presentation.project(data.camera, .{ .x = @floatFromInt(block.focus[0]), .y = @floatFromInt(block.focus[1]), .z = @floatFromInt(block.focus[2]) });
     data.camera.center_x += zero.x - focus.x;
     data.camera.center_y += zero.y - focus.y;
     data.sprite_scale = camera.scaleBlock(block) * 2;
@@ -482,8 +482,8 @@ pub fn framing(state: battle.State) Framing {
 pub fn applySpellReaction(state: battle.State, index: usize, point: *presentation.ScreenPoint, sprite: *battle.Pose) void {
     const reaction = state.spellReaction(index) orelse return;
     const block = currentCamera(state);
-    const dx = @divTrunc(@as(i32, reaction.offset[0]) * @divTrunc(block.d[0] << 10, block.c[2]), 4096);
-    const dy = @divTrunc(@as(i32, reaction.offset[1]) * @divTrunc(block.d[1] << 10, block.c[2]), 4096);
+    const dx = @divTrunc(@as(i32, reaction.offset[0]) * @divTrunc(block.scale[0] << 10, block.translation[2]), 4096);
+    const dy = @divTrunc(@as(i32, reaction.offset[1]) * @divTrunc(block.scale[1] << 10, block.translation[2]), 4096);
     point.x += @as(f32, @floatFromInt(dx)) * 2;
     point.y += @as(f32, @floatFromInt(dy)) * 2;
     if (reaction.entry) |entry_id| {
@@ -498,7 +498,7 @@ pub fn rotatedActorQuad(state: battle.State, index: usize, sprite: battle.Pose, 
     const angles = state.actor_node_angles[index];
     if (std.mem.eql(i16, &angles, &.{ 0, 0, 0 })) return null;
     var block = currentCamera(state);
-    for (&block.d) |*value| value.* = @intCast(@divTrunc(@as(i64, value.*) * state.actor_sizes[index], 4096));
+    for (&block.scale) |*value| value.* = @intCast(@divTrunc(@as(i64, value.*) * state.actor_sizes[index], 4096));
     return ordinaryRotatedNodeQuad(block, point, sprite, angles);
 }
 pub fn uniteAuxiliary(state: battle.State, index: usize) ?AuxiliaryQuad {
@@ -551,7 +551,7 @@ pub fn uniteAuxiliaryPiece(state: battle.State, index: usize, piece: usize) ?Aux
     const anchor = auxiliaryPoint(state, actor);
     const angles: [3]i32 = if (actor.record_flags & 4 != 0) .{ actor.draw_angles[0], actor.draw_angles[1], actor.draw_angles[2] } else .{ block.angles[0], block.angles[1], 360 };
     const qscale: i32 = @intFromFloat(@round(scale * 4096));
-    const local = camera.Block{ .position = .{ 0, 0, 0 }, .angles = angles, .c = .{ 0, 0, 1024 }, .d = @splat(qscale) };
+    const local = camera.Block{ .focus = .{ 0, 0, 0 }, .angles = angles, .translation = .{ 0, 0, 1024 }, .scale = @splat(qscale) };
     var quad = AuxiliaryQuad{ .vertices = undefined, .sprite = sprite, .translucent = actor.translucent or resource.find(actor.animation).?.semitransparent, .depth = anchor.depth, .color = actor.color orelse @splat(128) };
     for (&quad.vertices, 0..) |*vertex, corner| {
         const x: i32 = -@as(i32, sprite.anchor_x) + (if (corner & 1 != 0) sprite.rect.w - 1 else @as(i32, 0));
@@ -608,8 +608,8 @@ fn mirageCopy(state: battle.State, index: usize) ?AuxiliaryQuad {
     sprite.anchor_x -= x;
     sprite.anchor_y -= y;
     const block = currentCamera(state);
-    const scale_x = @divTrunc(block.d[0] << 10, block.c[2]);
-    const scale_y = @divTrunc(block.d[1] << 10, block.c[2]);
+    const scale_x = @divTrunc(block.scale[0] << 10, block.translation[2]);
+    const scale_y = @divTrunc(block.scale[1] << 10, block.translation[2]);
     const left = point.x + @as(f32, @floatFromInt(2 * @divTrunc(-@as(i32, sprite.anchor_x) * scale_x, 4096)));
     const top = point.y + @as(f32, @floatFromInt(2 * @divTrunc(-@as(i32, sprite.anchor_y) * scale_y, 4096)));
     const right = left + @as(f32, @floatFromInt(2 * @divTrunc(@as(i32, width) * scale_x, 4096)));
@@ -648,7 +648,7 @@ fn sirenNote(state: battle.State, index: usize) ?AuxiliaryQuad {
     const world = battle.spell_scene.vectorTransform(waves.note_local, .{ 0, waves.angle_y, note.angle_z }, @splat(note.scale), .{ action.root[0], action.root[1], action.root[2] });
     var block = currentCamera(state);
     const projected = camera.projectScene(block, world, .{}) orelse return null;
-    for (&block.d) |*value| value.* = @intCast(@divTrunc(@as(i64, value.*) * waves.note_size, 4096));
+    for (&block.scale) |*value| value.* = @intCast(@divTrunc(@as(i64, value.*) * waves.note_size, 4096));
     const point = presentation.ScreenPoint{ .x = projected.x * 2, .y = projected.y * 2, .depth = projected.depth };
     var quad = ordinaryRotatedNodeQuad(block, point, sprite, .{ 0, 0, 0 });
     quad.translucent = true;
@@ -722,7 +722,7 @@ fn uniteFan(state: battle.State, index: usize) ?AuxiliaryQuad {
     return ordinaryRotatedNodeQuad(block, anchor, sprite, spec.node_angles);
 }
 pub fn uniteFanPosition(local_x_q12: i32, anchor: [3]i32, roll: i16) [3]i32 {
-    const rotation = camera.scaledRot(.{ .position = .{ 0, 0, 0 }, .angles = .{ 0, 0, roll }, .c = .{ 0, 0, 0 }, .d = @splat(4096) });
+    const rotation = camera.scaledRot(.{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, roll }, .translation = .{ 0, 0, 0 }, .scale = @splat(4096) });
     var world = anchor;
     for (0..3) |axis| {
         const value = @as(i64, anchor[axis]) + ((@as(i64, rotation[axis * 3]) * (local_x_q12 >> 12)) >> 12);
@@ -731,8 +731,8 @@ pub fn uniteFanPosition(local_x_q12: i32, anchor: [3]i32, roll: i16) [3]i32 {
     return world;
 }
 pub fn ordinaryRotatedNodeQuad(block: camera.Block, anchor: presentation.ScreenPoint, sprite: battle.Pose, angles: [3]i16) AuxiliaryQuad {
-    const qscale = @divTrunc(block.d[0] << 10, block.c[2]);
-    const local = camera.Block{ .position = .{ 0, 0, 0 }, .angles = .{ angles[0], angles[1], angles[2] }, .c = .{ 0, 0, 1024 }, .d = @splat(qscale) };
+    const qscale = @divTrunc(block.scale[0] << 10, block.translation[2]);
+    const local = camera.Block{ .focus = .{ 0, 0, 0 }, .angles = .{ angles[0], angles[1], angles[2] }, .translation = .{ 0, 0, 1024 }, .scale = @splat(qscale) };
     var quad = AuxiliaryQuad{ .vertices = undefined, .sprite = sprite, .translucent = false, .depth = @floatFromInt(std.math.clamp(@as(i32, @intFromFloat(anchor.depth)) >> 2, 5, 379) * 4) };
     for (&quad.vertices, 0..) |*vertex, corner| {
         const x = -@as(i32, sprite.anchor_x) + (if (corner & 1 != 0) sprite.rect.w else @as(i32, 0));

@@ -5,10 +5,9 @@ pub const max_json_bytes = 4 * 1024 * 1024;
 pub const max_units = 64;
 pub const max_events = 256;
 
-pub const Source = struct { file: []const u8, lba: u32, size: u32, sha256: []const u8 };
+pub const Source = struct { sha256: []const u8 };
 pub const Leader = struct {
     id: u8,
-    record_offset: u32,
     troops: u16,
     flags: u8,
     unit_class: u8,
@@ -17,13 +16,9 @@ pub const Leader = struct {
     member_ids: []const u16,
 };
 pub const LeaderContract = struct {
-    record_bytes: u8,
-    record_count: u8,
-    fields: []const u8,
     leaders: []const Leader,
 };
 pub const Attack = struct {
-    offset: u32,
     flags: u32,
     name: []const u8,
     parameter0: u32,
@@ -57,22 +52,11 @@ pub const Unit = struct {
     counter: i16,
 };
 pub const InitialSide = struct { total_records: u8, remaining_records: u8, records: []const Unit };
-pub const InitializationProof = struct {
-    initializer: []const u8,
-    total_address: u32,
-    parameter_address: u32,
-    unit_table_address: u32,
-    unit_count_address: u32,
-    record_stride: u8,
-    coordinate_rule: []const u8,
-    setup_instruction_calls: u32,
-};
 pub const Initial = struct {
     initial_army_troops: u32,
     scenario_parameter: u32,
     initial_stage: u8,
     sides: []const InitialSide,
-    proof: InitializationProof,
 };
 pub const ScriptTransition = struct {
     phase: u8,
@@ -82,25 +66,16 @@ pub const ScriptTransition = struct {
 };
 pub const Lifecycle = struct {
     kind: []const u8,
-    phase_entry: u32,
-    phase_state_address: u32,
-    main_state_address: u32,
-    phase_table_address: u32,
-    phase_table: []const u32,
     wait_phase: u8,
     dispatch_phase: u8,
     confirmation_count: u8,
     second_confirmation_phase: u8,
     completion_main_phase: u8,
     transitions: []const ScriptTransition,
-    proof: []const u8,
 };
 pub const EnemyPolicy = struct {
-    range_address: u32,
-    action_map_address: u32,
     ranges: [5][2]u8,
     action_map: [9]u8,
-    selector: []const u8,
 };
 pub const Scenario = struct {
     selector: u8,
@@ -118,16 +93,9 @@ pub const Packet = struct {
     schema: []const u8,
     id: []const u8,
     target: []const u8,
-    selector_contract: []const u8,
     leader_contract: LeaderContract,
-    state_contract: std.json.Value,
-    rng_contract: []const u8,
-    casualty_contract: []const u8,
-    ordinary_contract: std.json.Value,
-    special_contract: std.json.Value,
     troops_per_record: ?[9]u16 = null,
     scenarios: []Scenario,
-    variant_matrix: []const std.json.Value,
     content_sha256: []const u8,
 
     pub fn scenario(self: Packet, id: []const u8) ?Scenario {
@@ -156,7 +124,7 @@ pub fn validate(packet: Packet) !void {
         if (cost == 0) return error.InvalidWarContent;
     };
     for (packet.scenarios, 0..) |scenario, index| {
-        if (scenario.selector != index or scenario.initial.sides.len != 2 or scenario.attacks.len == 0 or scenario.leaders.len != 108 or scenario.lifecycle.phase_table.len != 17) return error.InvalidWarScenario;
+        if (scenario.selector != index or scenario.initial.sides.len != 2 or scenario.attacks.len == 0 or scenario.leaders.len != 108) return error.InvalidWarScenario;
         const empty = scenario.initial.sides[0].total_records == 0 and scenario.initial.sides[1].total_records == 0;
         const scripted = std.mem.eql(u8, scenario.lifecycle.kind, "scripted");
         if (scripted != empty or (!scripted and !std.mem.eql(u8, scenario.lifecycle.kind, "unit_battle")) or

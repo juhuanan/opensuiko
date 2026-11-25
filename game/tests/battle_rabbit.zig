@@ -324,7 +324,7 @@ test "Rabbit live launch camera replaces moving channels before the same frame i
         try state.attachUniteActors(&library);
         state.phase = if (scheduled) .resolving else .battle_menu;
         state.acted = @splat(true);
-        state.actor_camera = try @TypeOf(state.actor_camera.?).init(.{ .position = .{ -83, 17, -9 }, .angles = .{ -700, 13, 501 }, .c = .{ 3, -5, 1024 }, .d = .{ 3840, 3841, 3839 } });
+        state.actor_camera = try @TypeOf(state.actor_camera.?).init(.{ .focus = .{ -83, 17, -9 }, .angles = .{ -700, 13, 501 }, .translation = .{ 3, -5, 1024 }, .scale = .{ 3840, 3841, 3839 } });
         if (moving) {
             try state.actor_camera.?.requestQ12(request.target, 8);
         }
@@ -334,7 +334,7 @@ test "Rabbit live launch camera replaces moving channels before the same frame i
         var draws = battle.systems.Draws{ .values = &values };
         for (1..22) |update| {
             try state.tickReplay(.{}, &draws);
-            inline for (.{ "position", "angles", "c", "d" }, 0..) |name, channel| {
+            inline for (.{ "focus", "angles", "translation", "scale" }, 0..) |name, channel| {
                 for (0..3) |axis| {
                     const destination = @field(request.target, name)[axis];
                     const velocity = @divTrunc(destination - initial[channel][axis], 20);

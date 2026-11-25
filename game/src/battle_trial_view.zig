@@ -521,7 +521,7 @@ fn drawScene(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, grou
             @import("battle_spell_view.zig").drawCommand(state, effect_atlas orelse atlas, dynamic, source_frame.?.commands[entry.index]);
         } else if (entry.scenery) {
             const prop = scenery[entry.index];
-            const prop_scale = if (state.hasSourceEffect()) @as(f32, @floatFromInt(geometry.currentCamera(state).d[0])) / 2048 else state.content.sprite_scale;
+            const prop_scale = if (state.hasSourceEffect()) @as(f32, @floatFromInt(geometry.currentCamera(state).scale[0])) / 2048 else state.content.sprite_scale;
             pose(atlas, prop.sprite, geometry.worldPoint(state, prop.position), prop_scale, .white, false);
         } else actor(state, atlas, effect_atlas, entry.index, minimum_depth == null);
     }
