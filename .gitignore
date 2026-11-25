@@ -158,15 +158,10 @@ game/zig-out
 /kit/extracted/
 /kit/data/registry/
 /kit/data/curated/**
-/kit/data/reports/**
 !/kit/data/curated/**/
-!/kit/data/reports/**/
 !/kit/data/curated/**/*.py
-!/kit/data/reports/**/*.py
 !/kit/data/curated/**/*.sh
-!/kit/data/reports/**/*.sh
 !/kit/data/curated/**/*.lua
-!/kit/data/reports/**/*.lua
 /game/assets/**/*.json
 /game/assets/**/*.zon
 /game/tests/fixtures/**
