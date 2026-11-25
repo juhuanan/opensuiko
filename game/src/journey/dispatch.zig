@@ -12,7 +12,7 @@ const modes = @import("modes.zig");
 /// 3. `item_overload` — forced item-overload disposal blocks movement/events.
 /// 4. `pending_field_music` — field event waits until the host completes requested BGM swap/fade.
 /// 5. `auto_travel` / 6. `boat_travel` — active crossings override free exploration.
-/// 7. `dice_or_party_selection` — dice/party-selection frames run in `journey_frame` before field ticks.
+/// 7. `dice_or_party_selection` — the frame supplies input and audio for this owner.
 /// 8. `field_menu` — open pause menu without an owning field event bypasses room-event admission.
 /// 9. `world_or_event` — normal room event admission and mode-specific `tickCore`.
 pub const ModalOwner = enum {
@@ -61,15 +61,14 @@ fn tickTeleport(state: *journey.State, input: pause.Input) !void {
         .cancelled => state.teleport_session = null,
         .confirmed => |proposal| {
             try journey.travel.commitTeleport(&session, state.package, &state.field_state, proposal);
-            state.syncProgressFromField();
             state.teleport_session = null;
             try exploration.onRoomChange(state, false);
         },
     }
 }
 
-pub noinline fn tickWithFieldEvents(state: *journey.State, input: pause.Input, combat_input: battle.Input) !pause.Effect {
-    switch (modalOwner(state, input)) {
+pub noinline fn tickWithModalOwner(state: *journey.State, modal: ModalOwner, input: pause.Input, combat_input: battle.Input) !pause.Effect {
+    switch (modal) {
         .teleport => {
             try tickTeleport(state, input);
             return .none;

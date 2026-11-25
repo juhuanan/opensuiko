@@ -104,7 +104,7 @@ pub const Snapshot = struct {
     pub fn capture(state: anytype) !Snapshot {
         const world = &state.field_state;
         if (state.mode != .field or state.dice_game != null or state.side_game != null or state.teleport_session != null or state.party_selection != null or state.item_overload != null or state.auto_travel != null or world.auto_route_id != null or world.remaining != 0 or world.dialogue != null or world.rest_ticks != 0) return error.GameBusy;
-        const combat = &state.combat;
+        const combat = state.combat;
         if (state.boat_travel) |boat| try boat.validate((state.boat_data orelse return error.MissingBoatOwner).*, state.package.rooms[world.room].id, world.x, world.y, world.facing, combat.progress.story.scenario orelse return error.MissingSourceStoryState);
         const count: u8 = @intCast(combat.partyCount());
         var snapshot: Snapshot = .{ .schema = std.fmt.comptimePrint("{s}{d}", .{ save_prefix, current_save_version }), .spell_scene_hash = if (combat.spell_scenes) |packet| try packet.digest() else null, .unite_actor_hash = if (combat.unite_actors) |packet| try packet.digest() else null, .party_count = count, .party = @splat(combat.progress.party[0]), .extras = state.extras, .reserves = state.reserves, .reserve_extras = state.reserve_extras, .storage = combat.progress.storage, .save_name = state.save_name, .elapsed_ticks = state.elapsed_ticks, .room = state.package.rooms[world.room].id, .x = world.x, .y = world.y, .facing = world.facing, .field_music = world.music, .money = combat.progress.money, .story = combat.progress.story, .levels = combat.levels, .experience = combat.experience, .stats = combat.base_stats, .formation = combat.formation, .weapon_levels = combat.weapon_levels, .equipment = combat.headEquipment(), .loadouts = combat.loadouts, .runes = combat.runes, .random = combat.random, .opening_event = state.opening_event, .route = state.route.checkpoint(), .campaign = state.campaign, .hq = state.hq, .world_battle_enabled = state.world_battle_enabled, .world_battle_ticks = state.world_battle_ticks, .world_battle_started = state.world_battle_started };
@@ -368,7 +368,7 @@ pub const Snapshot = struct {
         state.combat.quit_requested = false;
         const inn = state.field_state.inn_rules;
         const items = state.field_state.item_rules;
-        state.field_state = field.State.init(state.package, state.combat.progress);
+        state.field_state = field.State.init(state.package, &state.combat.progress);
         state.field_state.inn_rules = inn;
         state.field_state.item_rules = items;
         state.field_state.room = destination;

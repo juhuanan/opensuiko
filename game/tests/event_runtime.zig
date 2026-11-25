@@ -1041,12 +1041,21 @@ test "wheel motion branches all seven results under the existing reloop policy" 
         .{ .kind = .cue, .cue = 6 },
         .{ .kind = .end_stream },
     };
-    const programs = [_]runtime.Program{.{ .id = "p", .entry = .ordinary, .entity = 0, .trigger = .none, .commands = &commands }};
+    const backward_graph = commands ++ [_]runtime.Command{ .{ .kind = .jump, .target = 0 }, .{ .kind = .end_stream } };
+    var programs = [_]runtime.Program{.{ .id = "p", .entry = .ordinary, .entity = 0, .trigger = .none, .commands = &commands }};
     var content = reviewContent(&programs);
     content.schema = runtime.wheel_music_schema;
     try std.testing.expectError(error.InvalidEventCommand, content.validate());
-    for ([_][]const u8{ runtime.wheel_motion_schema, runtime.branch_history_schema }) |namespace| {
-        content.schema = namespace;
+    const Case = struct { namespace: []const u8, forward_branches: ?bool, history: bool };
+    for ([_]Case{
+        .{ .namespace = runtime.wheel_motion_schema, .forward_branches = null, .history = false },
+        .{ .namespace = runtime.branch_history_schema, .forward_branches = null, .history = true },
+        .{ .namespace = runtime.actor_owners_schema, .forward_branches = true, .history = true },
+        .{ .namespace = runtime.actor_owners_schema, .forward_branches = false, .history = false },
+    }) |case| {
+        content.schema = case.namespace;
+        content.forward_branches = case.forward_branches;
+        programs[0].commands = if (case.forward_branches == false) &backward_graph else &commands;
         try content.validate();
         for (0..7) |outcome| {
             var story = try runtime.StoryState.init(&.{content});
@@ -1063,14 +1072,15 @@ test "wheel motion branches all seven results under the existing reloop policy" 
             try std.testing.expectEqual(@as(u16, @intCast(outcome)), branch.effects[0].cue.?);
             try runtime.acknowledge(content, &instance, &story, branch.id);
             try std.testing.expect(!instance.execution.active);
-            if (content.hasBranchHistory()) {
-                var history: runtime.CommandHistory = .{ .commands = &commands, .execution = instance.execution };
+            const restored = try roundTrip(runtime.Instance, instance);
+            defer restored.deinit();
+            try restored.value.validate(content);
+            try std.testing.expectEqual(case.history, restored.value.execution.path != null);
+            if (case.history) {
+                var history: runtime.CommandHistory = .{ .commands = &commands, .execution = restored.value.execution };
                 const expected = [_]u16{ 0, 1, @intCast(2 + outcome * 2), @intCast(3 + outcome * 2) };
                 for (expected) |index| try std.testing.expectEqual(index, history.next().?.index);
                 try std.testing.expect(history.next() == null);
-                const restored = try roundTrip(runtime.Instance, instance);
-                defer restored.deinit();
-                try restored.value.validate(content);
                 var invalid = restored.value;
                 invalid.execution.path.?.edges[0].target = @intCast(2 + ((outcome + 1) % 7) * 2);
                 try std.testing.expectError(error.InvalidEventBranchHistory, invalid.validate(content));
@@ -1175,6 +1185,11 @@ test "item overload holds its isolated receipt until the modal closes" {
 
 test "event_runtime schema_versions parses all 29 versions and classifies commands" {
     const schema_mod = runtime.schema_versions;
+    var version_buffer: [32]u8 = undefined;
+    for (1..30) |version| {
+        const name = try std.fmt.bufPrint(&version_buffer, "suikoden-event-ir/{d}", .{version});
+        try std.testing.expectEqual(@as(?u8, @intCast(version)), schema_mod.parseVersion(name));
+    }
     try std.testing.expectEqual(@as(?u8, 1), schema_mod.parseVersion(runtime.schema));
     try std.testing.expectEqual(@as(?u8, 2), schema_mod.parseVersion(runtime.campaign_schema));
     try std.testing.expectEqual(@as(?u8, 15), schema_mod.parseVersion(runtime.party_select_schema));
@@ -1198,4 +1213,17 @@ test "event_runtime schema_versions parses all 29 versions and classifies comman
     try std.testing.expectEqual(runtime.Command.Category.story_flag, (runtime.Command{ .kind = .story_or }).category());
     try std.testing.expectEqual(runtime.Command.Category.service_minigame, (runtime.Command{ .kind = .fixed_dice }).category());
     try std.testing.expectEqual(runtime.Command.Category.source_record, (runtime.Command{ .kind = .source_move_batch }).category());
+}
+
+test "event_runtime converts a validated field effect into required execution fields" {
+    const valid = runtime.Command{ .kind = .field_effect, .origin = 9, .x = 16, .y = 2040, .effect = .appearance };
+    try std.testing.expectEqualDeep(runtime.FieldEffectOperation{ .origin = 9, .x = 16, .y = 2040, .effect = .appearance }, valid.fieldEffectOperation().?);
+    var invalid = valid;
+    invalid.x = null;
+    try std.testing.expect(invalid.fieldEffectOperation() == null);
+    invalid.x = 17;
+    try std.testing.expect(invalid.fieldEffectOperation() == null);
+    invalid = valid;
+    invalid.effect = null;
+    try std.testing.expect(invalid.fieldEffectOperation() == null);
 }

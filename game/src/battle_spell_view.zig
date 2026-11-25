@@ -6,8 +6,9 @@ pub fn beginBlend(blend: battle.spell_scene.Blend) void {
     switch (blend) {
         .additive => rl.beginBlendMode(.additive),
         .subtractive => {
-            gl.rlSetBlendFactors(1, 1, 0x800B);
-            rl.beginBlendMode(.custom);
+            // Subtract RGB while preserving the canvas alpha for compositing.
+            gl.rlSetBlendFactorsSeparate(1, 1, 0, 1, 0x800B, 0x8006);
+            rl.beginBlendMode(.custom_separate);
         },
         .@"opaque" => rl.beginBlendMode(.alpha),
     }

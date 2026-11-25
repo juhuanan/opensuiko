@@ -124,7 +124,8 @@ pub const State = struct {
     package: field.Package,
     data: Data,
     field_state: field.State,
-    combat: battle.State,
+    // The session backing outlives copies of the journey and its room state.
+    combat: *battle.State,
     menu: pause.State = .{},
     mode: Mode = .field,
     encounter_trigger: ?usize = null,
@@ -176,7 +177,7 @@ pub const State = struct {
     campaign: ?campaign_state.Snapshot = null,
     hq: ?hq_state.HqState = null,
 
-    pub fn initEpisode(package: field.Package, data: Data, content: battle.Content, rules: field.items.Rules, inn: field.inn.Rules, members: []battle.Member) !State {
+    pub fn initEpisode(package: field.Package, data: Data, content: battle.Content, rules: field.items.Rules, inn: field.inn.Rules, members: []battle.Member, combat_backing: *battle.State) !State {
         try package.validate();
         try data.validate(package, content);
         if (members.len != 6 or content.initialPartyCount() != 6) return error.InvalidParty;
@@ -190,13 +191,15 @@ pub const State = struct {
         combat.progress.party[3].inventory.slots[2] = .{ .id = .headband, .uses = 0 };
         try combat.equipOwned(0, 0);
         combat.experience[0] = 900;
-        var world = field.State.init(package, combat.progress);
+        var world = field.State.init(package, &combat.progress);
         if (package.roomIndex(inn.room) != null) try world.configureInn(package, inn);
         world.item_rules = rules;
-        return .{ .package = package, .data = data, .field_state = world, .combat = combat, .route = initialRoute(package), .party_backing = members, .field_encounter_clock = battle_flow.initialFieldEncounterClock(data.field_encounters, world.progress.story.scenario) };
+        combat_backing.* = combat;
+        world.progress = &combat_backing.progress;
+        return .{ .package = package, .data = data, .field_state = world, .combat = combat_backing, .route = initialRoute(package), .party_backing = members, .field_encounter_clock = battle_flow.initialFieldEncounterClock(data.field_encounters, world.progress.story.scenario) };
     }
 
-    pub fn initOpening(package: field.Package, data: Data, content: battle.Content, rules: field.items.Rules, inn: field.inn.Rules, members: []battle.Member, hero: opening.Hero, money: u32) !State {
+    pub fn initOpening(package: field.Package, data: Data, content: battle.Content, rules: field.items.Rules, inn: field.inn.Rules, members: []battle.Member, combat_backing: *battle.State, hero: opening.Hero, money: u32) !State {
         try package.validate();
         try data.validate(package, content);
         if (members.len < 1) return error.InvalidParty;
@@ -228,36 +231,22 @@ pub const State = struct {
                 try combat.equipSlotOwned(0, slot, equipment);
             }
         }
-        var world = field.State.init(package, combat.progress);
+        var world = field.State.init(package, &combat.progress);
         if (package.roomIndex(inn.room) != null) try world.configureInn(package, inn);
         world.item_rules = rules;
         members[0] = starting_party[0];
-        progress_owner.bindInitialParty(&combat.progress, &world.progress, members[0..1]);
-        return .{ .package = package, .data = data, .field_state = world, .combat = combat, .route = initialRoute(package), .party_backing = members, .field_encounter_clock = battle_flow.initialFieldEncounterClock(data.field_encounters, world.progress.story.scenario) };
+        combat.progress.party = members[0..1];
+        combat_backing.* = combat;
+        world.progress = &combat_backing.progress;
+        return .{ .package = package, .data = data, .field_state = world, .combat = combat_backing, .route = initialRoute(package), .party_backing = members, .field_encounter_clock = battle_flow.initialFieldEncounterClock(data.field_encounters, world.progress.story.scenario) };
     }
 
     pub fn progress(self: *const State) *const field.game_state.Progress {
         return progress_owner.current(self);
     }
 
-    pub fn progressInSync(self: *const State) bool {
-        return progress_owner.inSync(self);
-    }
-
-    pub fn syncProgressToField(self: *State) void {
-        progress_owner.publishToField(self);
-    }
-
-    pub fn syncProgressFromField(self: *State) void {
-        progress_owner.commitFromField(self);
-    }
-
-    pub fn commitProgress(self: *State, next: field.game_state.Progress) void {
-        progress_owner.commitProgress(self, next);
-    }
-
-    pub fn stageField(self: *const State) field.State {
-        return progress_owner.stageField(self);
+    pub fn stageField(self: *const State, scratch: *field.game_state.Progress, members: *[6]battle.Member) field.State {
+        return progress_owner.stageField(self, scratch, members);
     }
 
     pub fn commitFieldTransaction(self: *State, next_field: field.State) void {
@@ -270,10 +259,6 @@ pub const State = struct {
 
     pub fn completeStoryFlag(self: *State, flag: Flag) void {
         progress_owner.completeStoryFlag(self, flag);
-    }
-
-    pub fn commitStoryFromField(self: *State) void {
-        progress_owner.commitStoryFromField(self);
     }
 
     pub fn recordPahnDuel(self: *State, outcome: u8) void {
@@ -297,11 +282,10 @@ pub const State = struct {
         if (!self.package.supportsStoryExits() or self.combat.progress.story.scenario != null) return;
         const rooms = self.room_battles orelse return;
         self.combat.progress.story.scenario = rooms.initial_story;
-        self.field_state.progress.story.scenario = rooms.initial_story;
     }
 
     pub fn bind(self: *State) void {
-        self.menu.combat = &self.combat;
+        self.menu.combat = self.combat;
     }
 
     pub fn initializeRoomVisit(self: *State) !void {
@@ -310,6 +294,18 @@ pub const State = struct {
 
     pub fn deinitActiveModes(self: *State) void {
         modes.deinitActiveModes(self);
+    }
+
+    // Publish only validated startup or restore data into the long-lived session.
+    pub fn bindValidatedStorage(self: *State, combat_backing: *battle.State, members: []battle.Member) void {
+        const active = members[0..self.combat.partyCount()];
+        @memcpy(active, self.combat.progress.party);
+        combat_backing.* = self.combat.*;
+        combat_backing.progress.party = active;
+        self.combat = combat_backing;
+        self.field_state.progress = &combat_backing.progress;
+        self.party_backing = members;
+        self.menu.combat = null;
     }
 
     pub fn releaseRestoredSave(self: *State) void {
@@ -321,7 +317,7 @@ pub const State = struct {
         allocator.destroy(arena);
     }
 
-    pub fn fromSnapshot(package: field.Package, data: Data, content: battle.Content, rules: field.items.Rules, inn: field.inn.Rules, snapshot: Snapshot, retry_seed: u64, members: []battle.Member) !State {
+    pub fn fromSnapshot(package: field.Package, data: Data, content: battle.Content, rules: field.items.Rules, inn: field.inn.Rules, snapshot: Snapshot, retry_seed: u64, members: []battle.Member, combat_backing: *battle.State) !State {
         try package.validate();
         if (content.systems == null) return error.MissingBattleSystems;
         try content.validate();
@@ -329,7 +325,7 @@ pub const State = struct {
         try rules.validate();
         if (members.len < snapshot.party_count or snapshot.party_count == 0 or snapshot.party_count > 6) return error.InvalidParty;
         var owned = snapshot.party;
-        const combat: battle.State = .{
+        var combat: battle.State = .{
             .content = content,
             .rules = rules,
             .progress = .{ .money = snapshot.money, .party = owned[0..snapshot.party_count] },
@@ -337,17 +333,12 @@ pub const State = struct {
             .seed = retry_seed,
             .picker = try @FieldType(battle.State, "picker").init(.{ true, true, false, true, false }, .attack),
         };
-        var state: State = .{ .package = package, .data = data, .combat = combat, .field_state = field.State.init(package, combat.progress), .route = initialRoute(package) };
+        var state: State = .{ .package = package, .data = data, .combat = &combat, .field_state = field.State.init(package, &combat.progress), .route = initialRoute(package) };
         if (package.roomIndex(inn.room) != null) try state.field_state.configureInn(package, inn);
         state.field_state.item_rules = rules;
         try snapshot.apply(&state);
-        if (data.recruitment) |definition| try definition.validate(state.combat);
-        // Publish owned storage only after the entire checkpoint validates and references rebind.
-        @memcpy(members[0..snapshot.party_count], owned[0..snapshot.party_count]);
-        state.replacePartySlice(members[0..snapshot.party_count]);
-        state.party_backing = members;
-        state.syncProgressToField();
-        state.menu.combat = null;
+        if (data.recruitment) |definition| try definition.validate(state.combat.*);
+        state.bindValidatedStorage(combat_backing, members);
         state.world_battle_enabled = true;
         state.updateOpeningPartyMilestone();
         return state;
@@ -374,10 +365,10 @@ pub const State = struct {
         // Prepare against copies: a failed join spends no RNG and changes no owned state.
         var random = self.combat.random;
         var draws: [17 * 7]u15 = undefined;
-        try definition.validate(self.combat);
+        try definition.validate(self.combat.*);
         const count = definition.drawCount();
         for (draws[0..count]) |*draw| draw.* = random.random().int(u15);
-        const owned = try recruitment.prepare(definition, self.combat, draws[0..count]);
+        const owned = try recruitment.prepare(definition, self.combat.*, draws[0..count]);
         try self.retainReserve(owned);
         self.combat.random = random;
         self.completeStoryFlag(.maas_recruited);
@@ -551,7 +542,6 @@ pub const State = struct {
         if (self.pendingFieldMusic() != music) return error.InvalidFieldMusicReceipt;
         const owner = self.field_event orelse return error.MissingFieldMusicOwner;
         try owner.session.resumeFieldMusic(owner.binding.*, &self.field_state, music);
-        self.syncProgressFromField();
     }
 
     pub fn validateScenePartyChanges(self: *const State) !void {
@@ -567,7 +557,11 @@ pub const State = struct {
     }
 
     pub noinline fn tickWithFieldEvents(self: *State, input: pause.Input, combat_input: battle.Input) !pause.Effect {
-        return dispatch.tickWithFieldEvents(self, input, combat_input);
+        return self.tickWithModalOwner(self.modalOwner(input), input, combat_input);
+    }
+
+    pub fn tickWithModalOwner(self: *State, owner: ModalOwner, input: pause.Input, combat_input: battle.Input) !pause.Effect {
+        return dispatch.tickWithModalOwner(self, owner, input, combat_input);
     }
 
     pub fn tickPartySelection(self: *State, controls: party_selection.selector.Controls) !void {

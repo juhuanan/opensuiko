@@ -161,7 +161,7 @@ pub fn uniteView(self: *const State, party: *[6]unite_systems.Slot, enemies: *[6
     for (0..self.partyCount()) |index| {
         const member = self.progress.party[index];
         const slot_status: unite_systems.StatusFlags = .{
-            .down = member.status == .poisoned,
+            .poisoned = member.status == .poisoned,
             .asleep = self.asleep[index] > 0,
             .recovering = self.unbalanced[index] > 0,
         };

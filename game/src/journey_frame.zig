@@ -37,6 +37,56 @@ fn inspectTitleSaves(init: std.process.Init, save_path: ?[]const u8, state: *jou
     }
 }
 
+pub const SimulationInput = struct {
+    menu: pause.Input = .{},
+    battle: @import("battle").Input = .{},
+    dice: journey.dice.Entry.Controls = .{},
+    party: journey.party_selection.selector.Sampler.Sample = .{},
+};
+
+pub fn advanceSimulation(state: *journey.State, input: SimulationInput, audio_player: anytype) !struct { effect: pause.Effect, dice_audio: audio_sync.DiceAudioEvents } {
+    var dice_events: audio_sync.DiceAudioEvents = .{};
+
+    const owner = state.modalOwner(input.menu);
+    if (owner == .pending_field_music) {
+        try audio_sync.syncPendingFieldMusic(state, audio_player);
+        return .{ .effect = .none, .dice_audio = .{} };
+    }
+    const effect: pause.Effect = if (owner == .dice_or_party_selection and state.dice_game != null and journey.dice.usesModel(state)) blk: {
+        const active = state.dice_game.?;
+        if (!active.entry_audio_ready) {
+            try audio_player.requestDiceMusic(.dice);
+            try journey.dice.tick(state, .entry_audio_ready);
+        } else if (active.pending_exit and !active.exit_ready) {
+            try audio_player.requestDiceMusic(.dice);
+            try journey.dice.tick(state, .exit_ready);
+        } else {
+            if (active.pending_exit and active.exit_ready) try audio_player.requestDiceMusic(.area_b);
+            try journey.dice.tickFrame(state, input.dice);
+            if (active.animation != null) {
+                const frame = state.dice_game.?.frame.?;
+                for (frame.landed) |landed| dice_events.landings += @intFromBool(landed);
+            }
+        }
+        if (state.dice_game) |next| {
+            dice_events.box_opened = active.dialogue.phase == .allocate and next.dialogue.phase == .opening;
+            if (active.result) |report| {
+                const advanced = if (next.result) |result| result.cursor != report.cursor else true;
+                const session = state.dice_host.?.session.?.dice;
+                dice_events.won = report.hand_report and report.cursor == 0 and advanced and
+                    session.phase == .proposal and session.decision.?.outcome == .win;
+            }
+        }
+        state.elapsed_ticks +|= 1;
+        break :blk .none;
+    } else if (owner == .dice_or_party_selection and state.party_selection != null) blk: {
+        try state.tickPartySelection(input.party.forPhase(state.party_selection.?.menu.phase));
+        state.elapsed_ticks +|= 1;
+        break :blk .none;
+    } else try state.tickWithModalOwner(owner, input.menu, input.battle);
+    return .{ .effect = effect, .dice_audio = dice_events };
+}
+
 const App = struct {
     init_ctx: std.process.Init,
     boot_state: *boot.Boot,
@@ -157,42 +207,12 @@ const App = struct {
         const party_input = self.input.samplePartySelection();
         const crossing_before = render_mod.crossingState(&self.state);
         const boat_advances = self.state.menu.phase == .closed and (!self.input.menu_input.menu or self.state.field_state.remaining != 0);
-        var dice_events: audio_sync.DiceAudioEvents = .{};
-
-        const effect: pause.Effect = if (self.state.dice_game != null and journey.dice.usesModel(&self.state)) blk: {
-            const active = self.state.dice_game.?;
-            if (!active.entry_audio_ready) {
-                try self.resources.audio_player.requestDiceMusic(.dice);
-                try journey.dice.tick(&self.state, .entry_audio_ready);
-            } else if (active.pending_exit and !active.exit_ready) {
-                try self.resources.audio_player.requestDiceMusic(.dice);
-                try journey.dice.tick(&self.state, .exit_ready);
-            } else {
-                if (active.pending_exit and active.exit_ready) try self.resources.audio_player.requestDiceMusic(.area_b);
-                try journey.dice.tickFrame(&self.state, self.input.dice_input);
-                if (active.animation != null) {
-                    const frame = self.state.dice_game.?.frame.?;
-                    for (frame.landed) |landed| dice_events.landings += @intFromBool(landed);
-                }
-            }
-            if (self.state.dice_game) |next| {
-                dice_events.box_opened = active.dialogue.phase == .allocate and next.dialogue.phase == .opening;
-                if (active.result) |report| {
-                    const advanced = if (next.result) |result| result.cursor != report.cursor else true;
-                    const session = self.state.dice_host.?.session.?.dice;
-                    dice_events.won = report.hand_report and report.cursor == 0 and advanced and
-                        session.phase == .proposal and session.decision.?.outcome == .win;
-                }
-            }
-            self.state.elapsed_ticks +|= 1;
-            break :blk .none;
-        } else if (self.state.party_selection) |active| blk: {
-            try self.state.tickPartySelection(party_input.forPhase(active.menu.phase));
-            self.state.elapsed_ticks +|= 1;
-            break :blk .none;
-        } else try self.state.tickWithFieldEvents(self.input.menu_input, self.input.battle_input);
-
-        try audio_sync.syncPendingFieldMusic(&self.state, &self.resources.audio_player);
+        const simulation = try advanceSimulation(&self.state, .{
+            .menu = self.input.menu_input,
+            .battle = self.input.battle_input,
+            .dice = self.input.dice_input,
+            .party = party_input,
+        }, &self.resources.audio_player);
 
         if (render_mod.crossingState(&self.state)) |current| {
             const view = self.resources.crossing_view orelse return error.MissingCrossingArt;
@@ -220,8 +240,8 @@ const App = struct {
             return false;
         }
 
-        try audio_sync.syncTickAudio(&self.state, package, &self.resources.audio_player, dice_events);
-        try self.applyMenuEffect(effect);
+        try audio_sync.syncTickAudio(&self.state, package, &self.resources.audio_player, simulation.dice_audio);
+        try self.applyMenuEffect(simulation.effect);
         self.input.clearStepEdges(held_direction);
         return true;
     }

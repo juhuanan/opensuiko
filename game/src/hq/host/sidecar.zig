@@ -70,23 +70,23 @@ pub fn restore(self: *Host, snapshot: hq_host.Snapshot) !void {
     if (snapshot.version != hq_host.sidecar_version) return error.UnsupportedHqSidecar;
     if (!std.mem.eql(u8, snapshot.content_sha256, &self.content_hex)) return error.HqContentMismatch;
     for (snapshot.recruit) |byte| if (byte & 0xFC != 0) return error.InvalidRecruitByte;
-    _ = self.restore_arena.reset(.retain_capacity);
-    var roster = try roster_mod.roster.Roster.restore(self.restore_arena.allocator(), self.roster_packet.value, snapshot.roster_json);
-    try roster.validate(self.roster_packet.value);
-    self.recruit = snapshot.recruit;
-    self.roster = roster;
-    self.mode_facts = snapshot.mode;
-    self.result_host = try results.Host.init(self.modeProjection(), self.content_sha);
-    self.revision = snapshot.revision;
-    self.room = snapshot.room;
-    self.screen = snapshot.screen;
-    self.tablet = null;
+    var next = self.*;
+    next.restore_arena = std.heap.ArenaAllocator.init(self.allocator);
+    errdefer next.restore_arena.deinit();
+    next.roster = try roster_mod.roster.Roster.restore(next.restore_arena.allocator(), next.roster_packet.value, snapshot.roster_json);
+    next.recruit = snapshot.recruit;
+    next.mode_facts = snapshot.mode;
+    next.result_host = try results.Host.init(next.modeProjection(), next.content_sha);
+    next.revision = snapshot.revision;
+    next.room = snapshot.room;
+    next.screen = snapshot.screen;
+    next.tablet = null;
     if (snapshot.tablet) |stored| {
-        self.tablet = try tablet_mod.View.restore(stored, self.recruit);
+        next.tablet = try tablet_mod.View.restore(stored, next.recruit);
     } else if (snapshot.screen == .tablet) return error.InvalidHqSidecar;
-    try self.validateInitial();
-    try self.rebuild();
-    if (self.cursor != snapshot.cursor) {
-        if (snapshot.cursor < self.interaction_count) self.cursor = snapshot.cursor;
-    }
+    try next.validateInitial();
+    try next.rebuild();
+    if (snapshot.cursor < next.interaction_count) next.cursor = snapshot.cursor;
+    self.restore_arena.deinit();
+    self.* = next;
 }

@@ -172,14 +172,12 @@ pub fn tick(state: anytype, input: pause.Input) !void {
         const random = next.draws.prng orelse return error.InvalidRandomSource;
         if (finish) try next.finish();
         state.combat.progress.money = next.wallet.money;
-        state.field_state.progress.money = next.wallet.money;
         state.combat.random = random;
         state.optional_games.cup_profit = next.wallet.net;
         state.optional_games.card_records = next.wallet.best;
         if (settle) {
             const status = state.combat.progress.story.scenario.?.scenario[mode_status_start..][0..games.settle.status_bytes];
             for (status, next.wallet.status) |*current, result| current.* |= result;
-            state.field_state.progress.story = state.combat.progress.story;
         }
     }
     host.* = next;

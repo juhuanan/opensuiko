@@ -1,5 +1,7 @@
 //! Field callback ownership for headquarters party selection.
+const field = @import("field");
 const std = @import("std");
+const battle = @import("battle");
 const events = @import("field_events");
 const party = @import("party_session");
 const roster = @import("journey_roster");
@@ -8,14 +10,14 @@ pub const Active = struct { receipt: events.Receipt, menu: selector.Selector = .
 
 pub fn inspect(state: anytype, id: []const u8) !selector.Details {
     for (state.combat.progress.party, 0..) |member, index| if (std.mem.eql(u8, member.id, id)) {
-        return selector.Details.derive(state.combat, state.combat.ownedMember(index), state.extras[index]);
+        return selector.Details.derive(state.combat.*, state.combat.ownedMember(index), state.extras[index]);
     };
     for (state.reserves, state.reserve_extras) |maybe, extra| if (maybe) |owned| {
-        if (std.mem.eql(u8, owned.member.id, id)) return selector.Details.derive(state.combat, owned, extra orelse .{ .member_id = "" });
+        if (std.mem.eql(u8, owned.member.id, id)) return selector.Details.derive(state.combat.*, owned, extra orelse .{ .member_id = "" });
     };
     const catalogue = state.party_catalog orelse return error.MissingPartyCatalogue;
-    const seed = try party.catalogue.materializeBound(state.combat, catalogue, id, state.party_bindings);
-    return selector.Details.derive(state.combat, seed.owned, seed.extra);
+    const seed = try party.catalogue.materializeBound(state.combat.*, catalogue, id, state.party_bindings);
+    return selector.Details.derive(state.combat.*, seed.owned, seed.extra);
 }
 
 pub const View = struct {
@@ -98,7 +100,9 @@ pub fn begin(state: anytype) !void {
 
 fn resumeSelection(state: anytype, receipt: events.Receipt) !void {
     const owner = state.field_event.?;
-    var next_field = state.stageField();
+    var members: [6]battle.Member = undefined;
+    var draft: field.game_state.Progress = undefined;
+    var next_field = state.stageField(&draft, &members);
     try owner.session.resumePartySelect(owner.binding.*, &next_field, receipt);
     state.commitFieldTransaction(next_field);
     state.party_selection = null;
@@ -163,7 +167,6 @@ fn commit(state: anytype, active: *Active) !void {
     if (story.castle_tier != state.combat.progress.story.scenario.?.castle_tier)
         state.combat.progress.story.recruitment_tier = story.castle_tier;
     state.setScenarioStory(story);
-    state.syncProgressToField();
     active.menu = next_menu;
 }
 

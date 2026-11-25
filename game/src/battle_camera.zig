@@ -351,6 +351,18 @@ pub fn mix(a: Block, b: Block, t: f32) Block {
     return blend(a, b, @min(@max(t, 0), 1));
 }
 
+pub fn actionEnvelope(tick: u32, duration: u32, ease_in: u32, ease_out: u32) f32 {
+    if (tick >= duration) return 0;
+    const in_ticks: f32 = @floatFromInt(ease_in);
+    const out_ticks: f32 = @floatFromInt(ease_out);
+    const duration_ticks: f32 = @floatFromInt(duration);
+    const scale = @min(1, duration_ticks / @max(1, in_ticks + out_ticks));
+    const rise = if (ease_in == 0) 1 else @as(f32, @floatFromInt(tick)) / (in_ticks * scale);
+    const fall = if (ease_out == 0) 1 else @as(f32, @floatFromInt(duration - tick)) / (out_ticks * scale);
+    const weight = @min(1, @min(rise, fall));
+    return weight * weight * (3 - 2 * weight);
+}
+
 fn blend(a: Block, b: Block, t: f32) Block {
     var result: Block = undefined;
     for (0..3) |i| {

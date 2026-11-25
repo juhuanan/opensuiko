@@ -118,9 +118,6 @@ pub fn beginCombat(state: anytype, encounter: usize) !void {
             for (extra.weapon_fragments) |count| if (count != 0) return error.InvalidExtras;
         }
     }
-    const old_progress = state.combat.progress;
-    state.syncProgressFromField();
-    errdefer state.combat.progress = old_progress;
     state.checkpoint = try save.Snapshot.capture(state.*);
     startCombat(state, encounter);
 }
@@ -179,7 +176,6 @@ pub fn returnFromBattle(state: anytype, won: bool) void {
     state.combat.asleep = @splat(0);
     state.combat.clearTemporaryStats();
     state.combat.unbalanced = @splat(0);
-    state.syncProgressToField();
     state.encounter_trigger = null;
     state.checkpoint = null;
     state.mode = .field;

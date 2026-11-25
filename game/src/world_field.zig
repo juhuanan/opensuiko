@@ -120,6 +120,7 @@ pub const Session = struct {
     fn updateField(self: *Session, input: pause.Input, draws: *world.Draws, step_healing_rune: bool, menu: ?*pause.State, allow_exit: bool) !bool {
         if (self.travel.mode != .field) return error.NotInWorldField;
         const before = self.field_state;
+        const before_progress = before.progress.*;
         const old_updates = self.field_moving_updates;
         const old_draws = draws.*;
         const old_menu: ?pause.State = if (menu) |m| m.* else null;
@@ -128,6 +129,7 @@ pub const Session = struct {
         @memcpy(members[0..before.progress.party.len], before.progress.party);
         errdefer {
             self.field_state = before;
+            before.progress.* = before_progress;
             self.field_moving_updates = old_updates;
             draws.* = old_draws;
             @memcpy(before.progress.party, members[0..before.progress.party.len]);
@@ -160,6 +162,6 @@ pub const Session = struct {
     pub fn finishBattle(self: *Session, outcome: world.Outcome, progress: field.game_state.Progress) !void {
         try progress.validate();
         try self.travel.finishBattle(outcome);
-        self.field_state.progress = progress;
+        self.field_state.progress.* = progress;
     }
 };

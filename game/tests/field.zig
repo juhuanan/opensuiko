@@ -228,7 +228,8 @@ test "content validates IDs, occupancy, spawns, clips and atlas references" {
     try std.testing.expectError(error.InvalidSceneryProp, bad.validate());
     bad.schema = field.Package.prop_schema;
     try bad.validate();
-    var state = field.State.init(bad, .{ .money = 0, .party = &.{} });
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state = field.State.init(bad, &state_progress);
     try std.testing.expect(rooms[0].draws[0].sampleVisible(&state) == null);
     state.shown_props = @as(u64, 1) << 63;
     try std.testing.expect(rooms[0].draws[0].sampleVisible(&state) != null);
@@ -240,7 +241,8 @@ test "blocked movement changes facing; a walk step takes six fixed ticks" {
     const parsed = try package();
     defer parsed.deinit();
     const content = parsed.value;
-    var state = field.State.init(content, .{ .money = 0, .party = &.{} });
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state = field.State.init(content, &state_progress);
     step(&state, content, .right);
     try std.testing.expectEqual(@as(i32, 8), state.x);
     try std.testing.expectEqual(field.Direction.right, state.facing);
@@ -261,7 +263,8 @@ test "facing and range gate dialogue, which freezes walking until closed" {
     const parsed = try package();
     defer parsed.deinit();
     const content = parsed.value;
-    var state = field.State.init(content, .{ .money = 0, .party = &.{} });
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state = field.State.init(content, &state_progress);
     state.x = 24;
     state.y = 48;
     state.destination = .{ .x = 24, .y = 48 };
@@ -317,7 +320,8 @@ test "doorway changes scene and spawn once, then supports the return route" {
     const loaded = try field.load(std.testing.allocator, encoded);
     defer loaded.deinit();
     content = loaded.value;
-    var state = field.State.init(content, .{ .money = 0, .party = &.{} });
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state = field.State.init(content, &state_progress);
     state.x = 48;
     state.y = 40;
     state.destination = .{ .x = 48, .y = 40 };
@@ -350,7 +354,8 @@ test "walking cycles exported timed poses and stops on the neutral pose" {
     const parsed = try package();
     defer parsed.deinit();
     const content = parsed.value;
-    var state = field.State.init(content, .{ .money = 0, .party = &.{} });
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state = field.State.init(content, &state_progress);
     state.tick(content, .{ .direction = .down });
     try std.testing.expectEqual(@as(i32, 0), state.frame(content).rect.x);
     state.tick(content, .{});
@@ -370,7 +375,8 @@ test "holding a direction never flashes the idle pose at a grid-step boundary" {
     clips[0].frames = &frames;
     var modified = content;
     modified.player_clips = &clips;
-    var state = field.State.init(modified, .{ .money = 0, .party = &.{} });
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state = field.State.init(modified, &state_progress);
     for (1..19) |tick| {
         state.tick(modified, .{ .direction = .down });
         try std.testing.expect(state.walking);
@@ -385,7 +391,8 @@ test "an interaction pressed during a step is retained until arrival" {
     const parsed = try package();
     defer parsed.deinit();
     const content = parsed.value;
-    var state = field.State.init(content, .{ .money = 0, .party = &.{} });
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state = field.State.init(content, &state_progress);
     state.x = 24;
     state.y = 48;
     state.destination = .{ .x = 24, .y = 48 };
@@ -422,7 +429,8 @@ test "dialogue speed selects source fast/normal/slow pacing" {
 test "wheel ownership resets on room entry instead of event completion" {
     const parsed = try package();
     defer parsed.deinit();
-    var state = field.State.init(parsed.value, .{ .money = 0, .party = &.{} });
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state = field.State.init(parsed.value, &state_progress);
     state.wheel_state = .{};
     state.wheel_state.?.start(12960);
     state.wheel_state.?.advance();

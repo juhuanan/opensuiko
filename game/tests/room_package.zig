@@ -72,7 +72,8 @@ test "real package: walk, talk, close, exit and return" {
     defer parsed.deinit();
     const package = parsed.value;
     var members = [_]field.game_state.Member{.{ .id = "hero", .name = "Hero", .hp = 35, .max_hp = 100, .status = .poisoned, .rune_charges = .{ 0, 0, 0, 0 }, .max_rune_charges = .{ 0, 0, 0, 0 } }};
-    var state = field.State.init(package, .{ .money = 350, .party = &members });
+    var state_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var state = field.State.init(package, &state_progress);
     const inn = try field.inn.load(allocator, field.inn.json);
     defer inn.deinit();
     try state.configureInn(package, inn.value);
@@ -150,7 +151,8 @@ test "real package: walk, talk, close, exit and return" {
     var directory = std.testing.tmpDir(.{});
     defer directory.cleanup();
     try saves.write(allocator, std.testing.io, directory.dir, package, state);
-    var restarted = field.State.init(package, .{ .money = 350, .party = &members });
+    var restarted_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var restarted = field.State.init(package, &restarted_progress);
     try restarted.configureInn(package, inn.value);
     const loaded = try saves.restore(allocator, std.testing.io, directory.dir, package, &restarted);
     defer loaded.deinit();
@@ -180,7 +182,8 @@ test "three-room shopping loop: buy, use, save, reload and leave the shop" {
     const rules = try field.items.load(allocator, field.items.json);
     defer rules.deinit();
     var members = [_]field.game_state.Member{.{ .id = "hero", .name = "Hero", .hp = 35, .max_hp = 100, .status = .poisoned, .rune_charges = .{ 1, 0, 0, 0 }, .max_rune_charges = .{ 3, 0, 0, 0 } }};
-    var game = field.State.init(package, .{ .money = 350, .party = &members });
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game = field.State.init(package, &game_progress);
     game.item_rules = rules.value;
     try walkTo(&game, package, 248, 240);
     try walkTo(&game, package, 240, 152);
@@ -215,7 +218,8 @@ test "three-room shopping loop: buy, use, save, reload and leave the shop" {
     var dir = std.testing.tmpDir(.{});
     defer dir.cleanup();
     try saves.write(allocator, std.testing.io, dir.dir, package, game);
-    var fresh = field.State.init(package, .{ .money = 350, .party = &members });
+    var fresh_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var fresh = field.State.init(package, &fresh_progress);
     fresh.item_rules = rules.value;
     const loaded = try saves.restore(allocator, std.testing.io, dir.dir, package, &fresh);
     defer loaded.deinit();
@@ -254,7 +258,8 @@ test "field camera follows world coordinates, clamps map edges and retains small
     package.start_y = 600;
     package.interaction_offsets[@backingInt(field.Direction.up)] = .{ .x = 0, .y = -24 };
     var members = [_]field.game_state.Member{.{ .id = "hero", .name = "Hero", .hp = 100, .max_hp = 100, .status = .healthy, .rune_charges = @splat(0), .max_rune_charges = @splat(0) }};
-    var state = field.State.init(package, .{ .money = 0, .party = &members });
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &members };
+    var state = field.State.init(package, &state_progress);
     state.facing = .up;
     state.tick(package, .{ .action = true });
     try std.testing.expect(state.dialogue != null);

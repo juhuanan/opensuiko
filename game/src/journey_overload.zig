@@ -50,7 +50,7 @@ pub fn prepareReplacement(state: anytype, member: usize, slot: usize, incoming: 
     var members: [6]battle.Member = undefined;
     const count = state.combat.partyCount();
     @memcpy(members[0..count], state.combat.progress.party);
-    var staged = state.combat;
+    var staged = state.combat.*;
     staged.progress.party = members[0..count];
     if (try wornSlot(state, member, slot)) |place| try staged.equipSlotOwned(member, place, null);
     const bag = &members[member].inventory;
@@ -169,7 +169,6 @@ pub fn tick(state: anytype, input: pause.Input) !void {
         const replacement = if (next.replacement) |selection| try prepareReplacement(state, selection.member, selection.slot, next.item) else null;
         try owner.session.resumeItemOverload(owner.binding.*, &state.field_state, next.receipt);
         if (replacement) |owned| state.combat.setOwnedMember(next.replacement.?.member, owned);
-        state.commitStoryFromField();
         state.item_overload = null;
     } else state.item_overload = next;
     state.item_overload_sound = cue;

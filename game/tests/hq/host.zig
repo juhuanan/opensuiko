@@ -81,6 +81,7 @@ fn gameMember(id: []const u8, name: []const u8, index: usize) field.game_state.M
 /// fixture is initialised in place instead of returned by value.
 const Fixture = struct {
     state: field.State,
+    progress: field.game_state.Progress,
     members: [2]field.game_state.Member,
     story: event_runtime.StoryState,
     snapshot: party.Snapshot,
@@ -97,17 +98,17 @@ const Fixture = struct {
         self.members[1] = gameMember("gremio", "Gremio", 1);
         // The bag stack must be the full source stack to be sellable.
         self.members[0].inventory.slots[0].?.uses = self.rules.value.medicine.uses;
+        self.progress = .{
+            .money = 2000,
+            .party = self.members[0..2],
+            .story = .{ .scenario = self.story, .recruitment_tier = stage_byte, .village_south_exit_reached = true },
+        };
         self.state = .{
             .room = 0,
             .x = 112,
             .y = 120,
             .destination = .{ .x = 112, .y = 120 },
-            .progress = .{
-                .money = 2000,
-                .party = self.members[0..2],
-                .story = .{ .scenario = self.story, .recruitment_tier = stage_byte, .village_south_exit_reached = true },
-                .storage = .{},
-            },
+            .progress = &self.progress,
             .item_rules = self.rules.value,
         };
         @memset(&self.recruit, 0);
@@ -266,6 +267,17 @@ test "the recruit and roster sidecar survive a fresh host and a tampered one is 
     var bad_bytes = snapshot;
     bad_bytes.recruit[sonya_record] = 0x80;
     try std.testing.expectError(error.InvalidRecruitByte, resumed.restore(bad_bytes));
+
+    var missing_tablet = snapshot;
+    missing_tablet.screen = .tablet;
+    missing_tablet.tablet = null;
+    missing_tablet.recruit[sonya_record] = 0;
+    try std.testing.expectError(error.InvalidHqSidecar, resumed.restore(missing_tablet));
+    const after = try resumed.capture(allocator);
+    defer allocator.free(after.roster_json);
+    try std.testing.expectEqual(snapshot.screen, after.screen);
+    try std.testing.expectEqualDeep(snapshot.recruit, after.recruit);
+    try std.testing.expectEqualStrings(snapshot.roster_json, after.roster_json);
 }
 
 test "stage promotion is produced by the recount and reconstructs the next stage" {
@@ -345,11 +357,12 @@ test "ordinary service play transacts through the real engines and returns to th
 
     // The shop's second service is `shop_sell`; the real game_state engine
     // prices and removes the bag entry and credits the money.
-    const before_money = f.state.progress.money;
+    const before_money = f.progress.money;
     const before_items = f.state.progress.party[0].inventory.count();
     try host.step(.down);
     try host.step(.confirm);
-    try std.testing.expect(f.state.progress.money > before_money);
+    try std.testing.expect(host.field_state.progress == &f.progress);
+    try std.testing.expect(f.progress.money > before_money);
     try std.testing.expectEqual(before_items - 1, f.state.progress.party[0].inventory.count());
 
     // Cancel returns to the caller's field interaction, not another screen.

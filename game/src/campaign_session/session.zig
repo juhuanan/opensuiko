@@ -290,7 +290,7 @@ pub fn storeOf(state: *const travel.State, shared: [7]?[]const u8, revision: u64
     }
     if (state.combat.content.systems) |systems| {
         for (0..state.combat.partyCount()) |index| {
-            store.party.members[index] = try memberOf(&state.combat, index, systems);
+            store.party.members[index] = try memberOf(state.combat, index, systems);
         }
         store.party.count = @intCast(state.combat.partyCount());
     } else return error.UnboundEquipmentIdentity;

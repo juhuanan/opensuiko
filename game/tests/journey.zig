@@ -64,7 +64,6 @@ test "scripted crossing owns Journey input and arrives before its final movement
     state.field_state.enterRoom(0, .{ .x = 800, .y = 600 });
     state.field_state.progress.story.scenario.?.world_mode = 1;
     state.field_state.facing = .right;
-    state.combat.progress = state.field_state.progress;
     state.boat_travel = try journey.travel.Boat.begin(state.package, state.field_state, .left);
     const boat_rng = state.combat.random;
     const paused_boat = state.boat_travel.?;
@@ -112,9 +111,9 @@ test "defeat departure advances behind retry and preserves checkpoint" {
     state.combat.phase = .defeat;
     state.mode = .defeat;
     const start = state.combat.camera_ticks;
-    const origin = battle.layout.worldPosition(&state.combat, 0);
+    const origin = battle.layout.worldPosition(state.combat, 0);
     for (0..96) |_| _ = state.tick(.{}, .{});
-    try expect(battle.layout.worldPosition(&state.combat, 0).z < origin.z);
+    try expect(battle.layout.worldPosition(state.combat, 0).z < origin.z);
     try equal(start + 96, state.combat.camera_ticks);
     try equal(.defeat, state.mode);
     try equal(hp, state.combat.hp(0));
@@ -134,10 +133,10 @@ test "journey encounter carries rune pieces into battle and retry" {
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
     state.extras[0] = .{ .member_id = "wrong_member", .weapon_element = .fire, .weapon_fragments = .{ 3, 0, 0, 0, 0 } };
-    const before = state.combat;
+    const before = state.combat.*;
     try std.testing.expectError(error.InvalidExtras, state.beginEncounter(0));
     try expect(state.checkpoint == null and state.mode == .field);
-    try std.testing.expectEqualDeep(before, state.combat);
+    try std.testing.expectEqualDeep(before, state.combat.*);
     state.extras[0].member_id = "";
     try std.testing.expectError(error.InvalidExtras, state.beginEncounter(0));
     state.extras[0] = .{ .member_id = state.combat.progress.party[0].id, .weapon_element = .wind, .weapon_fragments = .{ 0, 0, 3, 0, 0 } };
@@ -275,13 +274,13 @@ test "reserve rune pieces follow their owner through swaps saves and battle" {
     try state.swapReserve("hero", "maas");
     try expect(state.extras[0].weapon_element == .wind);
     try expect(state.reserve_extras[0].?.weapon_element == .fire);
-    var neutral = state.combat;
+    var neutral = state.combat.*;
     neutral.weapon_augments[0] = .{};
     try equal(neutral.stats(0).defense + 9, state.combat.stats(0).defense);
     const roster = state.buildPartySnapshot();
     try std.testing.expectEqualStrings("hero", roster.members[6].?.member.id);
     try expect(roster.extras[6].?.weapon_element == .fire);
-    _ = try party_session.Session.init(state.combat, roster, .{});
+    _ = try party_session.Session.init(state.combat.*, roster, .{});
     var directory = std.testing.tmpDir(.{});
     defer directory.cleanup();
     try journey.save(std.testing.io, allocator, directory.dir, state);
@@ -289,7 +288,7 @@ test "reserve rune pieces follow their owner through swaps saves and battle" {
     try journey.restore(std.testing.io, allocator, directory.dir, &state);
     try equal(state.combat.progress.party[0].id.ptr, state.extras[0].member_id.ptr);
     try equal(state.reserves[0].?.member.id.ptr, state.reserve_extras[0].?.member_id.ptr);
-    neutral = state.combat;
+    neutral = state.combat.*;
     neutral.weapon_augments[0] = .{};
     try equal(neutral.stats(0).defense + 9, state.combat.stats(0).defense);
     try state.beginEncounter(0);
@@ -339,7 +338,7 @@ test "Maas join growth matches original event consumer including raw STR and lev
     for (vectors.value) |vector| {
         var definition = state.data.recruitment.?;
         definition.seed.level = vector.level;
-        const joined = try journey.recruitment.prepare(definition, state.combat, vector.draws);
+        const joined = try journey.recruitment.prepare(definition, state.combat.*, vector.draws);
         const weapon = state.combat.content.partyProfile("maas").?.weapon.?;
         try equal(vector.expected.level, joined.level);
         try equal(vector.expected.experience, joined.experience);
@@ -352,7 +351,7 @@ test "Maas join growth matches original event consumer including raw STR and lev
         try equal(@as(?usize, null), joined.rune);
         var bad = definition;
         bad.seed.level = 100;
-        try std.testing.expectError(error.InvalidMember, journey.recruitment.prepare(bad, state.combat, vector.draws));
+        try std.testing.expectError(error.InvalidMember, journey.recruitment.prepare(bad, state.combat.*, vector.draws));
     }
     try std.testing.expectEqualDeep(before, try journey.Snapshot.capture(state));
 }
@@ -380,7 +379,7 @@ test "Maas recruitment gates and commits membership ownership and RNG atomically
     var expected_random = state.combat.random;
     var draws: [119]u15 = undefined;
     for (&draws) |*draw| draw.* = expected_random.random().int(u15);
-    const expected = try journey.recruitment.prepare(state.data.recruitment.?, state.combat, &draws);
+    const expected = try journey.recruitment.prepare(state.data.recruitment.?, state.combat.*, &draws);
     try state.recruitMaas();
     try std.testing.expectEqualDeep(expected, state.reserves[0].?);
     try std.testing.expectEqualDeep(expected_random, state.combat.random);
@@ -527,7 +526,7 @@ test "authored episode initialization is explicit and repeatable without canonic
     try std.testing.expectEqualDeep(baseline, try journey.Snapshot.capture(state));
     var wrong = fixtures.content.value;
     wrong.initial_party = &.{ "maas", "gremio", "pahn", "viktor", "yam_koo", "tai_ho" };
-    try std.testing.expectError(error.InvalidEpisodeParty, journey.State.initEpisode(fixtures.package.value, fixtures.data.value, wrong, fixtures.items.value, fixtures.inn.value, &members));
+    try std.testing.expectError(error.InvalidEpisodeParty, journey.State.initEpisode(fixtures.package.value, fixtures.data.value, wrong, fixtures.items.value, fixtures.inn.value, &members, try fixtures.combat_storage.allocator().create(battle.State)));
 }
 
 test "party metadata and save validation follow identity across all catalogue permutations" {
@@ -558,7 +557,7 @@ test "party metadata and save validation follow identity across all catalogue pe
         for (0..6) |i| {
             try std.testing.expectEqualDeep(original[i], state.combat.partyProfile(i));
             try std.testing.expectEqualDeep(stats[i], state.combat.stats(i));
-            try std.testing.expectEqualDeep(original[i].sprite, battle.layout.actorLayout(state.combat, i).sprite);
+            try std.testing.expectEqualDeep(original[i].sprite, battle.layout.actorLayout(state.combat.*, i).sprite);
             try std.testing.expectEqualDeep(original[i].motion, state.combat.actionMotion(i));
             try equal(original[i].weapon_range.?, state.combat.weaponRange(i));
         }
@@ -824,8 +823,8 @@ test "BonBon uses exported jump contact and return phases with one physical impa
     const fixtures = try Fixtures.init();
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
-    var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const state = try fixtures.session(&members);
+    const combat = state.combat;
     combat.phase = .resolving;
     const actor = combat.partyCount();
     const motion = combat.enemy(0).motion.?;
@@ -867,8 +866,8 @@ test "Spark ordinary attack drains remaining allies in party order after priorit
     const fixtures = try Fixtures.init();
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
-    var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const state = try fixtures.session(&members);
+    const combat = state.combat;
     combat.runes[0] = combat.content.systems.?.runeIndex("spark").?;
     try std.testing.expectEqualStrings("Passive: allies follow an ordinary attack.", combat.runeHint(0));
     combat.phase = .resolving;
@@ -937,8 +936,8 @@ test "Double-beat preserves native target scan, latch, impact and continuous fol
     const vectors = try std.json.parseFromSlice([]const struct { usize, u6, usize, ?usize }, allocator, @embedFile("fixtures/double_beat_targets.json"), .{});
     defer vectors.deinit();
     var members: [6]battle.Member = undefined;
-    var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const state = try fixtures.session(&members);
+    const combat = state.combat;
     combat.runes[0] = combat.content.systems.?.runeIndex("double-beat").?;
     const encounters = try allocator.dupe(battle.Encounter, combat.content.encounters);
     defer allocator.free(encounters);
@@ -1033,7 +1032,7 @@ test "ordinary attacks consume hit then eligible party critical then impact roll
             var state = try fixtures.session(&members);
             state.combat.content.enemies = &enemies;
             try state.beginEncounter(0);
-            const combat = &state.combat;
+            const combat = state.combat;
             combat.base_stats[0].skill = 20;
             combat.base_stats[0].luck = 20;
             combat.random = .init(seed);
@@ -1079,7 +1078,7 @@ test "Crow can target surviving rear members and Ant special hits once with sour
         state.combat.restart();
         state.mode = .field;
         try state.beginEncounter(2);
-        const combat = &state.combat;
+        const combat = state.combat;
         // Advance the retained generator so both branches execute across trials.
         for (0..special_count + normal_count) |_| _ = combat.random.random().int(u15);
         try std.testing.expectEqualStrings("red_soldier_ant", combat.enemy(0).id);
@@ -1110,7 +1109,7 @@ test "three balloons depart at the boundary, retain HP, skip actions and EXP, an
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
     try state.beginEncounter(0);
-    const combat = &state.combat;
+    const combat = state.combat;
     const hp = members[0].hp;
     members[0].status = .poisoned;
     for (0..3) |_| try expect(combat.inflictStatus(0, .balloon));
@@ -1435,7 +1434,7 @@ test "Turtle blocks new status changes and individual Unite recovery without cle
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
     try state.beginEncounter(0);
-    const combat = &state.combat;
+    const combat = state.combat;
     try expect(combat.inflictStatus(0, .poison));
     try expect(!combat.inflictStatus(0, .poison));
     for (0..3) |_| try expect(combat.inflictStatus(0, .balloon));
@@ -1481,7 +1480,7 @@ test "accuracy and Rune blocking are distinct, cure at full HP and leave recover
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
     try state.beginEncounter(0);
-    const combat = &state.combat;
+    const combat = state.combat;
     const fire = spellIndex(combat.*, "spell_1");
     try expect(combat.canCast(0, fire));
     try expect(combat.inflictStatus(0, .rune_blocked));
@@ -1520,6 +1519,7 @@ test "accuracy and Rune blocking are distinct, cure at full HP and leave recover
     try expect(!combat.rune_blocked[2] and !combat.accuracy_reduced[0]);
 }
 const Fixtures = struct {
+    combat_storage: *std.heap.ArenaAllocator,
     package: std.json.Parsed(field.Package),
     content: std.json.Parsed(battle.Content),
     data: std.json.Parsed(journey.Data),
@@ -1534,9 +1534,15 @@ const Fixtures = struct {
         errdefer data.deinit();
         const items = try field.items.load(allocator, field.items.json);
         errdefer items.deinit();
-        return .{ .package = package, .content = content, .data = data, .items = items, .inn = try field.inn.load(allocator, field.inn.json) };
+        const inn = try field.inn.load(allocator, field.inn.json);
+        errdefer inn.deinit();
+        const combat_storage = try allocator.create(std.heap.ArenaAllocator);
+        combat_storage.* = .init(allocator);
+        return .{ .combat_storage = combat_storage, .package = package, .content = content, .data = data, .items = items, .inn = inn };
     }
     fn deinit(self: Fixtures) void {
+        self.combat_storage.deinit();
+        allocator.destroy(self.combat_storage);
         self.inn.deinit();
         self.items.deinit();
         self.data.deinit();
@@ -1544,7 +1550,7 @@ const Fixtures = struct {
         self.package.deinit();
     }
     fn session(self: Fixtures, members: []battle.Member) !journey.State {
-        return journey.State.initEpisode(self.package.value, self.data.value, self.content.value, self.items.value, self.inn.value, members);
+        return journey.State.initEpisode(self.package.value, self.data.value, self.content.value, self.items.value, self.inn.value, members, try self.combat_storage.allocator().create(battle.State));
     }
 };
 fn confirm(state: *journey.State) void {
@@ -1567,7 +1573,7 @@ test "connected encounter returns to the same origin with persistent HP, items, 
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
-    try expect(state.combat.canCast(1, spellIndex(state.combat, "spell_30")));
+    try expect(state.combat.canCast(1, spellIndex(state.combat.*, "spell_30")));
     state.menu.phase = .root;
     state.menu.selected = .rune;
     state.menu.member = 1;
@@ -1871,11 +1877,13 @@ fn castNow(combat: *battle.State, actor: usize, spell: usize, target: usize) voi
     combat.tick(.{});
 }
 
-test "connected item menus cure, buy different stock and retain supplies through saves" {
+test "shop purchase uses one progress owner through field battle and restore" {
     const fixtures = try Fixtures.init();
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
+    const progress_before = state.progress();
+    try expect(progress_before == state.field_state.progress);
     state.bind();
     members[0].inventory.slots[0] = .{ .id = .needle, .uses = 1 };
     members[1].balloons = 2;
@@ -1891,6 +1899,7 @@ test "connected item menus cure, buy different stock and retain supplies through
     try equal(@as(u8, 1), members[1].balloons);
     try equal(.poisoned, members[1].status);
     try equal(.medicine, members[0].inventory.slots[0].?.id);
+    state.combat.progress.money = 500;
     state.menu.phase = .buy_member;
     state.menu.member = 1;
     _ = state.tick(.{ .field = .{ .menu_direction = .down } }, .{});
@@ -1903,7 +1912,28 @@ test "connected item menus cure, buy different stock and retain supplies through
     confirm(&state);
     try equal(.shop_notice, state.menu.phase);
     try equal(money - 500, state.combat.progress.money);
-    try std.testing.expectEqualDeep(field.items.Stack{ .id = .mega_medicine, .uses = 3 }, members[1].inventory.slots[count].?);
+    const purchased = field.items.Stack{ .id = .mega_medicine, .uses = 3 };
+    try std.testing.expectEqualDeep(purchased, members[1].inventory.slots[count].?);
+
+    const before_rejection = members[1].inventory;
+    confirm(&state);
+    confirm(&state);
+    confirm(&state);
+    _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
+    confirm(&state);
+    try equal(.shop_notice, state.menu.phase);
+    try std.testing.expectEqualStrings("You do not have enough bits.", state.menu.message);
+    try equal(@as(u32, 0), state.progress().money);
+    try std.testing.expectEqualDeep(before_rejection, state.progress().party[1].inventory);
+
+    for (0..2) |_| _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
+    try equal(.closed, state.menu.phase);
+    try state.beginEncounter(0);
+    try equal(@as(u32, 0), state.combat.progress.money);
+    try std.testing.expectEqualDeep(purchased, state.combat.progress.party[1].inventory.slots[count].?);
+    try finishBattle(&state);
+    try equal(.field, state.mode);
+    try std.testing.expectEqualDeep(purchased, state.progress().party[1].inventory.slots[count].?);
     members[1].inventory.slots[count + 1] = .{ .id = .antitoxin, .uses = 2 };
     state.menu.phase = .closed;
     const before = try journey.Snapshot.capture(state);
@@ -1914,6 +1944,8 @@ test "connected item menus cure, buy different stock and retain supplies through
     members[1].inventory.slots[count + 1] = null;
     try journey.restore(std.testing.io, allocator, temp.dir, &state);
     try std.testing.expectEqualDeep(before, try journey.Snapshot.capture(state));
+    try expect(state.field_state.progress == progress_before);
+    try expect(state.progress() == progress_before);
 }
 
 test "battle selects exact item and rechecks target and item identity at a single impact" {
@@ -1923,7 +1955,7 @@ test "battle selects exact item and rechecks target and item identity at a singl
         for (0..4) |failure| {
             var members: [6]battle.Member = undefined;
             var state = try fixtures.session(&members);
-            const combat = &state.combat;
+            const combat = state.combat;
             try state.beginEncounter(0);
             members[0].inventory.slots[0] = .{ .id = id, .uses = 2 };
             members[1].hp = 1;
@@ -2018,8 +2050,8 @@ test "five equipment slots enforce compatibility, owned copies and protect every
     const fixtures = try Fixtures.init();
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
-    var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const state = try fixtures.session(&members);
+    const combat = state.combat;
     members[0].inventory.slots = .{ .{ .id = .bandanna, .uses = 0 }, .{ .id = .tunic, .uses = 0 }, .{ .id = .gloves, .uses = 0 }, null, null, null, null, null, null };
     const base = combat.base_stats[0].defense;
     try combat.equipSlotOwned(0, .head, combat.gearIndex(.bandanna));
@@ -2158,7 +2190,7 @@ test "sharpening respects every exported price, cumulative power and shop cap wi
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const combat = state.combat;
     for (0..combat.partyCount()) |i| {
         const profile = combat.partyProfile(i);
         const weapon = profile.weapon.?;
@@ -2189,7 +2221,7 @@ test "rune crystals respect native character permissions, locked runes and atomi
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const combat = state.combat;
     const money = combat.progress.money;
     members[0].inventory.slots[3] = .{ .id = .clone_crystal, .uses = 0 };
     const charges = members[3].rune_charges;
@@ -2302,7 +2334,7 @@ test "connected spells match static source semantic vectors and preserve rune ow
     }
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const combat = state.combat;
     try state.beginEncounter(0);
     const arrows = spellIndex(combat.*, "spell_1");
     const before = members[0].rune_charges[0];
@@ -2360,7 +2392,7 @@ test "both connected Unites use distinct native tracks, exact chosen target and 
         var members: [6]battle.Member = undefined;
         var state = try fixtures.session(&members);
         try state.beginEncounter(0);
-        const combat = &state.combat;
+        const combat = state.combat;
         combat.actions = @splat(.defend);
         combat.actions[pair[1]] = null;
         combat.choose(pair[0]);
@@ -2453,7 +2485,7 @@ test "full battle bags require explicit reward placement or leaving, preserve wo
         slot.* = .{ .id = .medicine, .uses = 6 };
     };
     members[0].inventory.slots[2] = .{ .id = .bandanna, .uses = 0 };
-    const combat = &state.combat;
+    const combat = state.combat;
     combat.phase = .victory;
     combat.dropped_item = .{ .id = .failure_urn, .uses = 0 };
     combat.drop_received = false;
@@ -2693,7 +2725,7 @@ test "Fisherman recovery restricts Attack, Rune and Unite for one following roun
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
     try state.beginEncounter(0);
-    const combat = &state.combat;
+    const combat = state.combat;
     combat.actions = @splat(.defend);
     combat.actions[5] = null;
     combat.choose(4);
@@ -2742,8 +2774,8 @@ test "expanded damage magic resolves each source element and consumes the owning
     const fixtures = try Fixtures.init();
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
-    var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const state = try fixtures.session(&members);
+    const combat = state.combat;
     const cases = .{
         .{ "fire", "spell_3", @as(u16, 400), true },
         .{ "fire", "spell_4", @as(u16, 700), true },
@@ -2783,8 +2815,8 @@ test "Rain of Kindness heals living allies by300 with cures while preserving rec
     const fixtures = try Fixtures.init();
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
-    var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const state = try fixtures.session(&members);
+    const combat = state.combat;
     combat.runes[1] = combat.content.systems.?.runeIndex("flowing").?;
     combat.refillMagic(1);
     for (&members, 0..) |*member, i| {
@@ -2989,7 +3021,7 @@ test "native poison costs five percent at one battle boundary and a cure prevent
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const combat = state.combat;
     try state.beginEncounter(0);
     members[1].hp = 1;
     members[1].status = .poisoned;
@@ -3050,7 +3082,7 @@ test "room movement encounters charge actual movement and use ordered draws thro
     const admitted = try journey.load(allocator, bytes, package, fixtures.content.value);
     defer admitted.deinit();
     var members: [6]battle.Member = undefined;
-    var state = try journey.State.initEpisode(package, admitted.value, fixtures.content.value, fixtures.items.value, fixtures.inn.value, &members);
+    var state = try journey.State.initEpisode(package, admitted.value, fixtures.content.value, fixtures.items.value, fixtures.inn.value, &members, try fixtures.combat_storage.allocator().create(battle.State));
     state.combat.random = std.Random.DefaultPrng.init(17);
     var after_rate_miss = state.combat.random;
     try equal(@as(u15, 24127), after_rate_miss.random().int(u15));
@@ -3104,7 +3136,7 @@ test "room movement encounters charge actual movement and use ordered draws thro
     defer saves.cleanup();
     const saved_clock = state.field_encounter_clock;
     try journey.save(std.testing.io, allocator, saves.dir, state);
-    state = try journey.State.initEpisode(package, admitted.value, fixtures.content.value, fixtures.items.value, fixtures.inn.value, &members);
+    state = try journey.State.initEpisode(package, admitted.value, fixtures.content.value, fixtures.items.value, fixtures.inn.value, &members, try fixtures.combat_storage.allocator().create(battle.State));
     try journey.restore(std.testing.io, allocator, saves.dir, &state);
     try std.testing.expectEqualDeep(saved_clock, state.field_encounter_clock);
     try std.testing.expectEqualDeep(pass_seed, state.combat.random);
@@ -3142,7 +3174,7 @@ test "room movement encounters charge actual movement and use ordered draws thro
     try equal(return_x, state.field_state.x);
     try equal(package.start_y, state.field_state.y);
     try journey.save(std.testing.io, allocator, saves.dir, state);
-    state = try journey.State.initEpisode(package, admitted.value, fixtures.content.value, fixtures.items.value, fixtures.inn.value, &members);
+    state = try journey.State.initEpisode(package, admitted.value, fixtures.content.value, fixtures.items.value, fixtures.inn.value, &members, try fixtures.combat_storage.allocator().create(battle.State));
     try journey.restore(std.testing.io, allocator, saves.dir, &state);
     try equal(return_x, state.field_state.x);
     try equal(package.start_y, state.field_state.y);
@@ -3175,7 +3207,7 @@ test "field poison advances on every moving update and settings survive battle r
     members[0].status = .poisoned;
     members[0].balloons = 2;
     var expected_members = members;
-    var expected = state.combat;
+    var expected = state.combat.*;
     expected.progress.party = &expected_members;
     for (0..20) |_| _ = state.tick(.{}, .{});
     try equal(members[0].max_hp, members[0].hp);
@@ -3290,7 +3322,7 @@ test "Fog and Clay scale additive bonuses and Copper Flesh preserves unrelated e
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const combat = state.combat;
     try state.beginEncounter(0);
     combat.runes[1] = combat.content.systems.?.runeIndex("water").?;
     combat.refillMagic(1);
@@ -3339,7 +3371,7 @@ test "Copper Flesh blocks healing HP changes and leaves cures and item consumpti
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const combat = state.combat;
     try state.beginEncounter(0);
     members[0].hp = 10;
     members[0].status = .poisoned;
@@ -3368,7 +3400,7 @@ test "round end promotes living rear identities into front vacancies and short w
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const combat = state.combat;
     try state.beginEncounter(0);
     const hero_inventory = members[0].inventory;
     try equal(.back, combat.partyRow(3));
@@ -3428,8 +3460,8 @@ test "Gale, Fortune, Sunbeam and stacked Prosperity use live rune ownership" {
     const fixtures = try Fixtures.init();
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
-    var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const state = try fixtures.session(&members);
+    const combat = state.combat;
     const rules = combat.content.systems.?;
     combat.runes[0] = null;
     const speed = combat.stats(0).speed;
@@ -3482,8 +3514,8 @@ test "passive round HP and unconscious Prosperity owner matrices retain source s
         for ([_]bool{ false, true }) |sunbeam| for ([_]bool{ false, true }) |poisoned| {
             for ([_]u16{ 1, maximum - 1, maximum }) |hp| for ([_]u8{ 0, 1, 2 }) |protection| {
                 var members: [6]battle.Member = undefined;
-                var state = try fixtures.session(&members);
-                const combat = &state.combat;
+                const state = try fixtures.session(&members);
+                const combat = state.combat;
                 combat.runes[0] = if (sunbeam) combat.content.systems.?.runeIndex("sunbeam").? else null;
                 members[0].max_hp = maximum;
                 members[0].hp = hp;
@@ -3501,8 +3533,8 @@ test "passive round HP and unconscious Prosperity owner matrices retain source s
     }
     for (0..64) |mask| {
         var members: [6]battle.Member = undefined;
-        var state = try fixtures.session(&members);
-        const combat = &state.combat;
+        const state = try fixtures.session(&members);
+        const combat = state.combat;
         const rune = combat.content.systems.?.runeIndex("prosperity").?;
         var owners: u5 = 0;
         for (&members, 0..) |*member, i| {
@@ -3711,7 +3743,7 @@ test "battle result ledger keeps each award once, records loot owner and reports
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const combat = state.combat;
     try state.beginEncounter(0);
     combat.progress.money = field.game_state.max_money - 1;
     combat.reward_drop = true;
@@ -3746,7 +3778,7 @@ test "Boar and Clone choose exact targets without charges then reserve one recov
     for ([_]usize{ 2, 3 }) |actor| {
         var members: [6]battle.Member = undefined;
         var state = try fixtures.session(&members);
-        const combat = &state.combat;
+        const combat = state.combat;
         try state.beginEncounter(0);
         if (actor == 3) {
             const slot = members[3].inventory.count();
@@ -3807,7 +3839,7 @@ test "an interrupted physical rune causes no damage, charge cost or recovery" {
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
-    const combat = &state.combat;
+    const combat = state.combat;
     try state.beginEncounter(0);
     combat.choose(2);
     combat.queue(.{ .rune_attack = 2 });
@@ -3845,7 +3877,7 @@ test "journey party snapshot preserves all six owned members" {
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
     const snapshot = state.buildPartySnapshot();
-    var session = try party_session.Session.init(state.combat, snapshot, .{});
+    var session = try party_session.Session.init(state.combat.*, snapshot, .{});
     try session.validate();
     try std.testing.expectEqualStrings("hero", snapshot.active[0].?);
     try std.testing.expectEqualStrings("gremio", snapshot.active[1].?);
@@ -4029,59 +4061,78 @@ test "journey modalOwner follows strict modal and traversal priority" {
     try expect(state.modalOwner(.{}) == .teleport);
 }
 
-test "journey single-owner progress API keeps combat and field_state synchronized" {
+test "journey simulation cancels teleport ahead of a pending party selector" {
+    const fixtures = try Fixtures.init();
+    defer fixtures.deinit();
+    var members: [6]battle.Member = undefined;
+    var state = try fixtures.session(&members);
+    state.party_selection = @as(journey.party_selection.Active, undefined);
+    var teleport: journey.travel.teleport.Session = undefined;
+    teleport.phase = .selecting;
+    teleport.entry.entry_id = "test_entry";
+    teleport.entry.receipt = 1;
+    teleport.settled = 0;
+    state.teleport_session = teleport;
+    const input = pause.Input{ .field = .{ .cancel = true } };
+    const owner = state.modalOwner(input);
+    try equal(.teleport, owner);
+    try equal(.none, try state.tickWithModalOwner(owner, input, .{}));
+    try expect(state.teleport_session == null);
+    try expect(state.party_selection != null);
+}
+
+test "journey progress stages detached party edits and commits into live storage" {
     const fixtures = try Fixtures.init();
     defer fixtures.deinit();
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
 
-    try expect(state.progressInSync());
-    try equal(state.combat.progress.money, state.progress().money);
-
+    const progress = state.progress();
+    const balance = progress.money;
+    try expect(state.field_state.progress == progress);
     state.field_state.progress.money += 250;
-    try expect(!state.progressInSync());
-    state.syncProgressToField();
-    try expect(state.progressInSync());
-
-    state.field_state.progress.money += 100;
-    try expect(!state.progressInSync());
-    state.syncProgressFromField();
-    try expect(state.progressInSync());
-    try equal(state.combat.progress.money, state.progress().money);
+    try equal(balance + 250, state.combat.progress.money);
 
     state.completeStoryFlag(.forest_entered);
-    try expect(state.progressInSync());
     try expect(state.field_state.progress.story.has(.forest_entered));
 
     var story: field.game_state.event_runtime.StoryState = .{};
     story.scenario[10] = 0x55;
     state.setScenarioStory(story);
-    try expect(state.progressInSync());
     try equal(@as(u8, 0x55), state.field_state.progress.story.scenario.?.scenario[10]);
 
-    var staged = state.stageField();
+    var staged_members: [6]battle.Member = undefined;
+    var draft: field.game_state.Progress = undefined;
+    const live_party = state.progress().party;
+    const original_member = live_party[0];
+    var staged = state.stageField(&draft, &staged_members);
+    staged.progress.party[0].hp = if (original_member.hp == 0) 1 else 0;
+    staged.progress.party[0].inventory = .{};
+    if (original_member.inventory.count() == 0) _ = try staged.progress.party[0].inventory.receive(.medicine);
+    staged.progress.party[0].max_hp = 0;
+    try std.testing.expectError(error.InvalidMember, staged.progress.validate());
+    try std.testing.expectEqualDeep(original_member, live_party[0]);
+
+    staged = state.stageField(&draft, &staged_members);
+    staged.progress.party[0].hp = original_member.max_hp - 1;
     staged.progress.money += 75;
     staged.progress.story.complete(.forest_returned);
     state.commitFieldTransaction(staged);
-    try expect(state.progressInSync());
+    try expect(state.field_state.progress == progress);
+    try expect(state.progress().party.ptr == live_party.ptr);
+    try equal(original_member.max_hp - 1, live_party[0].hp);
     try expect(state.progress().story.has(.forest_returned));
     try equal(staged.progress.money, state.progress().money);
 
     state.field_state.progress.story.complete(.vaa_dungeon_rumor);
-    try expect(!state.progressInSync());
-    state.commitStoryFromField();
-    try expect(state.progressInSync());
     try expect(state.progress().story.has(.vaa_dungeon_rumor));
 
     state.recordPahnDuel(2);
-    try expect(state.progressInSync());
     try equal(@as(u8, 2), state.progress().story.scenario.?.scenario[34] & 2);
 
     const prior_slice = state.progress().party;
     state.replacePartySlice(prior_slice[0..1]);
-    try expect(state.progressInSync());
     try equal(@as(usize, 1), state.progress().party.len);
     state.replacePartySlice(prior_slice);
-    try expect(state.progressInSync());
     try equal(prior_slice.len, state.progress().party.len);
 }

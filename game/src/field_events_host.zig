@@ -193,7 +193,8 @@ pub fn acknowledgeTedAdd(self: *Session, old_binding: Binding, new_binding: Bind
     if (!std.mem.eql(u8, old_binding.party, prior_ids[0..roster.state.count])) return error.InvalidFieldEventReceipt;
     try ted_party_add.commit(&roster, request, proposal);
     var staged = self.*;
-    var next_state = state.*;
+    var draft: field.game_state.Progress = undefined;
+    var next_state = state.stageProgress(&draft);
     var story = next_state.progress.story.scenario orelse return error.MissingSourceStoryState;
     try staged.validateStory(&story);
     var owner = staged.instance.?;
@@ -208,7 +209,7 @@ pub fn acknowledgeTedAdd(self: *Session, old_binding: Binding, new_binding: Bind
     try next_state.progress.validate();
     try staged.validate(new_binding);
     self.* = staged;
-    state.* = next_state;
+    state.commitProgress(next_state);
 }
 
 /// Return a source-qualified cue request from the retained pending batch.
@@ -242,7 +243,8 @@ pub fn acknowledgeSourceCue(self: *Session, binding: Binding, request: SourceCue
         !std.mem.eql(u8, request.program, owner.program_id) or request.instance != self.serial or
         request.batch != owner.pending.?.batch.id or request.origin != effect.origin or request.cue != effect.cue.?) return error.InvalidFieldEventReceipt;
     var staged = self.*;
-    var next_state = state.*;
+    var draft: field.game_state.Progress = undefined;
+    var next_state = state.stageProgress(&draft);
     var story = next_state.progress.story.scenario orelse return error.MissingSourceStoryState;
     try staged.validateStory(&story);
     var next_owner = owner;
@@ -261,7 +263,7 @@ pub fn acknowledgeSourceCue(self: *Session, binding: Binding, request: SourceCue
     try next_state.progress.validate();
     try staged.validate(binding);
     self.* = staged;
-    state.* = next_state;
+    state.commitProgress(next_state);
 }
 
 /// Propose a room transition from the current, retained VM batch. The caller
@@ -369,7 +371,8 @@ pub fn reconstruct(self: *Session, binding: Binding, state: *field.State) !bool 
     var owner = self.instance orelse return error.InvalidFieldEventReceipt;
     const pending = owner.pending orelse return error.InvalidFieldEventReceipt;
     if (pending.batch.effect_count != 1 or pending.batch.effects[0].kind != .room_transition or pending.batch.effects[0].origin != 12 or pending.batch.effects[0].destination == null or !std.mem.eql(u8, pending.batch.effects[0].destination.?, binding.room) or pending.batch.effects[0].x != 216 or pending.batch.effects[0].y != 200 or pending.story_write_count != 0) return error.InvalidFieldEventReceipt;
-    var next_state = state.*;
+    var draft: field.game_state.Progress = undefined;
+    var next_state = state.stageProgress(&draft);
     var story = next_state.progress.story.scenario orelse return error.MissingSourceStoryState;
     try self.validateStory(&story);
     try runtime.acknowledge(binding.content, &owner, &story, pending.batch.id);
@@ -391,6 +394,6 @@ pub fn reconstruct(self: *Session, binding: Binding, state: *field.State) !bool 
     try next.validate(binding);
     try next.validateStory(&next_state.progress.story.scenario.?);
     self.* = next;
-    state.* = next_state;
+    state.commitProgress(next_state);
     return true;
 }

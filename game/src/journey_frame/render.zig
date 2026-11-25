@@ -318,7 +318,7 @@ pub fn prepareSubRenderers(
         if (state.active_war) |*active| try res.war_renderer.prepare(allocator, &active.session.engine, active.session.command_index);
     }
     if (title.phase == .playing and (state.mode == .battle or state.mode == .defeat or state.mode == .game_over)) {
-        battle_view.prepare(state.combat, res.actors, res.floor, res.battle_ground, res.effect_atlas, &res.dynamic_effect);
+        battle_view.prepare(state.combat.*, res.actors, res.floor, res.battle_ground, res.effect_atlas, &res.dynamic_effect);
     }
 }
 
@@ -453,7 +453,7 @@ fn drawEndingScene(state: *journey.State) void {
 }
 
 fn drawBattleScene(state: *const journey.State, res: *resources_mod.Resources) void {
-    battle_view.draw(state.combat, res.actors, res.floor, res.battle_ground, res.effect_atlas, &res.dynamic_effect);
+    battle_view.draw(state.combat.*, res.actors, res.floor, res.battle_ground, res.effect_atlas, &res.dynamic_effect);
     if (state.mode == .defeat and !state.combat.hasDepartureFlights()) {
         ui.panel(72, 76, 496, 210);
         ui.text("Party defeated", 94, 96, 26, .gold);

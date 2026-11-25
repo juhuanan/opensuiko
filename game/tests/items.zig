@@ -234,7 +234,8 @@ test "item menu and shop confirm, cancel, freeze and consume once" {
     const parsed = try field.load(allocator, @embedFile("fixtures/room.json"));
     defer parsed.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game = field.State.init(parsed.value, .{ .money = 350, .party = &members });
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game = field.State.init(parsed.value, &game_progress);
     game.item_rules = rules.value;
     var menu = pause.State{ .phase = .shop };
     const action = pause.Input{ .field = .{ .action = true } };
@@ -281,7 +282,8 @@ test "inventory save validates uses, gaps, version and restores independently" {
     const rules = try field.items.load(allocator, field.items.json);
     defer rules.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game = field.State.init(parsed.value, .{ .money = 350, .party = &members });
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game = field.State.init(parsed.value, &game_progress);
     game.item_rules = rules.value;
     try game.progress.buyMedicine(rules.value, 0);
     try game.progress.useMedicine(rules.value, 0, 0, 0);
@@ -324,7 +326,8 @@ test "version-two saves load empty inventories and upgrade without losing story"
     ;
     const decoded = try saves.decode(allocator, bytes, package.value);
     defer decoded.deinit();
-    var game = field.State.init(package.value, .{ .money = 350, .party = &members });
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game = field.State.init(package.value, &game_progress);
     try decoded.value.apply(package.value, &game);
     try std.testing.expectEqual(@as(usize, 0), game.progress.party[0].inventory.count());
     try std.testing.expectEqual(@as(u32, 173), game.progress.money);
@@ -431,7 +434,8 @@ test "Incense field menus show the battle-only notice without target selection o
     defer room.deinit();
     var members = [_]field.game_state.Member{hero()};
     members[0].inventory.slots[0] = .{ .id = .dragon_seal_incense, .uses = 0 };
-    var game = field.State.init(room.value, .{ .money = 0, .party = &members });
+    var game_progress: field.game_state.Progress = .{ .money = 0, .party = &members };
+    var game = field.State.init(room.value, &game_progress);
     game.item_rules = rules.value;
     const before = members;
     for ([_]pause.Phase{ .items, .item_action }) |phase| {
@@ -450,7 +454,8 @@ test "Buddha menus explain automatic revival without queuing manual use" {
     defer room.deinit();
     var members = [_]field.game_state.Member{hero()};
     members[0].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
-    var game = field.State.init(room.value, .{ .money = 0, .party = &members });
+    var game_progress: field.game_state.Progress = .{ .money = 0, .party = &members };
+    var game = field.State.init(room.value, &game_progress);
     game.item_rules = rules.value;
     const before = members;
     for ([_]pause.Phase{ .items, .item_action }) |phase| {

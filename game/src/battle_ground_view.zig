@@ -54,10 +54,6 @@ fn drawMesh(state: *const battle.State, texture: rl.Texture2D, minimum_depth: u1
             const w10 = ground.vertices[y * stride + x + 1];
             const w11 = ground.vertices[(y + 1) * stride + x + 1];
             const w01 = ground.vertices[(y + 1) * stride + x];
-            if (minimum_depth > 0) {
-                const depth_ref = projectGround(cam, .{ .x = w00.x, .y = w00.y, .z = w00.z }) orelse continue;
-                if (battle.spell_scene.groundDepth(@intFromFloat(depth_ref.depth)) < minimum_depth) continue;
-            }
             const tile = ground.tiles[y * @as(usize, ground.across) + x];
             const tile_x: i32 = @intCast((tile % tile_columns) * tile_size);
             const tile_y: i32 = @intCast((tile / tile_columns) * tile_size);
@@ -84,6 +80,9 @@ fn drawMesh(state: *const battle.State, texture: rl.Texture2D, minimum_depth: u1
                     const b = grid[sy][sx + 1] orelse continue;
                     const c = grid[sy + 1][sx + 1] orelse continue;
                     const d = grid[sy + 1][sx] orelse continue;
+                    // Use the tile depth when its first corner is visible.
+                    // A near-plane crossing can still leave visible subquads.
+                    if (minimum_depth > 0 and battle.spell_scene.groundDepth(@intFromFloat((grid[0][0] orelse a).depth)) < minimum_depth) continue;
                     const u_left = u_start + u_span * @as(f32, @floatFromInt(sx)) / @as(f32, @floatFromInt(subdiv));
                     const u_right = u_start + u_span * @as(f32, @floatFromInt(sx + 1)) / @as(f32, @floatFromInt(subdiv));
                     gl.rlTexCoord2f(u_left, v_top);

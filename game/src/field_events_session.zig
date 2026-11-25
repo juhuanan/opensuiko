@@ -47,7 +47,7 @@ pub const beginWorldExit = begin_mod.beginWorldExit;
 pub const validate = validate_mod.validate;
 pub const takeBattle = playback_mod.takeBattle;
 pub const queuedBattle = playback_mod.queuedBattle;
-pub const resumeBattle = playback_mod.resumeBattle;
+pub const resumeBattleStory = playback_mod.resumeBattleStory;
 pub const queuedItemOverload = playback_mod.queuedItemOverload;
 pub const resumeItemOverload = playback_mod.resumeItemOverload;
 pub const queuedPartySelect = playback_mod.queuedPartySelect;
@@ -134,7 +134,8 @@ pub noinline fn tickPad(self: *Session, binding: Binding, state: *field.State, p
     if (self.instance.?.pendingBattle() != null or self.instance.?.pendingFixedDice() or self.instance.?.pendingPartySelect() or self.instance.?.pendingItemOverload()) return .running;
     if (!self.instance.?.execution.active and self.instance.?.pending == null) return .idle;
     var next = self.*;
-    var next_state = state.*;
+    var next_state_progress: field.game_state.Progress = undefined;
+    var next_state = state.stageProgress(&next_state_progress);
     var story = next_state.progress.story.scenario orelse return error.MissingSourceStoryState;
     if (!next.initialization_done) {
         try initialize(&next, binding, &next_state, &story);
@@ -356,7 +357,7 @@ pub noinline fn tickPad(self: *Session, binding: Binding, state: *field.State, p
     next_state.progress.story.scenario = story;
     try next.validateStory(&story);
     self.* = next;
-    state.* = next_state;
+    state.commitProgress(next_state);
     if (next.blocker != null) return .blocked;
     return if (next.instance != null and next.instance.?.execution.active) .running else .completed;
 }

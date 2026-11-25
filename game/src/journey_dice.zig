@@ -1,5 +1,7 @@
 //! Journey ownership of the source fixed-game request and its atomic return.
+const field = @import("field");
 const std = @import("std");
+const battle = @import("battle");
 const events = @import("field_events");
 pub const games = @import("hq").optional_games;
 pub const visual = @import("dice_presentation");
@@ -265,7 +267,9 @@ pub fn finish(state: anytype) !void {
     }
     try next_host.finish();
     var next_event = owner.session.*;
-    var next_field = state.stageField();
+    var members: [6]battle.Member = undefined;
+    var draft: field.game_state.Progress = undefined;
+    var next_field = state.stageField(&draft, &members);
     next_field.progress.money = next_host.wallet.money;
     if (usesModel(state)) next_field.music = .area_b;
     if (next_host.wallet.dice_flags.fixed_won) next_field.progress.story.scenario.?.scenario[12] |= 1;

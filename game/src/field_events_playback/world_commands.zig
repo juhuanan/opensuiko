@@ -37,13 +37,13 @@ fn applyWheel(self: *Session, binding: Binding, command: runtime.Command, state:
     return true;
 }
 
-fn applyFieldEffect(self: *Session, binding: Binding, command: runtime.Command) !bool {
+fn applyFieldEffect(self: *Session, binding: Binding, operation: runtime.FieldEffectOperation) !bool {
     if (!self.initialization_done or binding.room_package == null or !binding.content.hasFieldEffects()) return false;
     if (self.field_effect) |effect| if (effect.model.clock.callback != null) return error.FieldEffectStillActive;
     self.field_effect = .{
-        .command = command.origin,
-        .position = .{ .x = command.x.?, .y = command.y.? },
-        .model = field.area_effect.Effect.init(command.effect.?),
+        .command = operation.origin,
+        .position = .{ .x = operation.x, .y = operation.y },
+        .model = field.area_effect.Effect.init(operation.effect),
     };
     return true;
 }
@@ -177,7 +177,7 @@ pub noinline fn apply(self: *Session, binding: Binding, command: runtime.Command
         .camera_push => return applyCameraPush(self, binding, command),
         .hide_hero => return binding.content.hasHeroVisibility() and self.initialization_done and !self.hero.moving(),
         .wheel_restore, .wheel_turn, .wheel_align => return applyWheel(self, binding, command, state),
-        .field_effect => return applyFieldEffect(self, binding, command),
+        .field_effect => return applyFieldEffect(self, binding, command.fieldEffectOperation() orelse return error.InvalidEventCommand),
         .field_music => {
             if (self.instance == null or binding.content.program(self.instance.?.program_id).?.entry != .initialization or command.music != .headquarters) return false;
             state.music = .headquarters;

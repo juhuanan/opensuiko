@@ -26,7 +26,8 @@ pub const Checkpoint = struct {
         const next = try rebind(self.session, allocator, binding);
         try next.validateStory(&self.story);
         if (!std.mem.eql(u8, self.story.schema, "suikoden-event-story/1") or self.position.x != next.hero.x or self.position.y != next.hero.y or self.position.x < 0 or self.position.y < 0 or self.position.x > 2040 or self.position.y > 2040 or @mod(self.position.x, 8) != 0 or @mod(self.position.y, 8) != 0) return error.InvalidFieldEventCheckpoint;
-        var next_state = state.*;
+        var next_state_progress: field.game_state.Progress = undefined;
+        var next_state = state.stageProgress(&next_state_progress);
         next_state.progress.story.scenario = self.story;
         next_state.progress.story.scenario.?.schema = "suikoden-event-story/1";
         try next_state.progress.validate();
@@ -36,7 +37,7 @@ pub const Checkpoint = struct {
         next_state.walking = next.hero.moving();
         next_state.facing = next.facing;
         target.* = next;
-        state.* = next_state;
+        state.commitProgress(next_state);
     }
 };
 

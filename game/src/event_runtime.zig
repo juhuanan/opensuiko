@@ -217,6 +217,13 @@ pub const InventoryEdit = struct {
     failure_target: u16,
 };
 
+pub const FieldEffectOperation = struct {
+    origin: u16,
+    x: i32,
+    y: i32,
+    effect: FieldEffect,
+};
+
 pub const Command = struct {
     pub const Category = enum {
         control_flow,
@@ -416,6 +423,14 @@ pub const Command = struct {
     scenery_object: ?u16 = null,
     if_actor_constructed: ?bool = null,
     origin: u16 = 0,
+
+    pub fn fieldEffectOperation(self: Command) ?FieldEffectOperation {
+        if (self.kind != .field_effect or self.wait != null or self.requires != null) return null;
+        const x = self.x orelse return null;
+        const y = self.y orelse return null;
+        if (x < 0 or x > 2040 or @mod(x, 8) != 0 or y < 0 or y > 2040 or @mod(y, 8) != 0) return null;
+        return .{ .origin = self.origin, .x = x, .y = y, .effect = self.effect orelse return null };
+    }
 
     pub fn category(self: Command) Category {
         return switch (self.kind) {

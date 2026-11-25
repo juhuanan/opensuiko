@@ -37,7 +37,8 @@ pub const Snapshot = struct {
 
     pub fn apply(self: Snapshot, package: field.Package, state: *field.State) !void {
         try self.validate(package);
-        var restored = field.State.init(package, .{ .money = self.money, .party = self.party, .story = self.story orelse .initial });
+        var restored_progress: field.game_state.Progress = .{ .money = self.money, .party = self.party, .story = self.story orelse .initial };
+        var restored = field.State.init(package, &restored_progress);
         restored.room = package.roomIndex(self.room).?;
         restored.x = self.x;
         restored.y = self.y;
@@ -45,7 +46,7 @@ pub const Snapshot = struct {
         restored.facing = self.facing;
         restored.inn_rules = state.inn_rules;
         restored.item_rules = state.item_rules;
-        state.* = restored;
+        state.commitProgress(restored);
     }
 };
 

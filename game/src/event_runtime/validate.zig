@@ -205,9 +205,7 @@ pub fn validateCommand(self: Content, command: Command, count: usize, index: usi
             semanticEqual(command, Command{ .kind = .branch_castle_tier, .targets = command.targets, .origin = command.origin }),
         .branch_party => self.hasActorOwners() and command.index != null and command.index.? < 108 and command.targets != null and
             semanticEqual(command, Command{ .kind = .branch_party, .index = command.index, .targets = command.targets, .origin = command.origin }),
-        .field_effect => self.hasFieldEffects() and command.effect != null and command.x != null and command.y != null and
-            command.x.? >= 0 and command.x.? <= 2040 and @mod(command.x.?, 8) == 0 and
-            command.y.? >= 0 and command.y.? <= 2040 and @mod(command.y.?, 8) == 0 and command.wait == null and command.requires == null,
+        .field_effect => self.hasFieldEffects() and command.fieldEffectOperation() != null,
         .wait_field_effect => self.hasFieldEffects() and command.wait == null and command.requires == null,
         .camera_push => self.hasCameraPush() and command.push != null and push_valid: {
             command.push.?.validate() catch break :push_valid false;

@@ -1,6 +1,18 @@
 const std = @import("std");
 const camera = @import("battle_camera");
 
+test "action camera reaches neutral at the end of short actions" {
+    for ([_]u32{ 0, 1, 8, 12, 30 }) |duration| {
+        try std.testing.expectEqual(@as(f32, 0), camera.actionEnvelope(duration, duration, 12, 12));
+        try std.testing.expectEqual(@as(f32, 0), camera.actionEnvelope(duration + 1, duration, 12, 12));
+    }
+    try std.testing.expectApproxEqAbs(@as(f32, 0.5), camera.actionEnvelope(2, 8, 12, 12), 0.00001);
+    try std.testing.expectEqual(@as(f32, 1), camera.actionEnvelope(4, 8, 12, 12));
+    try std.testing.expectApproxEqAbs(@as(f32, 0.5), camera.actionEnvelope(6, 8, 12, 12), 0.00001);
+    try std.testing.expectEqual(@as(f32, 1), camera.actionEnvelope(15, 30, 12, 12));
+    try std.testing.expectEqual(@as(f32, 1), camera.actionEnvelope(0, 1, 0, 0));
+}
+
 const SourcePreset = struct { address: u32, block: camera.Block };
 const source_presets = [_]SourcePreset{
     .{ .address = 0x8016B7DC, .block = .{ .focus = .{ 0, 0, 0 }, .angles = .{ -768, 0, 640 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 4096, 4096, 4096 } } },

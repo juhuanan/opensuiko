@@ -55,7 +55,6 @@ pub fn tickAutomaticTravel(state: *journey.State) !void {
     if (state.mode != .field or state.menu.phase != .closed) return error.InvalidCrossingOwner;
     const arrived = try state.auto_travel.?.tick(state.package, &state.field_state);
     state.elapsed_ticks +|= 1;
-    state.syncProgressFromField();
     if (arrived) {
         state.auto_travel = null;
         state.field_event = null;
@@ -72,7 +71,6 @@ pub fn tickBoat(state: *journey.State, direction: ?field.Direction) !void {
     const packet = state.boat_data orelse return error.MissingBoatOwner;
     const arrived = try state.boat_travel.?.tick(packet.*, state.package, &state.field_state, direction);
     state.elapsed_ticks +|= 1;
-    state.syncProgressFromField();
     if (arrived) {
         state.boat_travel = null;
         state.field_event = null;
@@ -81,7 +79,6 @@ pub fn tickBoat(state: *journey.State, direction: ?field.Direction) !void {
 }
 
 pub fn tickFieldExploration(state: *journey.State, input: pause.Input, room_events: journey.RoomEventMode) !pause.Effect {
-    state.syncProgressToField();
     const old_room = state.field_state.room;
     const old_entry = state.field_state.room_entries;
     const old_x = state.field_state.x;
@@ -103,7 +100,6 @@ pub fn tickFieldExploration(state: *journey.State, input: pause.Input, room_even
         .authoritative = true,
     } else null;
     var effect = state.menu.tickWithArrivalAndGround(state.package, &state.field_state, menu_input, arrival, ground);
-    state.syncProgressFromField();
     if (effect == .blinking_mirror) {
         journey.travel.useMirror(state.teleport_catalogue.?, state.package, &state.field_state, state.menu.member, state.menu.slot) catch |err| {
             if (err != error.OutsideRequired) return err;
@@ -112,7 +108,6 @@ pub fn tickFieldExploration(state: *journey.State, input: pause.Input, room_even
             return .none;
         };
         state.boat_travel = null;
-        state.syncProgressFromField();
         state.menu.phase = .closed;
         try onRoomChange(state, false);
         return .none;
@@ -138,13 +133,11 @@ pub fn tickFieldExploration(state: *journey.State, input: pause.Input, room_even
         if (state.field_event == null) {
             state.field_state.finishStepArrival(state.package);
             state.menu.finishPending(&state.field_state);
-            state.syncProgressFromField();
         } else state.menu.pending = false;
     }
     if (old_entry != state.field_state.room_entries) try onRoomChange(state, false);
     if (moved) {
         state.combat.applyFieldStatuses();
-        state.syncProgressToField();
     }
     if (state.field_event != null) {
         if (state.data.field_encounters) |configured| {
@@ -268,7 +261,6 @@ pub fn applyFieldInteractions(state: *journey.State, old_room: usize, old_dialog
     };
     const story = &state.combat.progress.story;
     if (story.heard_forest_warning and story.forest_elf_seen and story.forest_treasure_needle and story.forest_treasure_water and story.forest_battle_one_won and story.forest_battle_two_won and story.forest_battle_three_won and std.mem.eql(u8, state.package.rooms[state.field_state.room].id, "vb6_village")) story.complete(.forest_returned);
-    state.syncProgressToField();
 }
 
 pub fn episodeObjective(state: *const journey.State) ?[]const u8 {

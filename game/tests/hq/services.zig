@@ -18,6 +18,7 @@ const TestState = struct {
     rules: items.Rules,
     members: [1]game_state.Member,
     state: field.State,
+    progress: field.game_state.Progress,
     adapter: service_engines.Adapter,
 };
 
@@ -59,12 +60,13 @@ fn initState(t: *TestState, money: u32) void {
         .goods = &.{},
         .stock = &.{ .medicine, .antitoxin },
     };
+    t.progress = .{ .money = money, .party = t.members[0..1] };
     t.state = .{
         .room = 0,
         .x = 0,
         .y = 0,
         .destination = .{ .x = 0, .y = 0 },
-        .progress = .{ .money = money, .party = t.members[0..1] },
+        .progress = &t.progress,
         .item_rules = t.rules,
     };
     t.adapter = .{ .state = &t.state };

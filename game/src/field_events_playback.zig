@@ -20,7 +20,7 @@ pub const updateSelectorParty = handoffs.updateSelectorParty;
 pub const pendingFieldMusic = handoffs.pendingFieldMusic;
 pub const resumeFieldMusic = handoffs.resumeFieldMusic;
 pub const resumeFixedDice = handoffs.resumeFixedDice;
-pub const resumeBattle = handoffs.resumeBattle;
+pub const resumeBattleStory = handoffs.resumeBattleStory;
 pub const acknowledgeAudio = handoffs.acknowledgeAudio;
 pub const apply = world_commands.apply;
 
@@ -106,7 +106,8 @@ pub noinline fn pump(self: *Session, binding: Binding, state: *field.State, stor
             self.* = staged;
             return true;
         }
-        var staged_state = state.*;
+        var staged_state_progress: field.game_state.Progress = undefined;
+        var staged_state = state.stageProgress(&staged_state_progress);
         var staged_story = story.*;
         var chest_failed_target: ?u16 = null;
         var item_grant: ?ItemGrant = null;
@@ -134,7 +135,7 @@ pub noinline fn pump(self: *Session, binding: Binding, state: *field.State, stor
         if (chest_failed_target) |target| try staged.instance.?.redirect(binding.content, batch.slice()[0].origin, target);
         if (item_grant) |grant| staged_state.progress.party[grant.member].inventory = grant.inventory;
         self.* = staged;
-        state.* = staged_state;
+        state.commitProgress(staged_state);
         story.* = staged_story;
     } else self.* = staged;
     return true;

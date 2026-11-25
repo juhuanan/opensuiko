@@ -52,7 +52,8 @@ test "inn cancel, decline and insufficient money leave all gameplay state intact
     scoped.npc = "keeper";
     for (0..3) |route| {
         var members = [_]progress.Member{injuredHero()};
-        var state = field.State.init(package.value, .{ .money = 99, .party = &members });
+        var state_progress: field.game_state.Progress = .{ .money = 99, .party = &members };
+        var state = field.State.init(package.value, &state_progress);
         try state.configureInn(package.value, scoped);
         offer(&state, package.value);
         try std.testing.expectEqual(.choices, state.dialogue.?.phase);
@@ -86,7 +87,8 @@ test "confirmation charges once; rest blocks input and returns control after its
     scoped.room = "inn";
     scoped.npc = "keeper";
     var members = [_]progress.Member{injuredHero()};
-    var state = field.State.init(package.value, .{ .money = 100, .party = &members });
+    var state_progress: field.game_state.Progress = .{ .money = 100, .party = &members };
+    var state = field.State.init(package.value, &state_progress);
     try state.configureInn(package.value, scoped);
     offer(&state, package.value);
     state.tick(package.value, .{ .action = true });
@@ -122,7 +124,8 @@ test "invalid rules, service bindings and party data fail before payment" {
     try std.testing.expectError(error.InvalidInn, rules.validate());
     try std.testing.expectError(error.UnexpectedEndOfInput, field.inn.load(std.testing.allocator, "{"));
     var members = [_]progress.Member{injuredHero()};
-    var state = field.State.init(package.value, .{ .money = 100, .party = &members });
+    var state_progress: field.game_state.Progress = .{ .money = 100, .party = &members };
+    var state = field.State.init(package.value, &state_progress);
     try std.testing.expectError(error.UnknownInnRoom, state.configureInn(package.value, parsed.value));
     rules = parsed.value;
     rules.room = "inn";

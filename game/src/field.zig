@@ -646,7 +646,7 @@ pub const State = struct {
     walking: bool = false,
     action_pending: bool = false,
     dialogue: ?Dialogue = null,
-    progress: game_state.Progress,
+    progress: *game_state.Progress,
     inn_rules: ?inn.Rules = null,
     item_rules: ?items.Rules = null,
     rest_ticks: u16 = 0,
@@ -655,10 +655,26 @@ pub const State = struct {
     pending_checkpoint: ?CheckpointRequest = null,
     auto_route_id: ?u8 = null,
 
-    pub fn init(package: Package, progress: game_state.Progress) State {
+    // Progress backing belongs to the session and outlives its room state.
+    pub fn init(package: Package, progress: *game_state.Progress) State {
         var result: State = .{ .room = package.roomIndex(package.start_room).?, .x = package.start_x, .y = package.start_y, .destination = .{ .x = package.start_x, .y = package.start_y }, .progress = progress };
         if (package.initial_world_entry) |id| result.setWorldEntry(package, id);
         return result;
+    }
+
+    // Staged scalar edits borrow the existing party unless the caller supplies a copy.
+    pub fn stageProgress(self: *const State, scratch: *game_state.Progress) State {
+        scratch.* = self.progress.*;
+        var staged = self.*;
+        staged.progress = scratch;
+        return staged;
+    }
+
+    pub fn commitProgress(self: *State, staged: State) void {
+        const progress = self.progress;
+        progress.* = staged.progress.*;
+        self.* = staged;
+        self.progress = progress;
     }
 
     pub fn worldEntry(self: State, package: Package) ?WorldEntry {

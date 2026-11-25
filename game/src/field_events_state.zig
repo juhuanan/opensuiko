@@ -460,8 +460,9 @@ pub const Session = struct {
         return begin.resumeFixedDice(self, binding, state, completed);
     }
     pub fn resumeBattle(self: *Session, binding: Binding, state: *field.State, completed: fe.BattleRequest, outcome: fe.BattleOutcome) !void {
-        return begin.resumeBattle(self, binding, state, completed, outcome);
+        state.progress.story.scenario = try self.resumeBattleStory(binding, state.progress.story.scenario, completed, outcome);
     }
+    pub const resumeBattleStory = begin.resumeBattleStory;
     pub fn acknowledgeAudio(self: *Session, binding: Binding, batch: u64, origin: u16) !void {
         return begin.acknowledgeAudio(self, binding, batch, origin);
     }

@@ -154,11 +154,11 @@ pub fn resumeFixedDice(self: *Session, binding: Binding, state: *field.State, co
     state.progress.story.scenario = story;
 }
 
-pub fn resumeBattle(self: *Session, binding: Binding, state: *field.State, completed: events.BattleRequest, outcome: events.BattleOutcome) !void {
+pub fn resumeBattleStory(self: *Session, binding: Binding, source_story: ?runtime.StoryState, completed: events.BattleRequest, outcome: events.BattleOutcome) !runtime.StoryState {
     try validate(self, binding);
     const request = battleRequest(self) orelse return error.InvalidFieldBattleReceipt;
     if (self.pending_battle != null or !semanticEqual(request, completed)) return error.InvalidFieldBattleReceipt;
-    var story = state.progress.story.scenario orelse return error.MissingSourceStoryState;
+    var story = source_story orelse return error.MissingSourceStoryState;
     try self.validateStory(&story);
     const continuation: ?u16 = switch (outcome) {
         .victory => null,
@@ -166,13 +166,15 @@ pub fn resumeBattle(self: *Session, binding: Binding, state: *field.State, compl
         .defeat => request.defeat_target orelse return error.MissingFieldDefeatContinuation,
     };
     const battle_command = self.instance.?.pending.?.batch.effects[0].origin;
-    try runtime.acknowledge(binding.content, &self.instance.?, &story, request.receipt.batch);
+    var next = self.*;
+    try runtime.acknowledge(binding.content, &next.instance.?, &story, request.receipt.batch);
     if (continuation) |target| {
-        try self.instance.?.redirect(binding.content, battle_command, target);
-        self.instance.?.execution.wait = null;
+        try next.instance.?.redirect(binding.content, battle_command, target);
+        next.instance.?.execution.wait = null;
     }
-    self.receipt = request.receipt;
-    state.progress.story.scenario = story;
+    next.receipt = request.receipt;
+    self.* = next;
+    return story;
 }
 
 // The recipient must deduplicate the stable (scene, instance, batch, origin) key.

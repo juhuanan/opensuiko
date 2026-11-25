@@ -25,7 +25,7 @@ pub fn fieldMusicToTrack(music: field.game_state.event_runtime.FieldMusic) audio
     };
 }
 
-pub fn syncPendingFieldMusic(state: *journey.State, audio_player: *audio.Player) !void {
+pub fn syncPendingFieldMusic(state: *journey.State, audio_player: anytype) !void {
     const requested = state.pendingFieldMusic() orelse return;
     const target = fieldMusicToTrack(requested);
     if (requested == .fade) {

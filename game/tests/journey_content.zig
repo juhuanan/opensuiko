@@ -6,6 +6,7 @@ const field = @import("field");
 const runtime = @import("event_runtime");
 const ui_font = @import("ui_font");
 const pause = @import("pause_menu");
+const frame = @import("journey_frame");
 
 const opening_rooms = [_][]const u8{ "test_route_start", "test_route_dungeon", "test_route_palace", "vb6_inn" };
 
@@ -19,11 +20,11 @@ fn fixtures(io: std.Io, directory: std.Io.Dir) !void {
 const compact_room_width = 304;
 const compact_room_height = 224;
 
-fn writeFieldBattle(io: std.Io, directory: std.Io.Dir, encounter: []const u8, variant: enum { silent, escape_branch, terminal_defeat, dialogue, motion, portrait, choice, scene, join, opening_battle, hero_track, compact_hero_track, scenery, facilities }) !void {
+fn writeFieldBattle(io: std.Io, directory: std.Io.Dir, encounter: []const u8, variant: enum { silent, escape_branch, terminal_defeat, dialogue, motion, portrait, choice, scene, join, opening_battle, hero_track, compact_hero_track, scenery, facilities, modal, acceptance }) !void {
     const hash = "0000000000000000000000000000000000000000000000000000000000000000";
     const compact = variant == .compact_hero_track;
     const with_hero_track = variant == .hero_track or compact;
-    const with_dialogue = variant != .silent and variant != .escape_branch and variant != .terminal_defeat and variant != .scenery and variant != .facilities and !with_hero_track;
+    const with_dialogue = variant != .silent and variant != .escape_branch and variant != .terminal_defeat and variant != .scenery and variant != .facilities and variant != .acceptance and !with_hero_track;
     const with_portrait = variant == .portrait;
     const with_motion = variant == .motion or with_portrait;
     const with_choice = variant == .choice or variant == .scene or variant == .join or variant == .opening_battle;
@@ -63,6 +64,25 @@ fn writeFieldBattle(io: std.Io, directory: std.Io.Dir, encounter: []const u8, va
     var terminal_defeat = battle_commands;
     terminal_defeat[2].defeat_ends_run = true;
     const dialogue_battle = open ++ body ++ battle_commands;
+    const acceptance_commands = [_]runtime.Command{
+        .{ .kind = .inventory_edit, .character = "hero", .inventory = .{ .give = "antitoxin", .failure_target = 4 } },
+        .{ .kind = .story_or, .flag = .{ .id = "scenario_0001", .mask = 2 } },
+        .{ .kind = .battle, .battle = encounter },
+        .{ .kind = .story_or, .flag = .{ .id = "scenario_0001", .mask = 0x20 } },
+        .{ .kind = .end_stream },
+    };
+    const fixture_namespace = switch (variant) {
+        .modal => runtime.wheel_music_schema,
+        .acceptance => runtime.character_schema,
+        else => runtime.schema,
+    };
+    const modal_commands = open ++ body ++ [_]runtime.Command{
+        .{ .kind = .wait_boxes },
+        .{ .kind = .party_select },
+        .{ .kind = .field_music, .music = .area_b },
+        .{ .kind = .story_or, .flag = .{ .id = "scenario_0001", .mask = 0x20 } },
+        .{ .kind = .end_stream },
+    };
     const motion_battle = approach ++ open ++ body ++ exit_pan ++ battle_commands;
     const portrait_battle = approach ++ open ++ portrait_commands ++ body ++ [_]runtime.Command{
         .{ .kind = .actor_transition, .actor = "hero", .transition = 1 },
@@ -129,6 +149,7 @@ fn writeFieldBattle(io: std.Io, directory: std.Io.Dir, encounter: []const u8, va
     var packet: content.BattleRooms.Packet = .{
         .schema = switch (variant) {
             .silent => content.BattleRooms.legacy_schema,
+            .acceptance => content.BattleRooms.party_edit_schema,
             .dialogue => content.BattleRooms.dialogue_schema,
             .motion => content.BattleRooms.motion_schema,
             .portrait => content.BattleRooms.portrait_schema,
@@ -137,7 +158,7 @@ fn writeFieldBattle(io: std.Io, directory: std.Io.Dir, encounter: []const u8, va
             .opening_battle => content.BattleRooms.escape_branch_schema,
             .escape_branch => content.BattleRooms.defeat_branch_schema,
             .terminal_defeat => content.BattleRooms.schema,
-            .scenery, .facilities => content.BattleRooms.current_schema,
+            .scenery, .facilities, .modal => content.BattleRooms.current_schema,
         },
         .opening_battles = if (variant == .opening_battle) &.{.{ .room = "vb6_inn", .program = "test_guard" }} else &.{},
         .rooms = &.{.{
@@ -169,7 +190,7 @@ fn writeFieldBattle(io: std.Io, directory: std.Io.Dir, encounter: []const u8, va
                 .default_speed = .normal,
             } else null,
             .population = .{
-                .schema = "suikoden-scene-population/2",
+                .schema = if (variant == .modal or variant == .acceptance) "suikoden-scene-population/3" else "suikoden-scene-population/2",
                 .id = "test_room_population",
                 .content_sha256 = hash,
                 .source = .{ .file = "authored_fixture", .lba = 0, .size = 1, .sha256 = hash, .room = 0 },
@@ -186,7 +207,7 @@ fn writeFieldBattle(io: std.Io, directory: std.Io.Dir, encounter: []const u8, va
                 },
                 .duplicate_policy = "preserve_source_records",
                 .story_values = &.{.{ .id = "scenario_0001", .storage = .scenario, .byte_index = 1 }},
-                .programs = &.{.{ .id = "test_guard", .namespace = "suikoden-event-ir/1", .content_id = "test_room_events" }},
+                .programs = &.{.{ .id = "test_guard", .namespace = fixture_namespace, .content_id = "test_room_events" }},
                 .entities = &.{.{
                     .id = "test_guard_owner",
                     .source_order = 0,
@@ -208,7 +229,7 @@ fn writeFieldBattle(io: std.Io, directory: std.Io.Dir, encounter: []const u8, va
                 }},
             },
             .content = .{
-                .schema = "suikoden-event-ir/1",
+                .schema = fixture_namespace,
                 .id = "test_room_events",
                 .content_sha256 = hash,
                 .story_values = &.{.{ .id = "scenario_0001", .storage = .scenario, .byte_index = 1, .initial = if (variant == .scene) 0 else 4 }},
@@ -237,9 +258,11 @@ fn writeFieldBattle(io: std.Io, directory: std.Io.Dir, encounter: []const u8, va
                     .conditions = &.{.{ .kind = .story_mask_set, .flag = .{ .id = "scenario_0001", .mask = 4 } }},
                     .commands = switch (variant) {
                         .silent => &battle_commands,
+                        .acceptance => &acceptance_commands,
                         .escape_branch => &escape_branch,
                         .terminal_defeat => &terminal_defeat,
                         .dialogue => &dialogue_battle,
+                        .modal => &modal_commands,
                         .motion => &motion_battle,
                         .portrait => &portrait_battle,
                         .choice => &optional_exit,
@@ -494,6 +517,7 @@ fn expectHeroTrackResume(compact: bool) !void {
     var loaded = try content.Bundle.load(allocator, io, temp.dir, &diagnostic);
     defer loaded.deinit();
     var members: [6]battle.Member = undefined;
+    var boot_combat: battle.State = undefined;
     var boot: @import("journey_boot").Boot = .{
         .allocator = allocator,
         .path = @constCast(""),
@@ -501,6 +525,7 @@ fn expectHeroTrackResume(compact: bool) !void {
         .bundle = loaded,
         .party = null,
         .members = &members,
+        .combat = &boot_combat,
         .state = undefined,
     };
     var state = try boot.newState();
@@ -582,6 +607,7 @@ test "room scenery interaction and constructor guards share room entry state" {
     var loaded = try content.Bundle.load(allocator, io, temp.dir, &diagnostics);
     defer loaded.deinit();
     var members: [6]battle.Member = undefined;
+    var boot_combat: battle.State = undefined;
     var boot: @import("journey_boot").Boot = .{
         .allocator = allocator,
         .path = @constCast(""),
@@ -589,6 +615,7 @@ test "room scenery interaction and constructor guards share room entry state" {
         .bundle = loaded,
         .party = null,
         .members = &members,
+        .combat = &boot_combat,
         .state = undefined,
     };
     var state = try boot.newState();
@@ -653,6 +680,7 @@ test "field facilities open a save point and storage from interaction" {
     var loaded = try content.Bundle.load(allocator, io, temp.dir, &diagnostic);
     defer loaded.deinit();
     var members: [6]battle.Member = undefined;
+    var boot_combat: battle.State = undefined;
     var boot: @import("journey_boot").Boot = .{
         .allocator = allocator,
         .path = @constCast(""),
@@ -660,6 +688,7 @@ test "field facilities open a save point and storage from interaction" {
         .bundle = loaded,
         .party = null,
         .members = &members,
+        .combat = &boot_combat,
         .state = undefined,
     };
     var state = try boot.newState();
@@ -743,6 +772,7 @@ test "package field battle admits a room event after a real step and resumes it 
     var loaded = try content.Bundle.load(std.testing.allocator, io, temp.dir, &diagnostic);
     defer loaded.deinit();
     var members: [6]battle.Member = undefined;
+    var boot_combat: battle.State = undefined;
     var boot: @import("journey_boot").Boot = .{
         .allocator = std.testing.allocator,
         .path = @constCast(""),
@@ -750,6 +780,7 @@ test "package field battle admits a room event after a real step and resumes it 
         .bundle = loaded,
         .party = null,
         .members = &members,
+        .combat = &boot_combat,
         .state = undefined,
     };
     var state = try boot.newState();
@@ -890,6 +921,7 @@ test "scripted duel outcomes and war completion resume field branches and persis
         var loaded = try content.Bundle.load(allocator, io, temp.dir, &diag);
         defer loaded.deinit();
         var members: [6]battle.Member = undefined;
+        var boot_combat: battle.State = undefined;
         var boot: @import("journey_boot").Boot = .{
             .allocator = allocator,
             .path = @constCast(""),
@@ -897,6 +929,7 @@ test "scripted duel outcomes and war completion resume field branches and persis
             .bundle = loaded,
             .party = null,
             .members = &members,
+            .combat = &boot_combat,
             .state = undefined,
         };
         var state = try boot.newState();
@@ -1010,7 +1043,8 @@ test "package field battle stages movement, shared camera, portraits, and visibl
     try loaded.room_battles.?.validatePortraitAtlas(272, 80);
     try std.testing.expectError(error.InvalidFieldPortraitAtlas, loaded.room_battles.?.validatePortraitAtlas(271, 80));
     var members: [6]battle.Member = undefined;
-    var boot: @import("journey_boot").Boot = .{ .allocator = std.testing.allocator, .path = @constCast(""), .save_path = null, .bundle = loaded, .party = null, .members = &members, .state = undefined };
+    var boot_combat: battle.State = undefined;
+    var boot: @import("journey_boot").Boot = .{ .allocator = std.testing.allocator, .path = @constCast(""), .save_path = null, .bundle = loaded, .party = null, .members = &members, .combat = &boot_combat, .state = undefined };
     var state = try boot.newState();
     for (0..state.package.step_ticks) |_| _ = try state.tickWithFieldEvents(.{ .field = .{ .direction = .right } }, .{});
     _ = try state.tickWithFieldEvents(.{}, .{});
@@ -1227,9 +1261,10 @@ test "package field battle choices wait for confirmation and select battle or fi
         defer loaded.deinit();
         if (outcome == .battle) try temp.dir.writeFile(io, .{ .sub_path = "battle/trial.json", .data = @embedFile("fixtures/journey_battle.json") });
         var members: [6]battle.Member = undefined;
+        var boot_combat: battle.State = undefined;
         const boot = try std.testing.allocator.create(@import("journey_boot").Boot);
         defer std.testing.allocator.destroy(boot);
-        boot.* = .{ .allocator = std.testing.allocator, .path = @constCast(""), .save_path = null, .bundle = loaded, .party = null, .members = &members, .state = undefined };
+        boot.* = .{ .allocator = std.testing.allocator, .path = @constCast(""), .save_path = null, .bundle = loaded, .party = null, .members = &members, .combat = &boot_combat, .state = undefined };
         defer if (boot.opening_seed) |seed| seed.deinit();
         defer if (boot.party) |*party| party.deinit();
         if (outcome == .join) {
@@ -1305,7 +1340,6 @@ test "package field battle choices wait for confirmation and select battle or fi
             var story = state.room_battles.?.initial_story;
             try story.clear(.{ .id = "scenario_0001", .mask = 4 });
             state.combat.progress.story.scenario = story;
-            state.field_state.progress = state.combat.progress;
             for (0..state.package.step_ticks) |_| _ = try state.tickWithFieldEvents(.{ .field = .{ .direction = .right } }, .{});
             try std.testing.expectEqual(.field, state.mode);
             try std.testing.expectEqual(@as(i32, 256), state.field_state.x);
@@ -1482,6 +1516,9 @@ test "package field battle choices wait for confirmation and select battle or fi
             const defeated = try std.testing.allocator.create(journey.State);
             defer std.testing.allocator.destroy(defeated);
             defeated.* = state.*;
+            var defeated_members: [6]battle.Member = undefined;
+            var defeated_combat: battle.State = undefined;
+            defeated.bindValidatedStorage(&defeated_combat, &defeated_members);
             defeated.combat.phase = .defeat;
             defeated.mode = .defeat;
             _ = try defeated.tickWithFieldEvents(.{}, .{ .confirm = true });
@@ -1612,7 +1649,9 @@ test "journey bundle keeps borrowed content and retained allocator valid after m
     defer allocator.free(bytes);
     try std.testing.expectEqualStrings("retained allocator after move", bytes);
     var members: [6]battle.Member = undefined;
-    var state = try journey.State.initEpisode(moved.package, moved.data, moved.combat, moved.items, moved.inn, &members);
+    var boot_combat: battle.State = undefined;
+    var combat_backing: battle.State = undefined;
+    var state = try journey.State.initEpisode(moved.package, moved.data, moved.combat, moved.items, moved.inn, &members, &combat_backing);
     state.bind();
     try state.combat.content.validate();
     try state.data.validate(state.package, state.combat.content);
@@ -1624,6 +1663,7 @@ test "journey bundle keeps borrowed content and retained allocator valid after m
         .bundle = moved,
         .party = null,
         .members = &members,
+        .combat = &boot_combat,
         .state = undefined,
     };
     var fresh = try boot.newState();
@@ -1819,7 +1859,8 @@ test "journey Unite bundle reaches new battle state and saves refuse changed con
     var bundle = try content.Bundle.load(std.testing.allocator, io, temp.dir, &diagnostic);
     defer bundle.deinit();
     var members: [6]battle.Member = undefined;
-    var boot = @import("journey_boot").Boot{ .allocator = std.testing.allocator, .path = @constCast(""), .save_path = null, .bundle = bundle, .party = null, .members = &members, .state = undefined };
+    var boot_combat: battle.State = undefined;
+    var boot = @import("journey_boot").Boot{ .allocator = std.testing.allocator, .path = @constCast(""), .save_path = null, .bundle = bundle, .party = null, .members = &members, .combat = &boot_combat, .state = undefined };
     var fresh = try boot.newState();
     try std.testing.expect(fresh.combat.unite_actors == bundle.unite_actors);
     try std.testing.expectEqual(@as(usize, 32), fresh.combat.unite_actors.?.unites.len);
@@ -1938,6 +1979,7 @@ test "journey duel mode lifecycle returns cleanly to field" {
     var loaded = try content.Bundle.load(std.testing.allocator, io, temp.dir, &diagnostic);
     defer loaded.deinit();
     var members: [6]battle.Member = undefined;
+    var boot_combat: battle.State = undefined;
     var boot: @import("journey_boot").Boot = .{
         .allocator = std.testing.allocator,
         .path = @constCast(""),
@@ -1945,6 +1987,7 @@ test "journey duel mode lifecycle returns cleanly to field" {
         .bundle = loaded,
         .party = null,
         .members = &members,
+        .combat = &boot_combat,
         .state = undefined,
     };
     var state = try boot.newState();
@@ -1983,6 +2026,7 @@ test "journey war mode lifecycle initializes and resolves" {
     var loaded = try content.Bundle.load(std.testing.allocator, io, temp.dir, &diagnostic);
     defer loaded.deinit();
     var members: [6]battle.Member = undefined;
+    var boot_combat: battle.State = undefined;
     var boot: @import("journey_boot").Boot = .{
         .allocator = std.testing.allocator,
         .path = @constCast(""),
@@ -1990,6 +2034,7 @@ test "journey war mode lifecycle initializes and resolves" {
         .bundle = loaded,
         .party = null,
         .members = &members,
+        .combat = &boot_combat,
         .state = undefined,
     };
     var state = try boot.newState();
@@ -2022,6 +2067,7 @@ test "journey startWarById resolves embedded war scenario cleanly" {
     var loaded = try content.Bundle.load(std.testing.allocator, io, temp.dir, &diagnostic);
     defer loaded.deinit();
     var members: [6]battle.Member = undefined;
+    var boot_combat: battle.State = undefined;
     var boot: @import("journey_boot").Boot = .{
         .allocator = std.testing.allocator,
         .path = @constCast(""),
@@ -2029,6 +2075,7 @@ test "journey startWarById resolves embedded war scenario cleanly" {
         .bundle = loaded,
         .party = null,
         .members = &members,
+        .combat = &boot_combat,
         .state = undefined,
     };
     var state = try boot.newState();
@@ -2062,6 +2109,7 @@ test "journey startDuelById dispatches all three canonical duels" {
     var loaded = try content.Bundle.load(std.testing.allocator, io, temp.dir, &diagnostic);
     defer loaded.deinit();
     var members: [6]battle.Member = undefined;
+    var boot_combat: battle.State = undefined;
     var boot: @import("journey_boot").Boot = .{
         .allocator = std.testing.allocator,
         .path = @constCast(""),
@@ -2069,6 +2117,7 @@ test "journey startDuelById dispatches all three canonical duels" {
         .bundle = loaded,
         .party = null,
         .members = &members,
+        .combat = &boot_combat,
         .state = undefined,
     };
     var state = try boot.newState();
@@ -2103,6 +2152,7 @@ test "journey ending mode initializes and advances through epilogue cleanly" {
     var loaded = try content.Bundle.load(std.testing.allocator, io, temp.dir, &diagnostic);
     defer loaded.deinit();
     var members: [6]battle.Member = undefined;
+    var boot_combat: battle.State = undefined;
     var boot: @import("journey_boot").Boot = .{
         .allocator = std.testing.allocator,
         .path = @constCast(""),
@@ -2110,6 +2160,7 @@ test "journey ending mode initializes and advances through epilogue cleanly" {
         .bundle = loaded,
         .party = null,
         .members = &members,
+        .combat = &boot_combat,
         .state = undefined,
     };
     var state = try boot.newState();
@@ -2141,4 +2192,405 @@ test "BattleRooms.schema_versions.parseSchemaVersion parses numbered and current
     try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("suikoden-battle-field-events/01"));
     try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("suikoden-battle-field-events/53"));
     try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("bad"));
+}
+
+const SimulationAudio = struct {
+    polls: usize = 0,
+    ready: bool = false,
+
+    pub fn pollFieldMusic(self: *@This(), track: anytype) !bool {
+        try std.testing.expectEqual(.area_b, track);
+        self.polls += 1;
+        return self.ready;
+    }
+
+    pub fn requestFieldFade(_: *@This()) void {
+        unreachable;
+    }
+
+    pub fn requestDiceMusic(_: *@This(), _: anytype) !void {
+        return error.UnexpectedDiceMusic;
+    }
+};
+
+test "production simulation frame hands dialogue to party selection and acknowledges each modal once" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    try fixtures(io, temp.dir);
+    try writeFieldBattle(io, temp.dir, "", .modal);
+    var window: [9]ui_font.WindowPiece = undefined;
+    const font = try std.json.Stringify.valueAlloc(allocator, dialogueFont(&window), .{});
+    defer allocator.free(font);
+    try temp.dir.writeFile(io, .{ .sub_path = "ui.json", .data = font });
+    try temp.dir.createDirPath(io, "audio/sfx");
+    try temp.dir.writeFile(io, .{
+        .sub_path = "audio/sfx/battle_sfx.json",
+        .data =
+        \\{"schema":"suikoden-battle-sfx/1","sample_rate":44100,"cues":[{"id":1281,"path":"0501.wav","frames":1,"sha256":"0000000000000000000000000000000000000000000000000000000000000000","bank":0,"program":0,"note":60,"retrigger":false}]}
+        ,
+    });
+    const wave = "RIFF\x28\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x02\x00" ++
+        "\x44\xac\x00\x00\x10\xb1\x02\x00\x04\x00\x10\x00data\x04\x00\x00\x00\x00\x00\x00\x00";
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(wave, &digest, .{});
+    const hash = std.fmt.bytesToHex(digest, .lower);
+    const audio_route = @import("audio_route");
+    var streams: [3]audio_route.StreamTrack = undefined;
+    for (&streams, [_]audio_route.Track{ .area_b, .ruins, .lakeshore }, [_][]const u8{ "area_b.wav", "ruins.wav", "lakeshore.wav" }) |*stream, id, path| {
+        stream.* = .{ .id = id, .path = path, .sample_rate = 44100, .frames = 1, .loop_start_frame = 0, .volume = 0, .sha256 = &hash };
+        var buffer: [64]u8 = undefined;
+        const name = try std.fmt.bufPrint(&buffer, "audio/{s}", .{path});
+        try temp.dir.writeFile(io, .{ .sub_path = name, .data = wave });
+    }
+    const audio_manifest: audio_route.FieldContent = .{ .schema = "suikoden-field-audio/1", .tracks = &streams };
+    const manifest = try std.json.Stringify.valueAlloc(allocator, audio_manifest, .{});
+    defer allocator.free(manifest);
+    try temp.dir.writeFile(io, .{ .sub_path = "audio/field.json", .data = manifest });
+    var diagnostic: content.Diagnostic = .{};
+    var bundle = try content.Bundle.load(allocator, io, temp.dir, &diagnostic);
+    defer bundle.deinit();
+
+    const catalogue = @import("party_session").catalogue;
+    const roster_bytes = @import("party_data").json;
+    const catalog = try catalogue.decode(allocator, roster_bytes);
+    defer catalog.deinit();
+    const bindings = try catalogue.decodeBindings(allocator, @embedFile("party_session/ownership_bindings.json"), roster_bytes);
+    defer bindings.deinit();
+    var members: [6]battle.Member = undefined;
+    var combat: battle.State = undefined;
+    var boot = @import("journey_boot").Boot{
+        .allocator = allocator,
+        .path = @constCast(""),
+        .save_path = null,
+        .bundle = bundle,
+        .party = .{ .catalog = catalog, .bindings = bindings },
+        .members = &members,
+        .combat = &combat,
+        .state = undefined,
+    };
+    var state = try boot.newState();
+    state.field_state.auxiliary_party = @splat(0xff);
+    var audio: SimulationAudio = .{};
+
+    for (0..state.package.step_ticks) |_| _ = try frame.advanceSimulation(&state, .{ .menu = .{ .field = .{ .direction = .right } } }, &audio);
+    const event = state.field_event orelse return error.MissingFieldEvent;
+    const session = event.session;
+    var saw_dialogue = false;
+    for (0..128) |_| {
+        saw_dialogue = saw_dialogue or session.boxes[0].phase != .closed;
+        _ = try frame.advanceSimulation(&state, .{
+            .menu = .{ .field = .{ .action = true } },
+            .party = .{ .repeated = .{ .cancel = true } },
+        }, &audio);
+        if (state.party_selection != null) break;
+    } else return error.MissingPartySelection;
+    try std.testing.expect(saw_dialogue);
+    try std.testing.expectEqual(.main_creation, state.party_selection.?.menu.phase);
+    const party_receipt = session.queuedPartySelect().?;
+    const party_pc = session.instance.?.execution.pc;
+    const party_resume_pc = session.instance.?.pending.?.next.pc;
+    const held_position = state.field_state.destination;
+
+    for (0..128) |_| {
+        if (state.party_selection.?.menu.phase == .main) break;
+        _ = try frame.advanceSimulation(&state, .{}, &audio);
+    } else return error.PartySelectionDidNotOpen;
+    _ = try frame.advanceSimulation(&state, .{
+        .menu = .{ .field = .{ .action = true, .direction = .right } },
+        .party = .{ .repeated = .{ .cancel = true } },
+    }, &audio);
+    try std.testing.expect(state.party_selection != null);
+    try std.testing.expectEqualDeep(party_receipt, session.queuedPartySelect().?);
+    try std.testing.expectEqual(party_pc, session.instance.?.execution.pc);
+    for (0..128) |_| {
+        if (state.party_selection == null) break;
+        _ = try frame.advanceSimulation(&state, .{}, &audio);
+    } else return error.PartySelectionDidNotClose;
+    try std.testing.expectEqualDeep(party_receipt, session.receipt.?);
+    try std.testing.expectEqual(party_resume_pc, session.instance.?.execution.pc);
+    try std.testing.expectEqual(held_position, state.field_state.destination);
+    try std.testing.expect(session.queuedPartySelect() == null and state.pendingFieldMusic() == null);
+    try std.testing.expectError(error.InvalidFieldPartySelectReceipt, session.resumePartySelect(event.binding.*, &state.field_state, party_receipt));
+
+    _ = try frame.advanceSimulation(&state, .{}, &audio);
+    try std.testing.expectEqual(.area_b, state.pendingFieldMusic().?);
+    try std.testing.expectEqual(@as(usize, 0), audio.polls);
+    const music_pc = session.instance.?.execution.pc;
+    const music_batch = session.instance.?.pending.?.batch.id;
+    const music_resume_pc = session.instance.?.pending.?.next.pc;
+
+    var teleport: journey.travel.teleport.Session = undefined;
+    teleport.phase = .selecting;
+    teleport.entry.entry_id = "modal_priority_test";
+    teleport.entry.receipt = 1;
+    teleport.settled = 0;
+    state.teleport_session = teleport;
+    audio.ready = true;
+    _ = try frame.advanceSimulation(&state, .{ .menu = .{ .field = .{ .cancel = true } } }, &audio);
+    try std.testing.expect(state.teleport_session == null);
+    try std.testing.expectEqual(@as(usize, 0), audio.polls);
+    try std.testing.expectEqual(music_pc, session.instance.?.execution.pc);
+    try std.testing.expectEqual(music_batch, session.instance.?.pending.?.batch.id);
+
+    audio.ready = false;
+    _ = try frame.advanceSimulation(&state, .{}, &audio);
+    try std.testing.expectEqual(@as(usize, 1), audio.polls);
+    try std.testing.expectEqual(music_pc, session.instance.?.execution.pc);
+    try std.testing.expectEqual(music_batch, session.instance.?.pending.?.batch.id);
+    audio.ready = true;
+    _ = try frame.advanceSimulation(&state, .{}, &audio);
+    try std.testing.expectEqual(@as(usize, 2), audio.polls);
+    try std.testing.expectEqual(music_batch, session.receipt.?.batch);
+    try std.testing.expectEqual(music_resume_pc, session.instance.?.execution.pc);
+    try std.testing.expectEqual(.area_b, state.field_state.music.?);
+    try std.testing.expectEqual(@as(u8, 4), state.progress().story.scenario.?.scenario[1]);
+    try std.testing.expectError(error.InvalidFieldMusicReceipt, state.completeFieldMusic(.area_b));
+    _ = try frame.advanceSimulation(&state, .{}, &audio);
+    try std.testing.expectEqual(@as(usize, 2), audio.polls);
+    try std.testing.expectEqual(@as(u8, 0x24), state.progress().story.scenario.?.scenario[1]);
+}
+
+test "field event compatibility preserves versioned restoration, world context, and pending effects" {
+    const event_host = @import("field_events");
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    try fixtures(io, temp.dir);
+    try writeFieldBattle(io, temp.dir, "area_a_1", .silent);
+    var diagnostic: content.Diagnostic = .{};
+    var bundle = try content.Bundle.load(allocator, io, temp.dir, &diagnostic);
+    defer bundle.deinit();
+
+    const template = bundle.room_battles.?.bindingFor("vb6_inn").?;
+    const session = try allocator.create(event_host.Session);
+    defer allocator.destroy(session);
+    const resumed = try allocator.create(event_host.Session);
+    defer allocator.destroy(resumed);
+    var members: [6]battle.Member = undefined;
+    var combat: battle.State = undefined;
+    var boot = @import("journey_boot").Boot{
+        .allocator = allocator,
+        .path = @constCast(""),
+        .save_path = null,
+        .bundle = bundle,
+        .party = null,
+        .members = &members,
+        .combat = &combat,
+        .state = undefined,
+    };
+
+    const full_restore: []const runtime.Command = &.{ .{ .kind = .party_restore }, .{ .kind = .end_stream } };
+    const hp_restore: []const runtime.Command = &.{ .{ .kind = .party_restore, .hp_only = true }, .{ .kind = .end_stream } };
+    const static_world: []const runtime.Command = &.{.{ .kind = .world_transition, .destination = "world_a", .x = 20, .y = 25 }};
+    const retained_world: []const runtime.Command = &.{.{ .kind = .world_transition, .retain_world_region = true, .x = 20, .y = 25 }};
+    const effect: []const runtime.Command = &.{
+        .{ .kind = .field_effect, .x = 256, .y = 208, .effect = .appearance },
+        .{ .kind = .wait_field_effect },
+        .{ .kind = .end_stream },
+    };
+    const Case = struct { schema: []const u8, commands: []const runtime.Command, outcome: enum { full, hp, rejected, static_world, retained_world, effect } };
+    for ([_]Case{
+        .{ .schema = runtime.campaign_schema, .commands = full_restore, .outcome = .full },
+        .{ .schema = runtime.scene_schema, .commands = full_restore, .outcome = .rejected },
+        .{ .schema = runtime.field_effect_schema, .commands = hp_restore, .outcome = .hp },
+        .{ .schema = runtime.branch_history_schema, .commands = static_world, .outcome = .static_world },
+        .{ .schema = runtime.branch_history_schema, .commands = retained_world, .outcome = .rejected },
+        .{ .schema = runtime.world_entry_schema, .commands = retained_world, .outcome = .retained_world },
+        .{ .schema = runtime.field_effect_schema, .commands = effect, .outcome = .effect },
+    }) |case| {
+        var state = try boot.newState();
+        state.field_state.enterRoom(state.package.roomIndex("vb6_inn").?, .{ .x = 256, .y = 208 });
+        var binding = template;
+        binding.room_package = state.package;
+        binding.scripted_motion = case.outcome == .effect;
+        const host = state.combat.integrationHost() orelse return error.MissingBattleIntegration;
+        var party_ids: [6]u8 = undefined;
+        for (&party_ids, members) |*id, member| id.* = host.characterId(member.id) orelse return error.UnknownFieldEventPartyMember;
+        binding.party = &party_ids;
+        var programs = [_]runtime.Program{binding.content.programs[0]};
+        programs[0].commands = case.commands;
+        binding.content.schema = case.schema;
+        binding.content.programs = &programs;
+        var references = [_]@TypeOf(binding.population.programs[0]){binding.population.programs[0]};
+        references[0].namespace = case.schema;
+        binding.population.schema = "suikoden-scene-population/3";
+        binding.population.programs = &references;
+        const field_state = &state.field_state;
+        if (case.outcome == .rejected) {
+            try std.testing.expectError(error.InvalidEventCommand, session.beginOrdinary(binding, field_state.*, 1, null));
+            continue;
+        }
+        field_state.progress.story.scenario = try runtime.StoryState.init(&.{binding.content});
+        try std.testing.expect(try session.beginOrdinary(binding, field_state.*, 1, null));
+        switch (case.outcome) {
+            .full, .hp => {
+                members[0].hp = 1;
+                members[0].status = .poisoned;
+                members[0].balloons = 2;
+                members[0].max_rune_charges[0] = 3;
+                members[0].rune_charges[0] = 1;
+                members[1].hp = 0;
+                members[1].status = .unconscious;
+                _ = try session.tick(binding, field_state, false);
+                const full = case.outcome == .full;
+                try std.testing.expectEqual(members[0].max_hp, members[0].hp);
+                try std.testing.expectEqual(members[1].max_hp, members[1].hp);
+                try std.testing.expectEqual(.healthy, members[1].status);
+                const expected_status: field.game_state.Status = if (full) .healthy else .poisoned;
+                try std.testing.expectEqual(expected_status, members[0].status);
+                try std.testing.expectEqual(@as(u8, if (full) 0 else 2), members[0].balloons);
+                try std.testing.expectEqual(@as(u16, if (full) 3 else 1), members[0].rune_charges[0]);
+            },
+            .static_world, .retained_world => {
+                const world_room = state.package.roomIndex("world_a").?;
+                if (case.outcome == .retained_world) {
+                    const before = session.instance.?.execution.pc;
+                    try std.testing.expectError(error.MissingWorldRegion, session.tick(binding, field_state, false));
+                    try std.testing.expectEqual(before, session.instance.?.execution.pc);
+                    try std.testing.expectEqualStrings("vb6_inn", state.package.rooms[field_state.room].id);
+                    field_state.world_context = .{ .room = world_room };
+                }
+                _ = try session.tick(binding, field_state, false);
+                try std.testing.expectEqual(world_room, field_state.room);
+                try std.testing.expectEqual(field.Point{ .x = 160, .y = 200 }, field_state.destination);
+                try std.testing.expect(field_state.crossed_world_exit);
+            },
+            .effect => {
+                const pending = (try runtime.step(binding.content, &session.instance.?, &field_state.progress.story.scenario.?, .{})).batch.?;
+                try std.testing.expect(session.field_effect == null and session.receipt == null);
+                const checkpoint = try event_host.Checkpoint.capture(session.*, field_state.*);
+                const bytes = try std.json.Stringify.valueAlloc(allocator, checkpoint, .{});
+                defer allocator.free(bytes);
+                const decoded = try std.json.parseFromSlice(event_host.Checkpoint, allocator, bytes, .{ .allocate = .alloc_always });
+                defer decoded.deinit();
+                try decoded.value.apply(allocator, binding, resumed, field_state);
+                try std.testing.expectEqual(pending.id, resumed.instance.?.pending.?.batch.id);
+                try std.testing.expect(resumed.field_effect == null and resumed.receipt == null);
+                _ = try resumed.tick(binding, field_state, false);
+                const receipt = resumed.receipt.?;
+                try std.testing.expectEqual(pending.id, receipt.batch);
+                try std.testing.expectEqual(field.Point{ .x = 256, .y = 208 }, resumed.field_effect.?.position);
+                try std.testing.expectEqual(@as(u8, 1), resumed.field_effect.?.model.clock.elapsed);
+                for (2..86) |elapsed| {
+                    _ = try resumed.tick(binding, field_state, false);
+                    try std.testing.expectEqualDeep(receipt, resumed.receipt.?);
+                    try std.testing.expectEqual(@as(u8, @intCast(elapsed)), resumed.field_effect.?.model.clock.elapsed);
+                }
+                for (0..4) |_| {
+                    if (!resumed.busy()) break;
+                    _ = try resumed.tick(binding, field_state, false);
+                    try std.testing.expect(resumed.field_effect == null);
+                }
+                try std.testing.expect(!resumed.busy());
+                try std.testing.expectEqual(pending.id + 1, resumed.receipt.?.batch);
+            },
+            .rejected => unreachable,
+        }
+    }
+}
+
+test "production field inventory and battle handoff survives saving and continuing from a fresh session" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    try fixtures(io, temp.dir);
+    try writeFieldBattle(io, temp.dir, "area_a_1", .acceptance);
+    var diagnostic: content.Diagnostic = .{};
+    var bundle = try content.Bundle.load(allocator, io, temp.dir, &diagnostic);
+    defer bundle.deinit();
+
+    var members: [6]battle.Member = undefined;
+    var combat: battle.State = undefined;
+    var boot = @import("journey_boot").Boot{
+        .allocator = allocator,
+        .path = @constCast(""),
+        .save_path = null,
+        .bundle = bundle,
+        .party = null,
+        .members = &members,
+        .combat = &combat,
+        .state = undefined,
+    };
+    var state = try boot.newState();
+    var audio: SimulationAudio = .{};
+    const original_progress = state.progress();
+    const original_rng = state.combat.random;
+    const slot = members[0].inventory.count();
+    const expected_item = field.items.Stack{ .id = .antitoxin, .uses = field.items.Id.antitoxin.maxUses() };
+    for (0..state.package.step_ticks) |_| _ = try frame.advanceSimulation(&state, .{ .menu = .{ .field = .{ .direction = .right } } }, &audio);
+    const session = (state.field_event orelse return error.MissingFieldEvent).session;
+    for (0..32) |_| {
+        if (state.mode == .battle) break;
+        _ = try frame.advanceSimulation(&state, .{}, &audio);
+    } else return error.FieldBattleDidNotStart;
+    try std.testing.expect(state.progress() == original_progress);
+    try std.testing.expectEqualDeep(expected_item, members[0].inventory.slots[slot].?);
+    try std.testing.expectEqual(slot + 1, members[0].inventory.count());
+    try std.testing.expectEqualDeep(original_rng, state.combat.random);
+    try std.testing.expectEqual(@as(u8, 6), state.progress().story.scenario.?.scenario[1]);
+    try std.testing.expectError(error.GameBusy, journey.save(io, allocator, temp.dir, state));
+
+    const request = (state.scripted_battle orelse return error.MissingScriptedBattleRequest).request;
+    const battle_pc = session.instance.?.execution.pc;
+    const resume_pc = session.instance.?.pending.?.next.pc;
+    try std.testing.expectEqual(request.receipt.batch, session.instance.?.pending.?.batch.id);
+    const position = state.field_state.destination;
+    const room = state.field_state.room;
+    for (0..6000) |_| {
+        try std.testing.expectEqual(battle_pc, session.instance.?.execution.pc);
+        if (state.combat.phase == .victory and state.combat.rewardReady()) break;
+        switch (state.combat.phase) {
+            .battle_menu => {
+                for (0..3) |_| _ = try frame.advanceSimulation(&state, .{ .battle = .{ .down = true } }, &audio);
+                _ = try frame.advanceSimulation(&state, .{ .battle = .{ .confirm = true } }, &audio);
+            },
+            .victory => _ = try frame.advanceSimulation(&state, .{ .battle = .{ .confirm = true } }, &audio),
+            .defeat, .escaped => return error.UnexpectedBattleOutcome,
+            else => _ = try frame.advanceSimulation(&state, .{}, &audio),
+        }
+    } else return error.BattleDidNotFinish;
+    try std.testing.expect(!std.meta.eql(original_rng, state.combat.random));
+    const battle_rng = state.combat.random;
+    _ = try frame.advanceSimulation(&state, .{ .battle = .{ .confirm = true } }, &audio);
+    try std.testing.expectEqual(.field, state.mode);
+    try std.testing.expectEqualDeep(request.receipt, session.receipt.?);
+    try std.testing.expectEqual(resume_pc, session.instance.?.execution.pc);
+    try std.testing.expect(session.instance.?.pending == null and state.scripted_battle == null);
+    try std.testing.expectEqual(@as(u8, 6), state.progress().story.scenario.?.scenario[1]);
+    try std.testing.expectEqual(room, state.field_state.room);
+    try std.testing.expectEqual(position, state.field_state.destination);
+
+    for (0..8) |_| {
+        if (state.field_event == null) break;
+        _ = try frame.advanceSimulation(&state, .{}, &audio);
+    } else return error.FieldEventDidNotFinish;
+    try std.testing.expect(!session.busy());
+    try std.testing.expectEqual(@as(u8, 0x26), state.progress().story.scenario.?.scenario[1]);
+    try std.testing.expectEqualDeep(battle_rng, state.combat.random);
+    const saved = try journey.Snapshot.capture(state);
+    try journey.save(io, allocator, temp.dir, state);
+
+    var restored_members: [6]battle.Member = undefined;
+    var restored_combat: battle.State = undefined;
+    boot.members = &restored_members;
+    boot.combat = &restored_combat;
+    var restored = try boot.newState();
+    const restored_progress = restored.progress();
+    try std.testing.expect(restored_progress != original_progress);
+    try journey.restore(io, allocator, temp.dir, &restored);
+    defer restored.releaseRestoredSave();
+    try std.testing.expect(restored.field_state.progress == restored_progress);
+    try std.testing.expectEqualDeep(saved, try journey.Snapshot.capture(restored));
+    try std.testing.expectEqualDeep(expected_item, restored_members[0].inventory.slots[slot].?);
+
+    for (0..restored.package.step_ticks) |_| _ = try frame.advanceSimulation(&restored, .{ .menu = .{ .field = .{ .direction = .right } } }, &audio);
+    try std.testing.expectEqual(field.Point{ .x = position.x + 8, .y = position.y }, restored.field_state.destination);
+    try std.testing.expect(restored.field_event == null and restored.scripted_battle == null);
+    try std.testing.expectEqual(@as(u8, 0x26), restored.progress().story.scenario.?.scenario[1]);
+    try std.testing.expectEqualDeep(battle_rng, restored.combat.random);
+    try std.testing.expectEqual(@as(usize, 0), audio.polls);
 }

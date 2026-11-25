@@ -710,9 +710,10 @@ pub fn issueSpellCameraRequest(self: *State, update: u16) void {
         break;
     }
 }
-pub fn advanceSpellScene(self: *State, update: u16) void {
+pub fn advanceSpellScene(self: *State, action_update: u16) void {
     if (!self.hasSpellScene()) return;
     const program = self.spell_scenes.?.spells[self.active.?.scene.?.spell].program.?;
+    const update = @min(action_update, program.duration);
     if (program.actor_motion) |motion| {
         const instance = &self.active.?.scene.?;
         for (instance.targets[0..instance.target_count]) |*target| {
@@ -728,7 +729,7 @@ pub fn advanceSpellScene(self: *State, update: u16) void {
         }
     }
     var local = systems.Draws{ .prng = self.random };
-    self.active.?.scene.?.advance(self.spell_scenes.?, @min(update, self.spell_scenes.?.spells[self.active.?.scene.?.spell].program.?.duration), self.replay_draws orelse &local) catch |err| {
+    self.active.?.scene.?.advance(self.spell_scenes.?, update, self.replay_draws orelse &local) catch |err| {
         if (err == error.RandomInputExhausted) self.replay_exhausted = true else self.replay_unsupported = .coordinator_action;
         return;
     };

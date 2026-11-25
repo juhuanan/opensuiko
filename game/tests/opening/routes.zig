@@ -72,7 +72,8 @@ test "scripted battle retries defeat and resumes the field event through the Jou
     const inn = try field.inn.load(allocator, field.inn.json);
     defer inn.deinit();
     var party: [6]battle.Member = undefined;
-    var journey_state = try journey.State.initEpisode(package.value, data.value, content.value, items.value, inn.value, &party);
+    var combat_backing: battle.State = undefined;
+    var journey_state = try journey.State.initEpisode(package.value, data.value, content.value, items.value, inn.value, &party, &combat_backing);
     const assets = try field_events.Owned.load(allocator, journey_state.field_state.progress.party);
     defer assets.deinit();
     var binding = assets.binding();
@@ -240,7 +241,8 @@ test "scripted battle retries defeat and resumes the field event through the Jou
     other.* = session;
     _ = journey_state.tick(.{ .field = .{ .action = true } }, .{ .confirm = true, .restart = true });
     try std.testing.expectError(error.ScriptedBattleFieldMismatch, journey_state.resumeScriptedBattle(other, binding));
-    _ = try journey_state.tickWithFieldEvents(.{}, .{});
+    try std.testing.expect(state.progress == journey_state.progress());
+    try journey_state.resumeScriptedBattle(&session, binding);
     try std.testing.expectEqual(.field, journey_state.mode);
     try std.testing.expect(earned > 0);
     try std.testing.expectEqual(money_before + earned, state.progress.money);

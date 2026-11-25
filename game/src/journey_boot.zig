@@ -21,6 +21,7 @@ pub const Boot = struct {
     opening_seed: ?std.json.Parsed(opening.Content) = null,
     hero_name_override: ?[]u8 = null,
     members: []battle.Member,
+    combat: *battle.State,
     state: engine.State,
 
     pub fn newState(self: *Boot) !engine.State {
@@ -29,18 +30,20 @@ pub const Boot = struct {
 
     pub fn newStateNamed(self: *Boot, hero_name: ?[]const u8) !engine.State {
         const package = self.bundle.package;
+        var members: [6]battle.Member = undefined;
+        var combat: battle.State = undefined;
+        var name_override: ?[]u8 = null;
+        errdefer if (name_override) |name| self.allocator.free(name);
         var state = if (self.opening_seed) |seed| blk: {
             var hero = seed.value.hero;
             if (hero_name) |custom| {
                 if (custom.len != 0) {
-                    if (self.hero_name_override) |old| self.allocator.free(old);
-                    const duped = try self.allocator.dupe(u8, custom);
-                    self.hero_name_override = duped;
-                    hero.member.name = duped;
+                    name_override = try self.allocator.dupe(u8, custom);
+                    hero.member.name = name_override.?;
                 }
             }
-            break :blk try engine.State.initOpening(package, self.bundle.data, self.bundle.combat, self.bundle.items, self.bundle.inn, self.members, hero, seed.value.money);
-        } else try engine.State.initEpisode(package, self.bundle.data, self.bundle.combat, self.bundle.items, self.bundle.inn, self.members);
+            break :blk try engine.State.initOpening(package, self.bundle.data, self.bundle.combat, self.bundle.items, self.bundle.inn, &members, &combat, hero, seed.value.money);
+        } else try engine.State.initEpisode(package, self.bundle.data, self.bundle.combat, self.bundle.items, self.bundle.inn, &members, &combat);
         if (self.bundle.battle_host) |host| state.combat.integration = .{ .host = host };
         if (self.bundle.spell_scenes) |packet| try state.combat.attachSpellScenes(packet);
         if (self.bundle.unite_actors) |packet| try state.combat.attachUniteActors(packet);
@@ -67,6 +70,11 @@ pub const Boot = struct {
         }
         try state.validateScenePartyChanges();
         try state.initializeRoomVisit();
+        state.bindValidatedStorage(self.combat, self.members);
+        if (name_override) |name| {
+            if (self.hero_name_override) |old| self.allocator.free(old);
+            self.hero_name_override = name;
+        }
         return state;
     }
 
@@ -75,6 +83,7 @@ pub const Boot = struct {
         if (self.party) |*value| value.deinit();
         if (self.opening_seed) |seed| seed.deinit();
         self.bundle.deinit();
+        self.allocator.destroy(self.combat);
         self.allocator.free(self.members);
         self.allocator.free(self.path);
         if (self.save_path) |save| self.allocator.free(save);
@@ -118,6 +127,8 @@ pub fn load(init: std.process.Init, args: []const [:0]const u8, check_journey_fi
     errdefer if (opening_seed) |seed| seed.deinit();
     const members = try allocator.alloc(battle.Member, 6);
     errdefer allocator.free(members);
+    const combat = try allocator.create(battle.State);
+    errdefer allocator.destroy(combat);
     var party_diagnostic: party_content.Diagnostic = .{};
     var party = party_content.load(allocator, init.io, directory, canonical, &party_diagnostic) catch |err| {
         if (party_diagnostic.path.len != 0) diagnostic.* = .{ .path = party_diagnostic.path, .cause = err };
@@ -135,7 +146,7 @@ pub fn load(init: std.process.Init, args: []const [:0]const u8, check_journey_fi
     };
     errdefer if (save_path) |save| allocator.free(save);
     if (save_path == null) save_path = saves.defaultDirectory(allocator, init.environ_map) catch null;
-    var result: Boot = .{ .allocator = allocator, .path = path, .save_path = save_path, .bundle = bundle, .party = party, .opening_seed = opening_seed, .members = members, .state = undefined };
+    var result: Boot = .{ .allocator = allocator, .path = path, .save_path = save_path, .bundle = bundle, .party = party, .opening_seed = opening_seed, .members = members, .combat = combat, .state = undefined };
     result.state = try result.newState();
     return result;
 }

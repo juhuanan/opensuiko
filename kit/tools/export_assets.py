@@ -34,6 +34,7 @@ to the in-tree locations):
 
 import struct, sys, os, re, json, shutil, hashlib, datetime, glob
 import importlib
+from functools import cache
 
 # --- path portability (2026-10-03): derive from __file__, never $HOME ---
 _TOOLS = os.path.dirname(os.path.abspath(__file__))
@@ -200,12 +201,12 @@ def rgb555(w):
     return list(_psx_rgb555_to_rgb888(w))
 
 
+@cache
 def lba_map():
     m = {}
     for lba, size, path in _load_json(os.path.join(KIT, "work/iso_files_full.json")):
         m[path] = lba
     return m
-LBA = lba_map()
 
 # --- class input inventories (used by preflight AND the exporters) ---------
 IKKI = os.path.join(BINOV, "DATA/12_IKKI", "DATA")
@@ -569,7 +570,7 @@ def export_palettes():
             out = proven_decompress(blob[4:4 + clen])
             words = struct.unpack("<256H", out[-512:])
             emit("bt2_%d" % i, list(words), "DATA/12_IKKI/DATA/" + fn,
-                 LBA.get("/DATA/12_IKKI/DATA/" + fn),
+                 lba_map().get("/DATA/12_IKKI/DATA/" + fn),
                  "kit/docs/decode_btsky_spritestruct.md",
                  "Trailing 512B of MSB-LZSS blob (kit/tools/btsky_lzss.py, verified vs text_decode_stream @0x800C3144); smoothness 171-214/255 vs ~30 noise.")
         except Exception as ex:
@@ -596,7 +597,7 @@ def export_palettes():
                 continue
             words = struct.unpack("<256H", out[o:o + 512])
             emit("sky_%s" % name.lower(), list(words), "DATA/12_IKKI/DATA/" + fn,
-                 LBA.get("/DATA/12_IKKI/DATA/" + fn),
+                 lba_map().get("/DATA/12_IKKI/DATA/" + fn),
                  "kit/docs/decode_sky_palette.md",
                  "File-specific offset 0x%x (no single structural rule); "
                  "offsets beyond the decode are omitted, not substituted. "
@@ -612,7 +613,7 @@ def export_palettes():
         for b in range(4):
             words = struct.unpack_from("<256H", bath, 0x8008d114 + b * 0x200 - base)
             emit("bath_bank%d" % b, list(words), "DATA/03_SHIRO/BATH.BIN",
-                 LBA.get("/DATA/03_SHIRO/BATH.BIN"),
+                 lba_map().get("/DATA/03_SHIRO/BATH.BIN"),
                  "kit/docs/decode_bath_filesource.md (kit/tools/bath_render.py)",
                  "Per-bank 256-color CLUT; uploader bath_sound_load case 0.")
     except Exception as ex:
@@ -630,7 +631,7 @@ def export_palettes():
             secs = struct.unpack("<5I", d[0x20:0x34])
             words = struct.unpack("<256H", d[secs[4]:secs[4] + 512])
             emit("play04_%s_s4" % fn[:-4].lower(), list(words),
-                 "DATA/04_PLAY/" + fn, LBA.get("/DATA/04_PLAY/" + fn),
+                 "DATA/04_PLAY/" + fn, lba_map().get("/DATA/04_PLAY/" + fn),
                  "kit/docs/decode_04play_consumer_20261002.md",
                  "S4 section (file tail, 512B).")
             n4 += 1
@@ -791,7 +792,7 @@ def parse_play04(path):
         "schema": "suikoden-sprite-recipe/2",
         "id": name[:-4],
         "source_file": "DATA/04_PLAY/" + name,
-        "disc_lba": LBA.get("/DATA/04_PLAY/" + name),
+        "disc_lba": lba_map().get("/DATA/04_PLAY/" + name),
         "size": cp["provenance"]["source_size"],
         "source_sha256": cp["provenance"]["source_sha256"],
         "provenance": {

@@ -2015,6 +2015,25 @@ test "generated Voice of Earth keeps grounded motion protection airborne immunit
             try std.testing.expectEqual(@as(i32, if (airborne) 4096 else @intCast(4096 + 85 * (cast_index + 1))), combat.actor_sizes[living]);
             try std.testing.expectEqualDeep(battle.Position{ .x = 0, .y = 0, .z = 0 }, combat.actor_world_offsets[living]);
         }
+        if (airborne) continue;
+
+        combat.enemy_hp[1] = 1;
+        combat.enemy_hp[2] = 0;
+        combat.actions = @splat(.defend);
+        combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
+        combat.acted = @splat(true);
+        combat.acted[0] = false;
+        combat.phase = .resolving;
+        var draws = rules.Draws{ .bios_state = 17 };
+        combat.replay_draws = &draws;
+        combat.nextAction();
+        combat.replay_draws = null;
+        for (0..500) |_| {
+            if (combat.phase == .victory) break;
+            try combat.tickReplay(.{}, &draws);
+        }
+        try std.testing.expectEqual(.victory, combat.phase);
+        try std.testing.expect(combat.action_ticks > 322);
     }
 }
 

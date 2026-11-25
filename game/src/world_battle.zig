@@ -393,7 +393,7 @@ pub const Adapter = struct {
             @memcpy(destination, members[0..result.member_count]);
             next.progress.party = destination;
             link.travel = plan.after;
-            link.field_state.progress = next.progress;
+            link.field_state.progress.* = next.progress;
             combat.* = next;
             last_receipt.* = tx.receipt;
             self.transaction = null;
@@ -431,7 +431,7 @@ pub const Adapter = struct {
         self.original_encounter = combat.encounter;
         combat.content = view;
         combat.encounter = index;
-        combat.progress = session.field_state.progress;
+        combat.progress = session.field_state.progress.*;
         combat.escape_allowed = view.encounters[index].escape_allowed;
         combat.reward_drop = false;
         combat.quit_requested = false;

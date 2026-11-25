@@ -148,10 +148,9 @@ pub fn resumeScriptedBattle(state: *journey.State, event: *field_events.Session,
         };
         if (state.mode != mode or !has_active) return error.ScriptedBattleNotReady;
         try checkScriptedBattleField(state, event, binding);
-        var next_field = state.stageField();
-        try event.resumeBattle(binding, &next_field, active.request, result);
+        const story = try event.resumeBattleStory(binding, state.progress().story.scenario, active.request, result);
         modes.deinitActiveModes(state);
-        state.commitProgress(next_field.progress);
+        state.setScenarioStory(story);
         state.scripted_battle = null;
         state.mode = .field;
         return;
@@ -163,9 +162,8 @@ pub fn resumeScriptedBattle(state: *journey.State, event: *field_events.Session,
     };
     if (state.mode != (if (result == .defeat) journey.Mode.defeat else journey.Mode.battle) or state.combat.phase != phase) return error.ScriptedBattleNotReady;
     try checkScriptedBattleField(state, event, binding);
-    var next_field = state.stageField();
-    try event.resumeBattle(binding, &next_field, active.request, result);
-    state.commitProgress(next_field.progress);
+    const story = try event.resumeBattleStory(binding, state.progress().story.scenario, active.request, result);
+    state.setScenarioStory(story);
     if (result == .victory and active.opening) state.route.noteOpeningBattle(.victory_returned);
     state.scripted_battle = null;
     battle_flow.returnFromBattle(state, result == .victory);
@@ -234,18 +232,18 @@ pub fn validateScenePartyChanges(state: *const journey.State) !void {
             if (host.characterId(id) == null or ((command.kind == .party_load or command.kind == .advance_character) and host.characterId(id).? >= 108) or state.combat.content.partyProfile(id) == null) return error.UnknownFieldEventPartyMember;
             if (command.kind == .party_join or command.kind == .party_load or command.kind == .advance_character) {
                 const catalog = state.party_catalog orelse return error.MissingPartyCatalogue;
-                _ = try party_session.catalogue.materializeBound(state.combat, catalog, id, state.party_bindings);
+                _ = try party_session.catalogue.materializeBound(state.combat.*, catalog, id, state.party_bindings);
             }
         }
     };
 }
 
-fn prepareSceneInventory(state: *const journey.State, member: usize, edit: field.game_state.event_runtime.InventoryEdit) !?field.items.Inventory {
-    var inventory = state.combat.progress.party[member].inventory;
+fn prepareSceneInventory(combat: *const battle.State, member: usize, edit: field.game_state.event_runtime.InventoryEdit) !?field.items.Inventory {
+    var inventory = combat.progress.party[member].inventory;
     if (edit.take) |name| {
         const id = std.meta.stringToEnum(field.items.Id, name) orelse return error.InvalidItem;
         const slot = for (inventory.slots[0..inventory.count()], 0..) |item, index| {
-            if (item.?.id == id and !state.combat.itemEquipped(member, index)) break index;
+            if (item.?.id == id and !combat.itemEquipped(member, index)) break index;
         } else return null;
         inventory.remove(slot);
     }
@@ -340,13 +338,12 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
             var members: [6]battle.Member = undefined;
             const count = state.combat.partyCount();
             @memcpy(members[0..count], state.combat.progress.party);
-            var next = state.combat;
+            var next = state.combat.*;
             next.progress.party = members[0..count];
             try next.sceneExperience(effect.kind == .party_gain_experience);
             try owner.session.acknowledgePartyEdit(binding, true, &story);
             for (0..count) |index| state.combat.setOwnedMember(index, next.ownedMember(index));
             state.combat.random = next.random;
-            state.syncProgressToField();
         } else if (effect.kind == .advance_character) {
             var advances = effect.level_advances.?;
             if (effect.add_hero_level == true) {
@@ -394,7 +391,6 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
                     reserve.?.member.inventory = inventory;
                 }
                 state.combat.progress.storage = storage;
-                state.syncProgressToField();
             } else try owner.session.acknowledgePartyEdit(binding, true, &story);
         } else if (effect.kind == .shared_inventory_edit) {
             const inventory = try prepareSharedInventory(state, effect.inventory.?);
@@ -405,7 +401,7 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
                 if (std.mem.eql(u8, character.id, effect.character.?)) break @as(?usize, index);
             } else null;
             if (effect.inventory) |edit| {
-                const inventory = if (member) |index| try prepareSceneInventory(state, index, edit) else null;
+                const inventory = if (member) |index| try prepareSceneInventory(state.combat, index, edit) else null;
                 try owner.session.acknowledgePartyEdit(binding, inventory != null, &story);
                 if (inventory) |next| state.combat.progress.party[member.?].inventory = next;
             } else {
@@ -453,7 +449,6 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
         rooms.party = party_ids;
         rooms.active_binding.party = rooms.party[0..1];
         state.setScenarioStory(story);
-        state.syncProgressToField();
         return;
     }
     const id = change.character.?;
@@ -500,7 +495,6 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
     if (story.castle_tier != state.combat.progress.story.scenario.?.castle_tier)
         state.combat.progress.story.recruitment_tier = story.castle_tier;
     state.setScenarioStory(story);
-    state.syncProgressToField();
 }
 
 pub fn tickActiveFieldEvent(state: *journey.State, owner: journey.ActiveFieldEvent, input: pause.Input, consumed_action: bool) !pause.Effect {
@@ -513,7 +507,6 @@ pub fn tickActiveFieldEvent(state: *journey.State, owner: journey.ActiveFieldEve
         var field_input = input.field;
         if (consumed_action) field_input.action = false;
         const result = try owner.session.tickField(binding, &state.field_state, field_input);
-        state.syncProgressFromField();
         if (owner.session.inn_payment_refused) {
             owner.session.inn_payment_refused = false;
             const message = if (state.field_state.inn_rules) |rules| rules.insufficient_funds else "Not enough bits to stay.";
@@ -529,7 +522,6 @@ pub fn tickActiveFieldEvent(state: *journey.State, owner: journey.ActiveFieldEve
                 if (wheel.startDraws() == 2) _ = random.random().int(u15);
                 try owner.session.acknowledgeWheelSpin(binding, &state.field_state, roll);
                 state.combat.random = random;
-                state.syncProgressFromField();
             } else try commitScenePartyEffect(state, owner);
         }
         if (old_entry == state.field_state.room_entries) {
@@ -597,7 +589,6 @@ pub fn tickActiveFieldEvent(state: *journey.State, owner: journey.ActiveFieldEve
             }
         }
         const effect = state.menu.tickWithArrival(state.package, &state.field_state, .{}, .immediate);
-        state.syncProgressFromField();
         return effect;
     }
     return .none;

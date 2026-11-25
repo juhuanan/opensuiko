@@ -269,7 +269,8 @@ test "real village field controller links world entry, walking and source return
     const package = try field.load(allocator, @embedFile("fixtures/journey_room.json"));
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    const initial = field.State.init(package.value, .{ .money = 1500, .party = &members });
+    var initial_progress: field.game_state.Progress = .{ .money = 1500, .party = &members };
+    const initial = field.State.init(package.value, &initial_progress);
     var session = try @import("world_field").Session.open(allocator, data.value, package.value, initial, .north);
     defer session.deinit();
     var draws: world.Draws = .{ .values = &.{} };
@@ -301,7 +302,8 @@ test "field-to-world party and draw continuity survive a supplied battle result 
     const package = try field.load(allocator, @embedFile("fixtures/journey_room.json"));
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    const initial = field.State.init(package.value, .{ .money = 1500, .party = &members });
+    var initial_progress: field.game_state.Progress = .{ .money = 1500, .party = &members };
+    const initial = field.State.init(package.value, &initial_progress);
     var session = try @import("world_field").Session.open(allocator, data.value, package.value, initial, .south);
     defer session.deinit();
     var draws: world.Draws = .{ .values = &.{ 0, 4095, 255, 8 } };
@@ -312,7 +314,7 @@ test "field-to-world party and draw continuity survive a supplied battle result 
     try std.testing.expectEqualStrings("world_b_encounter_2", packet.battle.id);
     members[0].hp = 16;
     members[0].status = .poisoned;
-    try session.finishBattle(.fled, session.field_state.progress);
+    try session.finishBattle(.fled, session.field_state.progress.*);
     for (0..16) |_| _ = try session.tickWorld(.{ .direction = .south }, &draws, 1, false, false);
     try std.testing.expectEqual(@as(u16, 13), members[0].hp);
     try std.testing.expectEqual(@as(u32, 1500), session.field_state.progress.money);
@@ -422,7 +424,8 @@ test "C actor world transactions run source melee cover Parry and counters throu
         }
         combat.progress.money = 1500;
         const initial_charges = combat.progress.party[0].rune_charges;
-        var session = try world_field.Session.open(allocator, map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, combat.progress), .south);
+        var session_progress = combat.progress;
+        var session = try world_field.Session.open(allocator, map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, &session_progress), .south);
         defer session.deinit();
         session.travel.mode = .battle;
         session.travel.selected = map.value.encounters[1].id;
@@ -573,7 +576,8 @@ test "C archer knockout and Buddha survive the world battle transaction" {
         if (buddha) members[1].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
         try combat.attachUniteActors(&actors.value);
         try combat.attachSpellScenes(&spells.value);
-        var session = try world_field.Session.open(allocator, map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, combat.progress), .south);
+        var session_progress = combat.progress;
+        var session = try world_field.Session.open(allocator, map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, &session_progress), .south);
         defer session.deinit();
         session.travel.mode = .battle;
         session.travel.selected = map.value.encounters[3].id;
@@ -647,7 +651,8 @@ test "C actor world transactions retain source archers mages and Strong Arm thro
         const charges = members[0].rune_charges;
         try combat.attachUniteActors(&actors.value);
         try combat.attachSpellScenes(&spells.value);
-        var session = try world_field.Session.open(allocator, map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, combat.progress), .south);
+        var session_progress = combat.progress;
+        var session = try world_field.Session.open(allocator, map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, &session_progress), .south);
         defer session.deinit();
         session.travel.mode = .battle;
         session.travel.selected = map.value.encounters[encounter].id;
@@ -767,9 +772,16 @@ test "world battle entry carries live roster rune pieces with identity and rollb
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
         combat.base_stats[0].attack = 500;
-        const field_state = field.State.init(fixture.rooms.value, combat.progress);
-        var state = try @import("world_travel").State.open(allocator, fixture.map.value, art.value, fixture.overlay.value, fixture.rooms.value, combat, field_state);
+        const field_state = field.State.init(fixture.rooms.value, &combat.progress);
+        var state = try @import("world_travel").State.open(allocator, fixture.map.value, art.value, fixture.overlay.value, fixture.rooms.value, &combat, field_state);
         defer state.deinit();
+        const progress = state.link.field_state.progress;
+        const bits = progress.money;
+        const count = progress.party[0].inventory.count();
+        const medicine = fixture.items.value.medicine;
+        try progress.buyItem(fixture.items.value, .medicine, 0);
+        try std.testing.expectEqual(bits - medicine.price, state.progress().money);
+        try std.testing.expectEqual(.medicine, state.combat.progress.party[0].inventory.slots[count].?.id);
         state.party_transactions = transactional;
         state.link.travel.mode = .battle_pending;
         state.link.travel.selected = fixture.map.value.encounters[1].id;
@@ -808,7 +820,7 @@ test "world battle entry carries live roster rune pieces with identity and rollb
         try std.testing.expect((try state.advance(.{}, &draws)) == .battle_started);
         try std.testing.expectEqual(battle.systems.WeaponRune.fire, state.combat.weapon_augments[0].rune);
         try std.testing.expectEqual(@as(u8, 4), state.combat.weapon_augments[0].fragments);
-        var neutral = state.combat;
+        var neutral = state.combat.*;
         neutral.weapon_augments[0] = .{};
         try std.testing.expect(state.combat.resolvePhysicalDamage(0, state.combat.partyCount(), 0, false) > neutral.resolvePhysicalDamage(0, neutral.partyCount(), 0, false));
         try std.testing.expectError(error.WorldBattleNotReady, state.attachPartySnapshot(&roster));
@@ -820,6 +832,9 @@ test "world battle entry carries live roster rune pieces with identity and rollb
         }
         try std.testing.expectEqual(battle.Phase.escaped, state.combat.phase);
         try std.testing.expect((try state.advance(.{ .combat = .{ .confirm = true } }, &draws)) == .battle_returned);
+        try std.testing.expect(state.link.field_state.progress == progress);
+        try std.testing.expect(state.progress() == progress);
+        try std.testing.expectEqual(.medicine, progress.party[0].inventory.slots[count].?.id);
         roster.extras[5].?.weapon_element = .wind;
         roster.extras[5].?.weapon_fragments = .{ 0, 0, 5, 0, 0 };
         state.link.travel.mode = .battle_pending;
@@ -886,7 +901,8 @@ test "all eight B rosters allow verified Run and Let go without executing unsupp
         combat.levels = @splat(if (release) 99 else 1);
         members[0].hp -= 7;
         const original = members;
-        var session = try world_field.Session.open(allocator, fixture.map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, combat.progress), .south);
+        var session_progress = combat.progress;
+        var session = try world_field.Session.open(allocator, fixture.map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, &session_progress), .south);
         defer session.deinit();
         session.travel.mode = .battle;
         session.travel.selected = fixture.map.value.encounters[index].id;
@@ -921,7 +937,8 @@ test "world encounter runs actual combat and rewards then resumes without reseed
     members[0].hp -= 7;
     const hp = members[0].hp;
     const inventory = members[0].inventory;
-    var session = try world_field.Session.open(allocator, fixture.map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, combat.progress), .south);
+    var session_progress = combat.progress;
+    var session = try world_field.Session.open(allocator, fixture.map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, &session_progress), .south);
     defer session.deinit();
     var values: [4096]u15 = @splat(255);
     values[0] = 0;
@@ -994,7 +1011,8 @@ test "world battle replay exhaustion preserves owned state and cursors" {
     defer fixture.deinit();
     var members: [6]battle.Member = undefined;
     var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
-    var session = try world_field.Session.open(allocator, fixture.map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, combat.progress), .south);
+    var session_progress = combat.progress;
+    var session = try world_field.Session.open(allocator, fixture.map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, &session_progress), .south);
     defer session.deinit();
     var draws: world.Draws = .{ .values = &.{ 0, 4095 } };
     try armBattle(&session, &draws);
@@ -1023,7 +1041,8 @@ test "world battle Run and Let go resolve through combat while defeat never heal
         if (scenario == 2) for (&members) |*member| {
             member.hp = 1;
         };
-        var session = try world_field.Session.open(allocator, fixture.map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, combat.progress), .south);
+        var session_progress = combat.progress;
+        var session = try world_field.Session.open(allocator, fixture.map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, &session_progress), .south);
         defer session.deinit();
         var values: [4096]u15 = @splat(255);
         values[0] = 0;
@@ -1198,7 +1217,8 @@ test "transactional Bribe charges the party only after the escape commits" {
     var members: [6]battle.Member = undefined;
     var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
     combat.progress.money = 600;
-    var session = try world_field.Session.open(allocator, fixture.map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, combat.progress), .south);
+    var session_progress = combat.progress;
+    var session = try world_field.Session.open(allocator, fixture.map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, &session_progress), .south);
     defer session.deinit();
     session.travel.mode = .battle;
     session.travel.selected = fixture.map.value.encounters[1].id;

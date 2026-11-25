@@ -155,23 +155,6 @@ fn withEnemyMagicPulse(state: *const battle.State, block: camera.Block, include_
     return result;
 }
 
-fn smoothstep(t: f32) f32 {
-    const x = std.math.clamp(t, 0.0, 1.0);
-    return x * x * (3.0 - 2.0 * x);
-}
-
-fn actionEnvelope(tick: u32, duration: u32, ease_in: u32, ease_out: u32) f32 {
-    if (tick < ease_in) return smoothstep(@as(f32, @floatFromInt(tick)) / @as(f32, @floatFromInt(ease_in)));
-    if (duration > ease_in) {
-        const out = @min(ease_out, duration - ease_in);
-        if (tick >= duration) return 0;
-        if (out > 0 and tick > duration - out) {
-            return smoothstep(@as(f32, @floatFromInt(duration - tick)) / @as(f32, @floatFromInt(out)));
-        }
-    }
-    return 1.0;
-}
-
 fn castCamera(state: *const battle.State, original: camera.Block, include_pulse: bool) camera.Block {
     if (state.hasSpellScene()) {
         const instance = &state.active.?.scene.?;
@@ -192,7 +175,7 @@ fn castCamera(state: *const battle.State, original: camera.Block, include_pulse:
                 if (effect.spell < systems.spells.len) {
                     if (camera.castPreset(systems.spells[effect.spell].name)) |block| {
                         // shortcut: smoothstep envelope into final preset and back; replace with per-phase source camera events.
-                        const t = actionEnvelope(state.effectTicks(), state.actionDuration(), 20, 16);
+                        const t = camera.actionEnvelope(state.effectTicks(), state.actionDuration(), 20, 16);
                         return camera.mix(base, block, t);
                     }
                 }
@@ -210,7 +193,7 @@ fn cameraBlock(state: *const battle.State, include_pulse: bool) camera.Block {
         if (effect.kind == .unite and (state.actor_camera != null or state.hasLiveUniteActors())) return base;
         if (effect.kind != .attack and effect.kind != .unite and effect.kind != .miss) return base;
         const target = if (effect.actor < state.partyCount()) camera.attack_party else camera.attack_enemy;
-        const t = actionEnvelope(state.effectTicks(), state.actionDuration(), 12, 12);
+        const t = camera.actionEnvelope(state.effectTicks(), state.actionDuration(), 12, 12);
         return camera.mix(base, target, t);
     }
     return base;

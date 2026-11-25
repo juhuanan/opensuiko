@@ -64,14 +64,14 @@ pub const rules = struct {
 };
 
 pub const StatusFlags = packed struct(u16) {
-    down: bool = false,
+    poisoned: bool = false,
     _unused1: u4 = 0,
     asleep: bool = false,
     recovering: bool = false,
     _unused7: u9 = 0,
 
     pub fn isIneligible(self: StatusFlags) bool {
-        return self.down or self.asleep or self.recovering;
+        return self.poisoned or self.asleep or self.recovering;
     }
 
     pub fn fromMask(mask: u16) StatusFlags {

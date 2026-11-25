@@ -274,7 +274,7 @@ pub fn build(b: *std.Build) !void {
     _ = r.addTest(test_step, "tests/scene_population.zig", &.{ "scene_population", "event_runtime", "pause_menu" }, true);
     _ = r.addTest(test_step, "tests/duel.zig", &.{"duel"}, false);
     _ = r.addTest(test_step, "tests/room_package.zig", &.{ "field", "save_file", "pause_menu" }, false);
-    _ = r.addTest(test_step, "tests/journey_content.zig", &.{ "journey_content", "journey", "battle", "field", "party_content", "party_session", "party_data", "journey_boot", "event_runtime", "ui_font", "pause_menu" }, false);
+    _ = r.addTest(test_step, "tests/journey_content.zig", &.{ "journey_content", "journey", "battle", "field", "party_content", "party_session", "party_data", "journey_boot", "journey_frame", "audio_route", "event_runtime", "field_events", "ui_font", "pause_menu" }, false);
     _ = r.addTest(test_step, "tests/root.zig", &.{ "game", "field", "battle", "save_file", "pause_menu", "journey", "party_session", "party_data", "opening", "opening_events", "opening_audience", "demo_batch", "audio_route", "ui_font", "battle_camera", "dice_presentation", "campaign", "campaign_policies_data" }, false);
     _ = r.addTest(test_step, "tests/route_transitions.zig", &.{ "route_transitions", "event_runtime" }, true);
     _ = r.addTest(test_step, "tests/scene_dispatch.zig", &.{ "scene_dispatch", "scene_population", "event_runtime" }, true);

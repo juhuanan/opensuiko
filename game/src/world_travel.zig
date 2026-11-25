@@ -117,7 +117,7 @@ pub const AreaCommandState = struct { cached: u16, area: ?u16 = null };
 pub const VillageAccess = struct { source: *const event_host.village.Source, dialogue: event_host.Binding, exit: event_host.Binding };
 pub const State = struct {
     link: field_link.Session,
-    combat: battle.State,
+    combat: *battle.State,
     overlay: battle_link.Data,
     art: view.Data,
     visual: view.State,
@@ -269,18 +269,6 @@ pub const State = struct {
         return &self.combat.progress;
     }
 
-    pub fn progressInSync(self: *const State) bool {
-        return self.combat.progress.equal(self.link.field_state.progress);
-    }
-
-    fn syncProgressFromField(self: *State) void {
-        self.combat.progress = self.link.field_state.progress;
-    }
-
-    fn syncProgressToField(self: *State) void {
-        self.link.field_state.progress = self.combat.progress;
-    }
-
     pub fn attachGround(self: *State, ground: field.Ground) void {
         self.link.ground = ground;
         self.route_authority = true;
@@ -330,7 +318,6 @@ pub const State = struct {
         self.link.travel.mode = .field;
         self.link.travel.remaining = 0;
         self.link.travel.heading = .east;
-        self.syncProgressFromField();
     }
     pub fn attachVillage(self: *State, access: VillageAccess) !void {
         if (self.village_access != null) return error.VillageAlreadyBound;
@@ -433,7 +420,6 @@ pub const State = struct {
         const access = self.village_access orelse return error.MissingVillageBinding;
         const event = if (self.scene_event) |*value| value else return error.MissingFieldEventOwner;
         const result = try event.tick(access.exit, &self.link.field_state, false);
-        self.syncProgressFromField();
         if (result != .blocked) return .none;
         const pending = event.instance.?.pending orelse return error.InvalidFieldEventReceipt;
         const effect = pending.batch.effects[0];
@@ -456,7 +442,6 @@ pub const State = struct {
         if (self.link.travel.camera.x != outcome.spawn_x or self.link.travel.camera.y != outcome.spawn_y) return error.UnsupportedVillageRoute;
         self.link.field_state.progress.story.scenario = committed_story;
         self.link.field_state.progress.story.village_south_exit_reached = true;
-        self.syncProgressFromField();
         self.travel_receipt = outcome.receipt;
         self.scene_event = null;
         self.village_actors = null;
@@ -524,7 +509,6 @@ pub const State = struct {
         if (self.link.travel.camera.x != outcome.spawn_x or self.link.travel.camera.y != outcome.spawn_y) return error.UnsupportedRouteDestination;
         state.walking = false;
         state.action_pending = false;
-        self.syncProgressFromField();
         self.travel_receipt = outcome.receipt;
         self.visual.reload(self.art);
         return true;
@@ -546,7 +530,6 @@ pub const State = struct {
             state.progress.story.complete(if (std.mem.eql(u8, region.map.id, "region_b")) .village_south_exit_reached else .kobold_world_exit_reached);
             state.walking = false;
             state.action_pending = false;
-            self.syncProgressFromField();
             return true;
         }
         return false;
@@ -581,23 +564,20 @@ pub const State = struct {
         if (!std.mem.eql(u8, outcome.id(), self.link.package.rooms[to_room].id)) return error.UnprovenDoorway;
         if (outcome.spawn_x != state.x or outcome.spawn_y != state.y) return error.UnprovenDoorway;
         state.progress.story.scenario = story;
-        self.syncProgressFromField();
         self.travel_receipt = outcome.receipt;
     }
 
-    pub fn open(allocator: std.mem.Allocator, map: world.Content, art: view.Data, overlay: battle_link.Data, package: field.Package, combat: battle.State, starting_field: field.State) !State {
+    pub fn open(allocator: std.mem.Allocator, map: world.Content, art: view.Data, overlay: battle_link.Data, package: field.Package, combat: *battle.State, starting_field: field.State) !State {
         try (Region{ .map = map, .art = art }).validate();
         if (combat.partyCount() == 0 or combat.partyCount() > 6) return error.InvalidParty;
         _ = try overlay.view(map, combat.content);
-        if (combat.progress.party.ptr != starting_field.progress.party.ptr or combat.partyCount() != starting_field.progress.party.len or combat.active != null or combat.pending_enemy_actor != null or combat.coordinator != null) return error.WorldPartyMismatch;
+        if (starting_field.progress != &combat.progress or combat.active != null or combat.pending_enemy_actor != null or combat.coordinator != null) return error.WorldPartyMismatch;
         for (0..combat.partyCount()) |i| try combat.validateOwnedMember(combat.ownedMember(i));
         var link = try field_link.Session.open(allocator, map, package, starting_field, .east);
         errdefer link.deinit();
-        var owned = combat;
-        owned.progress = starting_field.progress;
-        if (link.field_state.item_rules == null) link.field_state.item_rules = owned.rules;
-        link.travel.speed = if ((try partyTraits(&owned)).faster) .stallion else .normal;
-        return .{ .link = link, .combat = owned, .overlay = overlay, .art = art, .visual = view.State.init(art) };
+        if (link.field_state.item_rules == null) link.field_state.item_rules = combat.rules;
+        link.travel.speed = if ((try partyTraits(combat)).faster) .stallion else .normal;
+        return .{ .link = link, .combat = combat, .overlay = overlay, .art = art, .visual = view.State.init(art) };
     }
     pub fn deinit(self: *State) void {
         self.adapter.deinit(self.link.allocator);
@@ -605,7 +585,7 @@ pub const State = struct {
     }
     pub fn attachPartySnapshot(self: *State, snapshot: *const party.Snapshot) !void {
         if (self.link.travel.mode == .battle or self.adapter.transaction != null or self.adapter.original != null) return error.WorldBattleNotReady;
-        _ = try party.weaponAugments(self.combat, snapshot.*);
+        _ = try party.weaponAugments(self.combat.*, snapshot.*);
         self.party_snapshot = snapshot;
     }
     fn supportedRoom(id: []const u8) bool {
@@ -629,13 +609,15 @@ pub const State = struct {
     pub fn advance(self: *State, input: Input, draws: *world.Draws) !Event {
         if (input.text_len > input.text.len) return error.InvalidWorldTextInput;
         if (self.blocked_entrance) |id| return .{ .unsupported_entrance = id };
-        const traits = try partyTraits(&self.combat);
+        const traits = try partyTraits(self.combat);
         const before = self.*;
+        const combat_before = self.combat.*;
         const saved_draws = draws.*;
         var members: [6]battle.Member = undefined;
         @memcpy(members[0..self.combat.partyCount()], self.combat.progress.party);
         errdefer {
             self.* = before;
+            self.combat.* = combat_before;
             @memcpy(self.combat.progress.party, members[0..self.combat.partyCount()]);
             draws.* = saved_draws;
         }
@@ -643,10 +625,8 @@ pub const State = struct {
         const menu_input: pause.Input = .{ .field = input.field, .left = input.field.menu_direction == .left, .right = input.field.menu_direction == .right, .menu = input.menu, .text = input.text[0..input.text_len], .erase = input.erase, .party_transactions = self.party_transactions };
         // shortcut: Shared menu presentation omits original transition fades; add source driver scheduling before presentation parity.
         if (self.world_menu) {
-            self.menu.combat = &self.combat;
-            self.syncProgressToField();
+            self.menu.combat = self.combat;
             const effect = self.menu.tick(self.link.package, &self.link.field_state, menu_input);
-            self.syncProgressFromField();
             if (self.menu.phase == .closed) {
                 self.world_menu = false;
                 self.menu.travel_context = false;
@@ -656,7 +636,6 @@ pub const State = struct {
         switch (self.link.travel.mode) {
             .world, .field_pending, .battle_pending => {
                 const event = try self.link.tickWorld(input.world, draws, traits.level_sum, traits.suppression, traits.healing);
-                self.syncProgressFromField();
                 if (before.link.travel.mode == .world) try self.visual.step(self.art, before.link.travel, self.link.travel, input.world);
                 if (event == .entrance and self.link.field_state.room == self.link.village) try self.commitVillageEntry(event.entrance, before.link.field_state.facing);
                 // Source point entry wins; otherwise menu selection follows this frame's encounter draw.
@@ -671,11 +650,11 @@ pub const State = struct {
                     .battle => block: {
                         if (std.mem.eql(u8, self.link.content.id, "region_c") and (self.region_c == null or self.region_c.?.battles == null)) return error.UnimplementedRegionCCombat;
                         if (self.party_snapshot) |snapshot| {
-                            self.combat.weapon_augments = try party.weaponAugments(self.combat, snapshot.*);
+                            self.combat.weapon_augments = try party.weaponAugments(self.combat.*, snapshot.*);
                         } else if (self.party_transactions) return error.UnsupportedCombatSidecar;
                         if (self.party_transactions) {
-                            try self.adapter.beginTransactional(&self.link, &self.combat, self.overlay, draws.*, self.battle_receipt);
-                        } else try self.adapter.begin(&self.link, &self.combat, self.overlay);
+                            try self.adapter.beginTransactional(&self.link, self.combat, self.overlay, draws.*, self.battle_receipt);
+                        } else try self.adapter.begin(&self.link, self.combat, self.overlay);
                         break :block .battle_started;
                     },
                     .unsupported_entrance => |id| block: {
@@ -742,11 +721,9 @@ pub const State = struct {
                         if (self.scene_event.?.audio_cached_command) |cached| {
                             self.area_commands = .{ .cached = cached, .area = self.scene_event.?.area_command };
                         }
-                        self.syncProgressFromField();
                         if (result == .blocked) {
                             if (self.source_dispatch_enabled and self.scene_event.?.completed_event != null and try self.scene_event.?.reconstruct(binding, state)) {
                                 self.source_dispatch = try event_host.DispatchTracker.start(binding, state.progress.story.scenario.?);
-                                self.syncProgressFromField();
                                 return .none;
                             }
                             return .{ .scene_event_blocked = self.scene_event.?.blocker.? };
@@ -770,7 +747,7 @@ pub const State = struct {
                     if (dialogue.source.npc >= npcs.len) return error.InvalidRecruitment;
                     return .{ .recruitment_requested = npcs[dialogue.source.npc].id };
                 };
-                self.menu.combat = &self.combat;
+                self.menu.combat = self.combat;
                 if (input.menu and self.menu.phase == .closed) {
                     self.menu.travel_context = true;
                     self.menu.selected = .item;
@@ -799,7 +776,6 @@ pub const State = struct {
                         self.link.field_state.walking = false;
                         self.link.field_state.action_pending = false;
                         self.scene_event = try event_host.Session.beginWorldExit(self.village_access.?.exit, self.link.field_state, std.math.add(u64, self.travel_receipt, 1) catch return error.TravelReceiptOverflow);
-                        self.syncProgressFromField();
                         return .none;
                     }
                 }
@@ -808,7 +784,6 @@ pub const State = struct {
                     if (self.link.field_state.room == self.link.village) try self.constructVillage();
                 }
                 if (!supportedRoom(self.link.package.rooms[self.link.field_state.room].id)) return error.UnimplementedWorldFieldDestination;
-                self.syncProgressFromField();
                 if (self.menu.phase == .closed and !self.menu.pending) self.menu.travel_context = false;
                 if (returned) {
                     self.village_actors = null;
@@ -819,7 +794,7 @@ pub const State = struct {
                 if (!std.meta.eql(before.menu.preferences, self.menu.preferences)) return .settings_changed;
                 return self.menuEvent(self.link.menu_effect);
             },
-            .battle => return switch (if (self.adapter.transaction != null) try self.adapter.tickTransactional(&self.link, &self.combat, input.combat, draws, &self.battle_receipt) else try self.adapter.tick(&self.link, &self.combat, input.combat, draws)) {
+            .battle => return switch (if (self.adapter.transaction != null) try self.adapter.tickTransactional(&self.link, self.combat, input.combat, draws, &self.battle_receipt) else try self.adapter.tick(&self.link, self.combat, input.combat, draws)) {
                 .running => .none,
                 .defeated => .defeated,
                 .returned => block: {

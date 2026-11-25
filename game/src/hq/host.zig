@@ -144,7 +144,7 @@ pub const Snapshot = struct {
 
 pub const Host = struct {
     allocator: std.mem.Allocator,
-    /// Canonical field owner (money, bags, storage, story scenario, party).
+    /// Field state borrows the session's money, party, storage and story.
     field_state: *field.State,
     scenes: std.json.Parsed(scene_mod.Catalogue),
     windows: windows_mod.Loaded,
