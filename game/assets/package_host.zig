@@ -3,7 +3,6 @@
 pub const entry_policy_json = @embedFile("package_host/entry_policy.json");
 pub const resources_json = @embedFile("package_host/resources.json");
 pub const package_schema_json = @embedFile("package_host/package_schema.json");
-pub const notice_text = @embedFile("package_host/NOTICE.txt");
 
 pub const fixture = struct {
     pub const manifest_json = @embedFile("package_host/manifest_fixture.json");

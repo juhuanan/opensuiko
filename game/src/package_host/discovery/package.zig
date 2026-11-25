@@ -401,7 +401,7 @@ fn containsIgnoreCase(haystack: []const u8, needle: []const u8) bool {
 
 fn checkNotice(bytes: []const u8, subject: []const u8, diag: *Diagnostic) !void {
     if (!std.unicode.utf8ValidateSlice(bytes))
-        return diag.fail(.notice_invalid, subject, "notice is not valid UTF-8 text", .{}, "restore the package notice from game/assets/package_host/NOTICE.txt");
+        return diag.fail(.notice_invalid, subject, "notice is not valid UTF-8 text", .{}, "restore the notice declared by the bundle manifest");
     const required = [_][]const u8{ "Konami", "private", "provenance" };
     for (required) |token| {
         if (!containsIgnoreCase(bytes, token))
@@ -410,7 +410,7 @@ fn checkNotice(bytes: []const u8, subject: []const u8, diag: *Diagnostic) !void 
                 subject,
                 "notice does not state \"{s}\"",
                 .{token},
-                "restore the package notice from game/assets/package_host/NOTICE.txt",
+                "restore the notice declared by the bundle manifest",
             );
     }
 }
