@@ -75,7 +75,7 @@ fn drawScene(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, grou
     const data = battle.layout.sceneArt(state);
     const list = art.compose(data, state);
     rl.clearBackground(if (minimum_depth != null) .blank else .black);
-    if (minimum_depth != null) rl.beginScissorMode(0, 0, 640, 480) else rl.beginScissorMode(0, battle.layout.viewport_top, 640, battle.layout.viewport_height);
+    rl.beginScissorMode(0, 0, 640, 480);
     defer rl.endScissorMode();
     @import("battle_ground_view.zig").draw(&state, floor, ground_texture, minimum_depth orelse 0);
     if ((minimum_depth orelse 0) <= 380) for (list.shadows) |shadow| {
@@ -167,7 +167,7 @@ fn drawScene(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, grou
     }
     if (minimum_depth == null) if (spell_frame) |frame| {
         spell_view.beginBlend(frame.wash_blend);
-        rl.drawRectangle(0, 38, 640, 298, .{ .r = frame.wash[0], .g = frame.wash[1], .b = frame.wash[2], .a = 255 });
+        rl.drawRectangle(0, 0, 640, 480, .{ .r = frame.wash[0], .g = frame.wash[1], .b = frame.wash[2], .a = 255 });
         rl.endBlendMode();
     };
     if (minimum_depth == null) drawSpellVfx(state, data);

@@ -429,6 +429,45 @@ test "three source encounters load and trial state starts independently" {
     try std.testing.expectEqual(.command, state.phase);
 }
 
+test "battle layout shadowLayout tracks actor ground XY and eases action camera cleanly" {
+    const parsed = try battle.load(allocator, @embedFile("fixtures/demo_batch.json"));
+    defer parsed.deinit();
+    const rules = try field.items.load(allocator, field.items.json);
+    defer rules.deinit();
+    var members: [6]battle.Member = undefined;
+    var state = try battle.State.init(parsed.value, rules.value, &members, 17);
+    state.camera_ticks = 300;
+    const base_cam = battle.layout.currentCamera(state);
+    state.active = .{ .actor = 0, .target = 6, .kind = .attack, .started_at = 0 };
+    const duration = state.actionDuration();
+
+    state.action_ticks = 0;
+    try std.testing.expectEqualDeep(base_cam, battle.layout.currentCamera(state));
+
+    state.action_ticks = 6;
+    const mid_cam = battle.layout.currentCamera(state);
+    try std.testing.expect(mid_cam.focus[0] != base_cam.focus[0]);
+
+    state.action_ticks = 18;
+    const peak_cam = battle.layout.currentCamera(state);
+    try std.testing.expectEqualDeep(@import("battle_camera").attack_party, peak_cam);
+
+    state.action_ticks = duration;
+    try std.testing.expectEqualDeep(base_cam, battle.layout.currentCamera(state));
+
+    // Shadow tracks the acting character on the floor plane instead of staying pinned at home.
+    state.action_ticks = 14;
+    const ground_pos = battle.Position{
+        .x = battle.layout.worldPosition(&state, 0).x,
+        .y = battle.layout.worldPosition(&state, 0).y,
+        .z = battle.layout.homePosition(&state, 0).z,
+    };
+    const expected_point = battle.layout.worldPoint(state, ground_pos);
+    const shadow = battle.layout.shadowLayout(state, 0);
+    try std.testing.expectApproxEqAbs(expected_point.x, shadow.point.x, 0.01);
+    try std.testing.expectApproxEqAbs(expected_point.y, shadow.point.y, 0.01);
+}
+
 test "combat arithmetic agrees with original damage, hit and priority instructions" {
     const Damage = struct { attack: u16, defense: u16, roll: u15, defending: bool, damage: u32 };
     const Accuracy = struct { skill: u16, target_skill: u16, roll: u15, hit: bool };

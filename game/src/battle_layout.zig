@@ -155,6 +155,23 @@ fn withEnemyMagicPulse(state: *const battle.State, block: camera.Block, include_
     return result;
 }
 
+fn smoothstep(t: f32) f32 {
+    const x = std.math.clamp(t, 0.0, 1.0);
+    return x * x * (3.0 - 2.0 * x);
+}
+
+fn actionEnvelope(tick: u32, duration: u32, ease_in: u32, ease_out: u32) f32 {
+    if (tick < ease_in) return smoothstep(@as(f32, @floatFromInt(tick)) / @as(f32, @floatFromInt(ease_in)));
+    if (duration > ease_in) {
+        const out = @min(ease_out, duration - ease_in);
+        if (tick >= duration) return 0;
+        if (out > 0 and tick > duration - out) {
+            return smoothstep(@as(f32, @floatFromInt(duration - tick)) / @as(f32, @floatFromInt(out)));
+        }
+    }
+    return 1.0;
+}
+
 fn castCamera(state: *const battle.State, original: camera.Block, include_pulse: bool) camera.Block {
     if (state.hasSpellScene()) {
         const instance = &state.active.?.scene.?;
@@ -174,8 +191,8 @@ fn castCamera(state: *const battle.State, original: camera.Block, include_pulse:
             if (state.content.systems) |systems| {
                 if (effect.spell < systems.spells.len) {
                     if (camera.castPreset(systems.spells[effect.spell].name)) |block| {
-                        // shortcut: final preset over 20 ticks; replace with per-phase source camera events.
-                        const t = @as(f32, @floatFromInt(@min(state.effectTicks(), 20))) / 20.0;
+                        // shortcut: smoothstep envelope into final preset and back; replace with per-phase source camera events.
+                        const t = actionEnvelope(state.effectTicks(), state.actionDuration(), 20, 16);
                         return camera.mix(base, block, t);
                     }
                 }
@@ -193,10 +210,25 @@ fn cameraBlock(state: *const battle.State, include_pulse: bool) camera.Block {
         if (effect.kind == .unite and (state.actor_camera != null or state.hasLiveUniteActors())) return base;
         if (effect.kind != .attack and effect.kind != .unite and effect.kind != .miss) return base;
         const target = if (effect.actor < state.partyCount()) camera.attack_party else camera.attack_enemy;
-        const t = @as(f32, @floatFromInt(@min(state.effectTicks(), 8))) / 8.0;
+        const t = actionEnvelope(state.effectTicks(), state.actionDuration(), 12, 12);
         return camera.mix(base, target, t);
     }
     return base;
+}
+
+pub fn sceneCamera(state: *const battle.State) presentation.Camera {
+    const block = selectCamera(state, true);
+    var cam = presentation.Camera{
+        .transform = camera.transform(block),
+        .focal_length = 2048,
+        .center_x = 320,
+        .center_y = 240,
+    };
+    const zero = presentation.project(cam, .{ .x = 0, .y = 0, .z = 0 });
+    const focus = presentation.project(cam, .{ .x = @floatFromInt(block.focus[0]), .y = @floatFromInt(block.focus[1]), .z = @floatFromInt(block.focus[2]) });
+    cam.center_x += zero.x - focus.x;
+    cam.center_y += zero.y - focus.y;
+    return cam;
 }
 
 // Share camera selection between native drawing, headless composition and overlays.
@@ -204,14 +236,7 @@ pub fn sceneArt(state: battle.State) battle.world_art.Data {
     var data = state.content.world_art.?;
     if (battlefield(&state)) |entry| data.scenery = entry.scenery;
     const block = selectCamera(&state, true);
-    data.camera.transform = camera.transform(block);
-    data.camera.focal_length = 2048;
-    data.camera.center_x = 320;
-    data.camera.center_y = 240;
-    const zero = presentation.project(data.camera, .{ .x = 0, .y = 0, .z = 0 });
-    const focus = presentation.project(data.camera, .{ .x = @floatFromInt(block.focus[0]), .y = @floatFromInt(block.focus[1]), .z = @floatFromInt(block.focus[2]) });
-    data.camera.center_x += zero.x - focus.x;
-    data.camera.center_y += zero.y - focus.y;
+    data.camera = sceneCamera(&state);
     data.sprite_scale = camera.scaleBlock(block) * 2;
     return data;
 }
@@ -407,8 +432,13 @@ fn findTrail(state: battle.State, resource: []const u8, frozen_pose: u16, record
 
 pub fn shadowLayout(state: battle.State, index: usize) presentation.Shadow {
     const home = homePosition(&state, index);
-    const point = worldPoint(state, formationShiftPosition(&state, index) orelse home);
-    const scale = camera.scaleBlock(cameraBlock(&state, true)) * 2;
+    const actor = worldPosition(&state, index);
+    const ground = battle.Position{ .x = actor.x, .y = actor.y, .z = home.z };
+    const point = worldPoint(state, ground);
+    const home_point = worldPoint(state, home);
+    const base_scale = camera.scaleBlock(currentCamera(state)) * 2;
+    const depth_ratio = if (point.depth > 1) std.math.clamp(home_point.depth / point.depth, 0.25, 4) else 1;
+    const scale = base_scale * depth_ratio;
     return .{ .point = point, .radius_x = 12 * scale, .radius_y = 5 * scale };
 }
 

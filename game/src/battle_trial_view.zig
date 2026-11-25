@@ -446,7 +446,7 @@ fn drawCastVfx(state: battle.State) void {
 fn drawScene(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, ground_texture: ?rl.Texture2D, effect_atlas: ?rl.Texture2D, dynamic: ?*@import("battle_spell_view.zig").DynamicTexture, minimum_depth: ?u16) void {
     rl.clearBackground(if (minimum_depth != null) .blank else .black);
     const frame = geometry.framing(state);
-    if (minimum_depth != null) rl.beginScissorMode(0, 0, 640, 480) else rl.beginScissorMode(0, geometry.viewport_top, 640, geometry.viewport_height);
+    rl.beginScissorMode(0, 0, 640, 480);
     rl.beginMode2D(.{ .offset = .{ .x = frame.x, .y = frame.y }, .target = .{ .x = 0, .y = 0 }, .rotation = 0, .zoom = frame.zoom });
     @import("battle_ground_view.zig").draw(&state, floor, ground_texture, minimum_depth orelse 0);
     // Ground decals precede every billboard, so they cannot darken another actor or prop.
@@ -537,7 +537,7 @@ fn drawScene(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, grou
     };
     if (minimum_depth == null) if (source_frame) |source| {
         @import("battle_spell_view.zig").beginBlend(source.wash_blend);
-        rl.drawRectangle(0, 38, 640, 298, .{ .r = source.wash[0], .g = source.wash[1], .b = source.wash[2], .a = 255 });
+        rl.drawRectangle(0, 0, 640, 480, .{ .r = source.wash[0], .g = source.wash[1], .b = source.wash[2], .a = 255 });
         rl.endBlendMode();
     };
     if (minimum_depth == null) drawCastVfx(state);
