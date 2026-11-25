@@ -1172,3 +1172,30 @@ test "item overload holds its isolated receipt until the modal closes" {
     try std.testing.expect(!instance.pendingItemOverload());
     try std.testing.expectError(error.NoPendingEventBatch, runtime.acknowledge(content, &instance, &story, request.id));
 }
+
+test "event_runtime schema_versions parses all 29 versions and classifies commands" {
+    const schema_mod = runtime.schema_versions;
+    try std.testing.expectEqual(@as(?u8, 1), schema_mod.parseVersion(runtime.schema));
+    try std.testing.expectEqual(@as(?u8, 2), schema_mod.parseVersion(runtime.campaign_schema));
+    try std.testing.expectEqual(@as(?u8, 15), schema_mod.parseVersion(runtime.party_select_schema));
+    try std.testing.expectEqual(@as(?u8, 29), schema_mod.parseVersion(runtime.scenery_mutation_schema));
+    try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("suikoden-event-ir/0"));
+    try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("suikoden-event-ir/01"));
+    try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("suikoden-event-ir/30"));
+    try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("other/2"));
+    try std.testing.expect(!schema_mod.isCampaignNamespace(runtime.schema));
+    try std.testing.expect(schema_mod.isCampaignNamespace(runtime.campaign_schema));
+    try std.testing.expect(schema_mod.atLeast(runtime.camera_push_schema, 28));
+    try std.testing.expect(!schema_mod.atLeast(runtime.actor_owners_schema, 28));
+
+    try std.testing.expectEqual(runtime.Command.Category.control_flow, (runtime.Command{ .kind = .jump }).category());
+    try std.testing.expectEqual(runtime.Command.Category.wait, (runtime.Command{ .kind = .wait_for_accept }).category());
+    try std.testing.expectEqual(runtime.Command.Category.dialogue, (runtime.Command{ .kind = .open_box }).category());
+    try std.testing.expectEqual(runtime.Command.Category.camera_visual, (runtime.Command{ .kind = .camera_push }).category());
+    try std.testing.expectEqual(runtime.Command.Category.actor_track, (runtime.Command{ .kind = .queue_track }).category());
+    try std.testing.expectEqual(runtime.Command.Category.party_inventory, (runtime.Command{ .kind = .party_join }).category());
+    try std.testing.expectEqual(runtime.Command.Category.transition, (runtime.Command{ .kind = .battle }).category());
+    try std.testing.expectEqual(runtime.Command.Category.story_flag, (runtime.Command{ .kind = .story_or }).category());
+    try std.testing.expectEqual(runtime.Command.Category.service_minigame, (runtime.Command{ .kind = .fixed_dice }).category());
+    try std.testing.expectEqual(runtime.Command.Category.source_record, (runtime.Command{ .kind = .source_move_batch }).category());
+}

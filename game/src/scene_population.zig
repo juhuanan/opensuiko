@@ -339,35 +339,9 @@ pub fn validate(packet: Packet) !void {
     for (packet.programs, 0..) |program, index| {
         try validId(program.id);
         try validId(program.content_id);
-        if (!std.mem.eql(u8, program.namespace, event_runtime.schema) and
-            (!is_extended or (!std.mem.eql(u8, program.namespace, event_runtime.campaign_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.scene_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.motion_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.hop_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.party_track_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.party_scene_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.position_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.fixed_box_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.character_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.music_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.queued_music_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.entry_music_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.field_effect_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.party_select_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.scene_actor_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.fade_in_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.prop_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.mansion_music_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.item_overload_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.hero_visibility_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.branch_history_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.wheel_motion_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.wheel_music_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.party_experience_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.world_entry_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.actor_owners_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.camera_push_schema) and
-                !std.mem.eql(u8, program.namespace, event_runtime.scenery_mutation_schema)))) return error.UnsupportedPopulationProgramNamespace;
+        const valid_namespace = std.mem.eql(u8, program.namespace, event_runtime.schema) or
+            (is_extended and event_runtime.schema_versions.isCampaignNamespace(program.namespace));
+        if (!valid_namespace) return error.UnsupportedPopulationProgramNamespace;
         for (packet.programs[0..index]) |other| if (std.mem.eql(u8, program.id, other.id)) return error.DuplicatePopulationProgram;
     }
 
