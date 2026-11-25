@@ -1312,7 +1312,6 @@ ASSET_CLASSES = {"text", "audio", "video", "palette", "geometry",
 # module requirements per class; checked BEFORE any output is written
 CLASS_DEPS = {
     "palettes": ["text_lzss"],   # PIL is only needed for optional swatches
-    "geometry": ["eight_gpu_parse"],
     "recipes": ["parse_04play"],
     "textures": ["PIL", "numpy", "stone_render"],
 }

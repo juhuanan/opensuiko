@@ -414,6 +414,8 @@ class ValidationTest(unittest.TestCase):
         return base
 
     def test_spu_streams_cannot_be_exported_as_geometry(self):
+        self.ex.preflight(set(self.ex.CLASSES) - {"geometry"})
+        self.assertEqual(self.ex.MANIFEST["errors"], [])
         self.ex.export_geometry()
         self.assertEqual(self.ex.MANIFEST["assets"], [])
         self.assertEqual(os.listdir(self.tmp), [])

@@ -8,6 +8,3 @@
 # --- required ---
 Pillow>=9.0          # PNG output (sprite pieces, contact sheets, CLUT swatches)
 numpy>=1.20          # used by render_quads.py and stone_render.py
-
-# --- optional ---
-# matplotlib         # eight_gpu_parse.py / nibble_delta_decode.py diagnostics
