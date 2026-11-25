@@ -96,9 +96,9 @@ kit/work/build/
 # in kit/docs/ and are pinned by tests in kit/tests/; the bytes are not tracked.
 kit/work/candidates/
 
-# ---- emulator rig (methodology ruled out 2026-10-01; large fixtures) ----
-kit/tools/emu/fixtures/
-kit/tools/emu/shots/
+# ---- retired emulator harness and save-state reader ----
+/kit/tools/emu/
+/kit/tools/vram_dump.py
 
 # ---- web-build cruft in goal briefs ----
 goals/**/.artifacts/
@@ -170,4 +170,3 @@ game/zig-out
 /game/assets/**/*.json
 /game/assets/**/*.zon
 /game/tests/fixtures/**
-/kit/tools/emu/captures/
