@@ -1,4 +1,5 @@
 //! Journey ownership of the source fixed-game request and its atomic return.
+const State = @import("journey.zig").State;
 const field = @import("field");
 const std = @import("std");
 const battle = @import("battle");
@@ -50,11 +51,11 @@ pub const Input = union(enum) {
     animation_tick,
 };
 
-pub fn usesModel(state: anytype) bool {
+pub fn usesModel(state: *const State) bool {
     return state.dice_model != null and state.dice_host.?.session.?.dice.entry.variant == .fixed;
 }
 
-fn facts(state: anytype) !Before {
+fn facts(state: *const State) !Before {
     const story = state.combat.progress.story.scenario orelse return error.MissingSourceStoryState;
     return .{
         .money = state.combat.progress.money,
@@ -64,14 +65,14 @@ fn facts(state: anytype) !Before {
     };
 }
 
-fn validateField(state: anytype) !void {
+fn validateField(state: *const State) !void {
     const owner = state.field_event orelse return error.MissingFieldDiceRequest;
     if (!std.mem.eql(u8, owner.binding.room, state.package.rooms[state.field_state.room].id) or
         owner.session.hero.x != state.field_state.x or owner.session.hero.y != state.field_state.y) return error.ScriptedDiceFieldMismatch;
     try owner.session.validate(owner.binding.*);
 }
 
-pub fn begin(state: anytype) !void {
+pub fn begin(state: *State) !void {
     if (state.mode != .field or state.dice_game != null or state.menu.phase != .closed) return error.GameBusy;
     const owner = state.field_event orelse return error.MissingFieldDiceRequest;
     const receipt = owner.session.queuedFixedDice() orelse return error.MissingFieldDiceRequest;
@@ -122,7 +123,7 @@ pub fn begin(state: anytype) !void {
     };
 }
 
-fn validateOwner(state: anytype) !Active {
+fn validateOwner(state: *const State) !Active {
     const active = state.dice_game orelse return error.MissingFieldDiceRequest;
     const owner = state.field_event orelse return error.MissingFieldDiceRequest;
     const host = state.dice_host orelse return error.MissingJourneyDiceHost;
@@ -134,7 +135,7 @@ fn validateOwner(state: anytype) !Active {
     return active;
 }
 
-pub fn tick(state: anytype, input: Input) !void {
+pub fn tick(state: *State, input: Input) !void {
     var active = try validateOwner(state);
     const host = state.dice_host.?;
     const packet = state.dice_model orelse return error.MissingDiceModel;
@@ -247,7 +248,7 @@ pub fn tick(state: anytype, input: Input) !void {
     state.dice_game = active;
 }
 
-pub fn finish(state: anytype) !void {
+pub fn finish(state: *State) !void {
     const active = try validateOwner(state);
     if (active.animation != null) return error.PendingDiceAnimation;
     if (active.result != null) return error.PendingDiceResultText;
@@ -284,7 +285,7 @@ pub fn finish(state: anytype) !void {
     state.dice_game = null;
 }
 
-pub fn tickPlain(state: anytype, input: anytype) !void {
+pub fn tickPlain(state: *State, input: @import("pause_menu").Input) !void {
     var active = try validateOwner(state);
     const host = state.dice_host.?;
     var next = host.*;
@@ -352,7 +353,7 @@ pub fn tickPlain(state: anytype, input: anytype) !void {
     if (active.exit_ready) try finish(state);
 }
 
-pub fn tickFrame(state: anytype, input: Entry.Controls) !void {
+pub fn tickFrame(state: *State, input: Entry.Controls) !void {
     const active = try validateOwner(state);
     if (!active.entry_audio_ready) return;
     if (active.animation != null) return tick(state, .animation_tick);

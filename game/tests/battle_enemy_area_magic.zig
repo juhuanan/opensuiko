@@ -435,7 +435,7 @@ test "area magic AI uses front scan secondary special thresholds pending wait em
         area_suite.prepareDefendingParty(&wait_s, 9999);
         const owner = wait_s.state.partyCount();
         // Mark another living party member pending KO so branch waits before starting enemy magic
-        wait_s.state.knockout_pending[1] = true;
+        wait_s.state.party_knockouts[1].pending = true;
         var wait_draws = battle.systems.Draws{ .values = &.{ 51, 16712 } };
         wait_s.state.replay_draws = &wait_draws;
         wait_s.state.sourceEnemyDecision(owner);
@@ -443,7 +443,7 @@ test "area magic AI uses front scan secondary special thresholds pending wait em
         try std.testing.expect(wait_s.state.enemy_branch_selection != null);
         try std.testing.expect(wait_s.state.active == null);
         // Empty living party leaves enemy turn cleanly consumed
-        wait_s.state.knockout_pending = @splat(false);
+        for (&wait_s.state.party_knockouts) |*knockout| knockout.pending = false;
         for (wait_s.members) |*m| {
             m.hp = 0;
             m.status = .unconscious;
@@ -739,8 +739,8 @@ test "Siren special runs 20-tick warmup camera 4 columns 16 sirenNote quads 8 wa
     try std.testing.expectEqual(@as(usize, 8), wave_dispatches);
     try std.testing.expect(saw_delay_30);
     // Slot 0 blocked by .rune_blocked, slot 1 immune via Turtle rune!
-    try std.testing.expect(s.state.rune_blocked[0]);
-    try std.testing.expect(!s.state.rune_blocked[1]);
+    try std.testing.expect(s.state.actor_conditions[0].rune_blocked);
+    try std.testing.expect(!s.state.actor_conditions[1].rune_blocked);
     // Fire rune slot 2 took half damage vs unequipped slot 0
     const d0 = 9999 - s.members[0].hp;
     const d2 = 9999 - s.members[2].hp;
@@ -852,10 +852,10 @@ test "area magic covers group protection Sleep Sacrificial Buddha revival RNG ro
         area_suite.prepareDefendingParty(&s, 9999);
         s.members[0].hp = 1; // Sacrificial Buddha target
         s.members[0].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
-        s.state.protection = @splat(0);
-        s.state.protection[1] = 2;
-        s.state.asleep = @splat(0);
-        s.state.asleep[2] = 2;
+        for (&s.state.actor_conditions) |*conditions| conditions.protection_rounds = 0;
+        s.state.actor_conditions[1].protection_rounds = 2;
+        s.state.clearSleep();
+        s.state.actor_conditions[2].sleep_turns = 2;
         const owner = s.state.partyCount();
         try s.state.beginEnemyMagic(owner, 0);
         var values: [512]u15 = @splat(100);
@@ -864,8 +864,8 @@ test "area magic covers group protection Sleep Sacrificial Buddha revival RNG ro
         for (0..450) |_| {
             try s.state.tickReplay(.{}, &draws);
             if (s.members[0].hp == 0 and s.state.unite_vm.ownsActor(0)) {
-                try std.testing.expect(s.state.knockout_pending[0]);
-                try std.testing.expect(s.state.revivals[0] == null);
+                try std.testing.expect(s.state.party_knockouts[0].pending);
+                try std.testing.expect(s.state.party_knockouts[0].revival == null);
                 checked_locked_pending = true;
             }
             if (s.state.round >= 2 and s.state.phase == .battle_menu and !s.state.unite_vm.hasActors() and !s.state.hasPendingRevival()) break;

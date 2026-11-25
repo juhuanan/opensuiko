@@ -95,46 +95,51 @@ fn applyAreaAction(binding: Binding, command: runtime.Command, state: *field.Sta
     return true;
 }
 
-fn applyRoomTransition(self: *Session, binding: Binding, command: runtime.Command, state: *field.State) !bool {
+fn applyRoomTransition(self: *Session, binding: Binding, transition: runtime.RoomTransition, state: *field.State) !bool {
     const package = binding.room_package orelse return false;
-    const room = package.roomIndex(command.destination.?) orelse return error.UnknownEventRoom;
-    const spawn: field.Point = .{ .x = command.x.?, .y = command.y.? };
+    const room = package.roomIndex(transition.destination) orelse return error.UnknownEventRoom;
+    const spawn: field.Point = .{ .x = transition.x, .y = transition.y };
     if (!package.rooms[room].contains(spawn.x, spawn.y) or
-        (!command.source_arrival and !package.rooms[room].canStand(spawn.x, spawn.y))) return error.InvalidFieldEventTransition;
-    if (command.world_entry) |entry_id| {
+        (!transition.source_arrival and !package.rooms[room].canStand(spawn.x, spawn.y))) return error.InvalidFieldEventTransition;
+    if (transition.world_entry == .named) {
+        const entry_id = transition.world_entry.named;
         const entry = package.world_entries[package.worldEntryIndex(entry_id) orelse return error.MissingWorldEntry];
         if (!std.mem.eql(u8, entry.area, package.rooms[room].source_area orelse "")) return error.InvalidFieldEventTransition;
     }
     state.enterRoom(room, spawn);
-    if (command.world_entry) |entry_id| state.setWorldEntry(package, entry_id) else state.reconcileWorldEntry(package, command.world_point);
+    switch (transition.world_entry) {
+        .named => |entry_id| state.setWorldEntry(package, entry_id),
+        .point => |point| state.reconcileWorldEntry(package, point),
+        .reconcile => state.reconcileWorldEntry(package, null),
+    }
     self.field_effect = null;
-    if (command.arrival_facing) |facing| state.facing = events.fieldDirection(facing);
+    if (transition.facing) |facing| state.facing = events.fieldDirection(facing);
     return true;
 }
 
-fn applyWorldTransition(self: *Session, binding: Binding, command: runtime.Command, state: *field.State) !bool {
+fn applyWorldTransition(self: *Session, binding: Binding, transition: runtime.WorldTransition, state: *field.State) !bool {
     const package = binding.room_package orelse return false;
-    var destination = command.destination;
-    var spawn: field.Point = undefined;
-    if (command.return_to_entry) {
-        state.reconcileWorldEntry(package, null);
-        const entry = state.worldEntry(package) orelse return error.MissingWorldEntry;
-        destination = entry.world_room;
-        spawn = .{ .x = entry.return_x, .y = entry.return_y };
-    } else {
-        if (command.retain_world_region) {
+    const target: struct { room: []const u8, spawn: field.Point } = switch (transition) {
+        .destination => |destination| .{
+            .room = destination.room,
+            .spawn = .{ .x = @as(i32, destination.cell.x) * 8, .y = @as(i32, destination.cell.y) * 8 },
+        },
+        .retained_region => |cell| blk: {
             const context = state.world_context orelse return error.MissingWorldRegion;
-            destination = package.rooms[context.room].id;
-        }
-        spawn = .{ .x = command.x.? * 8, .y = command.y.? * 8 };
-    }
-    const room = package.roomIndex(destination.?) orelse return error.UnknownEventRoom;
-    if (!package.rooms[room].contains(spawn.x, spawn.y)) return error.InvalidFieldEventTransition;
-    state.enterRoom(room, spawn);
+            break :blk .{ .room = package.rooms[context.room].id, .spawn = .{ .x = @as(i32, cell.x) * 8, .y = @as(i32, cell.y) * 8 } };
+        },
+        .return_to_entry => blk: {
+            state.reconcileWorldEntry(package, null);
+            const entry = state.worldEntry(package) orelse return error.MissingWorldEntry;
+            break :blk .{ .room = entry.world_room, .spawn = .{ .x = entry.return_x, .y = entry.return_y } };
+        },
+    };
+    const room = package.roomIndex(target.room) orelse return error.UnknownEventRoom;
+    if (!package.rooms[room].contains(target.spawn.x, target.spawn.y)) return error.InvalidFieldEventTransition;
+    state.enterRoom(room, target.spawn);
     self.field_effect = null;
     state.reconcileWorldEntry(package, null);
     state.crossed_world_exit = true;
-    if (command.arrival_facing) |facing| state.facing = events.fieldDirection(facing);
     return true;
 }
 
@@ -191,9 +196,9 @@ pub noinline fn apply(self: *Session, binding: Binding, command: runtime.Command
         .pan => return applyPan(self, binding, command),
         .spawn_actor => return actor_commands.applySpawnActor(self, binding, command),
         .release_actor => return actor_commands.applyReleaseActor(self, binding, command),
-        .place_actor => return actor_commands.applyPlaceActor(self, binding, command),
-        .actor_x, .actor_y => return actor_commands.applyActorAxis(self, binding, command),
-        .actor_transition, .source_hero_transition => return actor_commands.applyActorTransition(self, binding, command),
+        .place_actor => return actor_commands.applyPlaceActor(self, binding, command.actorPlacement() orelse return error.InvalidEventCommand),
+        .actor_x, .actor_y => return actor_commands.applyActorAxis(self, binding, command.actorAxisMove() orelse return error.InvalidEventCommand),
+        .actor_transition, .source_hero_transition => return actor_commands.applyActorTransition(self, binding, command.actorFacing() orelse return error.InvalidEventCommand),
         .queue_track => return actor_commands.applyQueueTrack(self, binding, command),
         .delay, .source_timer => {
             const duration = command.updates orelse return false;
@@ -212,7 +217,8 @@ pub noinline fn apply(self: *Session, binding: Binding, command: runtime.Command
         .scenery_stage, .scenery_restore, .scenery_append => {
             if (!binding.content.hasSceneryMutations() or !self.initialization_done) return false;
             const package = binding.room_package orelse return false;
-            try package.rooms[state.room].mutateScenery(&state.room_scenery, command);
+            const operation = command.sceneryOperation() orelse return error.InvalidFieldSceneryState;
+            try package.rooms[state.room].mutateScenery(&state.room_scenery, operation);
         },
         .area_action => return applyAreaAction(binding, command, state),
         .request_area_party_prefix => return actor_commands.applyRequestAreaPartyPrefix(self, command),
@@ -236,8 +242,8 @@ pub noinline fn apply(self: *Session, binding: Binding, command: runtime.Command
             if (!self.initialization_done) return false;
             try self.fade_state.request();
         },
-        .room_transition => return applyRoomTransition(self, binding, command, state),
-        .world_transition => return applyWorldTransition(self, binding, command, state),
+        .room_transition => return applyRoomTransition(self, binding, command.roomTransition() orelse return error.InvalidEventCommand, state),
+        .world_transition => return applyWorldTransition(self, binding, command.worldTransition() orelse return error.InvalidEventCommand, state),
         .room_flag_clear => {
             if (binding.room_package == null) return false;
             const index = command.index.?;

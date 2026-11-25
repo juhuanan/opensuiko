@@ -135,16 +135,16 @@ fn beginReaction(self: *State, attacker: usize, defender: usize, kind: battle.co
     const responder = if (kind.ordinary()) null else packet.defenderFor(defender_id, kind) orelse return error.MissingCounterProgram;
     for ([_][]const u8{ origin.attack_program, origin.return_program }) |program| {
         try packet.validateProgram(program, attacker_resource);
-        if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, attacker_resource, program, 0, 0, false);
+        if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), attacker_resource, program, 0, 0, false);
     }
     if (kind == .projectile) {
         const child = packet.meleeEnemy(attacker_id).?.projectile.?;
         try packet.validateProgram(child.child_program, attacker_resource);
-        if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, attacker_resource, child.child_program, child.animation, 0, true);
+        if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), attacker_resource, child.child_program, child.animation, 0, true);
     }
     if (packet.cooperation) |binding| if (std.mem.eql(u8, binding.id, attacker_id)) {
         try packet.validateProgram(binding.fallback_program, attacker_resource);
-        if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, attacker_resource, binding.fallback_program, 0, 0, false);
+        if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), attacker_resource, binding.fallback_program, 0, 0, false);
     };
     if (guard) |index| {
         const cover = packet.cover orelse return error.MissingCounterProgram;
@@ -152,21 +152,21 @@ fn beginReaction(self: *State, attacker: usize, defender: usize, kind: battle.co
         const melee = packet.meleeEnemy(attacker_id) orelse return error.MissingCounterProgram;
         for ([_][]const u8{ cover.guard_program, melee.hurt_program }) |program| {
             try packet.validateProgram(program, resource);
-            if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, resource, program, 0, 0, false);
+            if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), resource, program, 0, 0, false);
         }
         for ([_][]const u8{ cover.ward_program, cover.return_program }) |program| {
             try packet.validateProgram(program, defender_resource);
-            if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, defender_resource, program, 0, 0, false);
+            if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), defender_resource, program, 0, 0, false);
         }
     } else if (kind.party()) {
         const ranged = packet.partyAttacker(attacker_id, kind) orelse return error.MissingCounterProgram;
         const hurt = if (critical) ranged.critical_hurt_program orelse ranged.hurt_program else ranged.hurt_program;
         try packet.validateProgram(hurt, defender_resource);
-        if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, defender_resource, hurt, 0, 0, false);
+        if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), defender_resource, hurt, 0, 0, false);
         if (kind.miss()) {
             const reaction = packet.rangedDodge(defender_id) orelse return error.MissingCounterProgram;
             try packet.validateProgram(reaction.response_program, defender_resource);
-            if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, defender_resource, reaction.response_program, 0, 0, false);
+            if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), defender_resource, reaction.response_program, 0, 0, false);
         }
     } else if (kind.ordinary()) {
         const reaction = packet.partyReaction(defender_id) orelse return error.MissingCounterProgram;
@@ -174,14 +174,14 @@ fn beginReaction(self: *State, attacker: usize, defender: usize, kind: battle.co
         const hurt = if (kind == .special) (melee.special orelse return error.MissingCounterProgram).hurt_program else melee.hurt_program;
         for ([_][]const u8{ reaction.response_program, hurt }) |program| {
             try packet.validateProgram(program, defender_resource);
-            if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, defender_resource, program, 0, 0, false);
+            if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), defender_resource, program, 0, 0, false);
         }
     } else {
         try packet.validateProgram(responder.?.hurt_program, attacker_resource);
-        if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, attacker_resource, responder.?.hurt_program, 0, 0, false);
+        if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), attacker_resource, responder.?.hurt_program, 0, 0, false);
         for ([_][]const u8{ responder.?.response_program, responder.?.strike_program }) |program| {
             try packet.validateProgram(program, defender_resource);
-            if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, defender_resource, program, 0, 0, false);
+            if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), defender_resource, program, 0, 0, false);
         }
     }
     const victim = guard orelse if (kind.ordinary()) defender else attacker;
@@ -244,7 +244,7 @@ pub fn applyCounterContact(self: *State, leader: usize) !void {
         break :blk base * binding.damage_numerator / binding.damage_denominator;
     } else base * @as(u32, if (playback.critical) 3 else 1);
     playback.amount = if (playback.action != null and playback.action.?.regional_mode == .creeper_special) blk: {
-        const hit_amount = if (self.protection[victim] == 0) amount else 0;
+        const hit_amount = if (self.actor_conditions[victim].protection_rounds == 0) amount else 0;
         const applied: u32 = if (self.hp(victim) == 0) 0 else hit_amount;
         if (victim < self.partyCount()) {
             self.progress.party[victim].hp = @intCast(@as(u32, self.hp(victim)) -| applied);
@@ -252,7 +252,7 @@ pub fn applyCounterContact(self: *State, leader: usize) !void {
         } else self.enemy_hp[victim - self.partyCount()] = @intCast(@as(u32, self.hp(victim)) -| applied);
         break :blk playback.amount +| applied;
     } else blk: {
-        const settled = if (self.protection[victim] == 0) amount else 0;
+        const settled = if (self.actor_conditions[victim].protection_rounds == 0) amount else 0;
         if (victim < self.partyCount()) {
             self.progress.party[victim].hp = @intCast(@as(u32, self.hp(victim)) -| settled);
             if (self.hp(victim) == 0) self.markPartyKnockout(victim);
@@ -273,7 +273,7 @@ pub fn advanceCoverActor(self: *State, actor: usize) void {
         if (current.highlights & 8 != 0) return;
         if (self.revivalAge(actor)) |age| {
             if (age < self.rules.automatic_revival.?.release_delay) current.highlights |= 1 else current.highlights &= ~@as(u8, 1);
-        } else if (self.hp(actor) == 0 and self.knockout_pending[actor] and battle.revival.hasBuddha(self.*, actor)) {
+        } else if (self.hp(actor) == 0 and self.party_knockouts[actor].pending and battle.revival.hasBuddha(self.*, actor)) {
             if (!self.commitPartyKnockout(actor)) current.highlights |= 1;
         }
         return;
@@ -310,7 +310,7 @@ pub fn advanceStrongArmActor(self: *State, actor: usize, runtime: *host.Runtime)
                 inline for (.{ "approach_program", "lift_program", "launch_program" }) |name| {
                     const program = @field(binding, name);
                     try packet.validateProgram(program, resource);
-                    if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet, resource, program, 0, 0, false);
+                    if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), resource, program, 0, 0, false);
                 }
                 const position = q12(layout.worldPosition(self, other));
                 const resource_index = for (self.unite_actors.?.animations.resources, 0..) |value, index| {
@@ -359,16 +359,22 @@ pub fn finishCounterController(self: *State, leader: usize) void {
 pub fn retainPosition(self: *State, actor: usize) void {
     const current = self.unite_vm.actors[actor];
     const home = self.uniteVmHome(actor);
-    self.actor_world_offsets[actor] = .{ .x = @as(f32, @floatFromInt(current.position_q12[0])) / 4096 - home.x, .y = @as(f32, @floatFromInt(current.position_q12[1])) / 4096 - home.y, .z = @as(f32, @floatFromInt(current.position_q12[2])) / 4096 - home.z };
-    if (self.content.world_art == null) self.actor_screen_offsets[actor] = current.screen_offset;
-    self.actor_node_angles[actor] = .{ 0, 0, 0 };
+    const transform = &self.actor_transforms[actor];
+    transform.world_offset = .{
+        .x = @as(f32, @floatFromInt(current.position_q12[0])) / 4096 - home.x,
+        .y = @as(f32, @floatFromInt(current.position_q12[1])) / 4096 - home.y,
+        .z = @as(f32, @floatFromInt(current.position_q12[2])) / 4096 - home.z,
+    };
+    if (self.content.world_art == null) transform.screen_offset = current.screen_offset;
+    transform.node_angles = .{ 0, 0, 0 };
 }
 pub fn repeatCounter(self: *State, leader: usize, runtime: *host.Runtime) !bool {
     const playback = self.unite_vm.counter_actions[leader].?;
     if (playback.kind != .parry and !playback.kind.party()) return false;
-    const target = self.nextDoubleBeatTarget(playback.attacker, playback.defender - self.partyCount()) orelse return false;
+    const enemy = self.nextDoubleBeatTarget(playback.attacker, playback.defender - self.partyCount()) orelse return false;
+    const target = self.partyCount() + enemy;
     if (self.active) |effect| if (!effect.counter_attack and effect.actor != playback.attacker) return true;
-    if (self.coordinatorLocked(target + self.partyCount()) or self.unite_vm.ownsActor(target + self.partyCount())) {
+    if (self.coordinatorLocked(target) or self.unite_vm.ownsActor(target)) {
         // The common return callback retries the selected busy target before accuracy or latch changes.
         return true;
     }
@@ -378,12 +384,12 @@ pub fn repeatCounter(self: *State, leader: usize, runtime: *host.Runtime) !bool 
     self.unite_vm.counter_actions[leader].?.attacker_done = true;
     self.finishCounterController(leader);
     if (playback.defender_done) self.unite_vm.counter_actions[leader] = null;
-    self.beginAttack(playback.attacker, target, false, playback.defender);
+    self.beginAttack(playback.attacker, target, .{ .followup = playback.defender });
     if (self.replay_exhausted) return error.RandomInputExhausted;
     if (self.replay_unsupported != null) return error.UnsupportedCounterFollowup;
     if (self.active != null and !self.active.?.counter_attack) {
         self.active.?.motion_origin = .{ .x = @as(f32, @floatFromInt(origin[0])) / 4096, .y = @as(f32, @floatFromInt(origin[1])) / 4096, .z = @as(f32, @floatFromInt(origin[2])) / 4096 };
-        self.actor_world_offsets[playback.attacker] = .{ .x = 0, .y = 0, .z = 0 };
+        self.actor_transforms[playback.attacker].world_offset = .{ .x = 0, .y = 0, .z = 0 };
     }
     if (self.coordinator != null) self.active.?.started_at = self.action_ticks else self.action_ticks = 0;
     if (self.active != null and self.active.?.counter_attack) for (&self.unite_vm.counter_actions, 0..) |*value, index| if (value.*) |*next| {
@@ -418,7 +424,7 @@ pub fn finishCounterActors(self: *State) void {
             if (playback.guard == actor and self.revivalAge(actor) != null) continue;
             if (self.unite_vm.actors[actor].suikomi_phase != null) continue;
             retainPosition(self, actor);
-            if (actor < self.actor_sizes.len) self.actor_sizes[actor] = 4096;
+            if (actor < self.actor_transforms.len) self.actor_transforms[actor].scale_q12 = 4096;
             self.unite_vm.scripted_actors[actor] = null;
             if (role == 0) playback.attacker_done = true else if (role == 1) playback.defender_done = true else if (role == 2) playback.guard_done = true else playback.cooperation.assistant_done = true;
             if (actor < self.partyCount()) {
@@ -448,9 +454,9 @@ pub fn syncRegionalActorVisuals(self: *State, actor: usize, runtime: *const host
     for (self.unite_vm.counter_actions) |maybe| if (maybe) |playback| {
         if (playback.action) |action| if (action.regional_mode == .creeper_special and playback.defender == actor) {
             const current = runtime.actors[actor];
-            if (current.suikomi_phase != null or self.actor_sizes[actor] != current.draw_size_q12) {
-                self.actor_sizes[actor] = current.draw_size_q12;
-                self.actor_node_angles[actor] = current.draw_angles;
+            if (current.suikomi_phase != null or self.actor_transforms[actor].scale_q12 != current.draw_size_q12) {
+                self.actor_transforms[actor].scale_q12 = current.draw_size_q12;
+                self.actor_transforms[actor].node_angles = current.draw_angles;
             }
             return;
         };

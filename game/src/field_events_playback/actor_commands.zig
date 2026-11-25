@@ -31,20 +31,20 @@ pub fn applyReleaseActor(self: *Session, binding: Binding, command: runtime.Comm
     return true;
 }
 
-pub fn applyPlaceActor(self: *Session, binding: Binding, command: runtime.Command) !bool {
+pub fn applyPlaceActor(self: *Session, binding: Binding, placement: runtime.ActorPlacement) !bool {
     if (!binding.content.hasActorPositions()) return false;
     const packet = binding.ordinary orelse return false;
     const actors = if (self.ordinary_actors) |*value| value else return false;
     const jobs = self.tracks();
-    for (jobs) |job| if (job != null and job.?.state.active and std.mem.eql(u8, binding.content.tracks[job.?.track].actor, command.actor.?)) return false;
-    actors.place(packet, command.actor.?, command.x, command.y) catch |err| switch (err) {
+    for (jobs) |job| if (job != null and job.?.state.active and std.mem.eql(u8, binding.content.tracks[job.?.track].actor, placement.actor)) return false;
+    actors.place(packet, placement.actor, placement.x, placement.y) catch |err| switch (err) {
         error.UnknownFieldActor, error.FieldActorNotConstructed, error.FieldActorReleased, error.FieldActorGraphicsUnavailable, error.FieldActorBusy => return false,
         else => return err,
     };
     return true;
 }
 
-pub fn applyActorAxis(self: *Session, binding: Binding, command: runtime.Command) bool {
+pub fn applyActorAxis(self: *Session, binding: Binding, movement: runtime.ActorAxisMove) bool {
     const access = binding.ground orelse return false;
     const initializer = std.mem.eql(u8, self.schema, "suikoden-field-event/16") and std.mem.eql(u8, self.instance.?.program_id, "vb6_r06_init_08");
     if (access.identity.len == 0 or (!initializer and ((!std.mem.eql(u8, binding.content.id, "vb6_room6_e7") and !std.mem.eql(u8, self.schema, "suikoden-field-event/17")) or !std.mem.eql(u8, self.instance.?.program_id, "vb6_r06_entity07_followon")))) return false;
@@ -52,20 +52,28 @@ pub fn applyActorAxis(self: *Session, binding: Binding, command: runtime.Command
     const packet = binding.ordinary orelse return false;
     const actors = if (self.ordinary_actors) |*value| value else return false;
     const slot = for (packet.actors, 0..) |definition, index| {
-        if (std.mem.eql(u8, definition.id, command.actor.?)) break index;
+        if (std.mem.eql(u8, definition.id, movement.actor)) break index;
     } else return false;
-    const avatar = actors.actor(packet, command.actor.?) catch return false;
+    const avatar = actors.actor(packet, movement.actor) catch return false;
     if (avatar.support != null or avatar.motion.moving() or access.ground_fn(access.context, avatar.id, avatar.motion) != true) return false;
     var next_motion = avatar.motion;
-    if (command.kind == .actor_x) next_motion.x = @as(i32, command.value.?) * 8 else next_motion.y = @as(i32, command.value.?) * 8;
+    const pixels = @as(i32, movement.cell) * 8;
+    switch (movement.axis) {
+        .x => next_motion.x = pixels,
+        .y => next_motion.y = pixels,
+    }
     if (access.ground_fn(access.context, avatar.id, next_motion) != true) return false;
     if (initializer) {
-        if (batch != 1 or self.position_history != null or (command.kind == .actor_x and (command.origin != 1 or command.value != 24)) or (command.kind == .actor_y and (command.origin != 2 or command.value != 25))) return false;
-    } else if (command.kind == .actor_x) {
-        if (command.origin != 0 or batch != 1 or self.position_history != null) return false;
+        const expected_origin, const expected_cell = switch (movement.axis) {
+            .x => .{ @as(u16, 1), @as(u8, 24) },
+            .y => .{ @as(u16, 2), @as(u8, 25) },
+        };
+        if (batch != 1 or self.position_history != null or movement.origin != expected_origin or movement.cell != expected_cell) return false;
+    } else if (movement.axis == .x) {
+        if (movement.origin != 0 or batch != 1 or self.position_history != null) return false;
         self.position_history = .{ .actor = @intCast(slot), .instance = self.serial, .x_batch = batch, .support_identity = access.identity };
     } else {
-        if (command.origin != 1 or batch != 2 or self.position_history == null or self.position_history.?.actor != slot or !std.mem.eql(u8, self.position_history.?.support_identity, access.identity)) return false;
+        if (movement.origin != 1 or batch != 2 or self.position_history == null or self.position_history.?.actor != slot or !std.mem.eql(u8, self.position_history.?.support_identity, access.identity)) return false;
         self.position_history.?.y_batch = batch;
     }
     avatar.motion = next_motion;
@@ -74,49 +82,42 @@ pub fn applyActorAxis(self: *Session, binding: Binding, command: runtime.Command
     return true;
 }
 
-pub fn applyActorTransition(self: *Session, binding: Binding, command: runtime.Command) !bool {
-    if (command.kind == .actor_transition and !std.mem.eql(u8, command.actor.?, "hero")) {
-        if (runtime.partyActorIndex(command.actor.?)) |index| {
+pub fn applyActorTransition(self: *Session, binding: Binding, facing: runtime.ActorFacing) !bool {
+    const direction: motion.Direction = switch (facing.variant) {
+        .down => .down,
+        .up => .up,
+        .left => .left,
+        .right => .right,
+    };
+    if (!std.mem.eql(u8, facing.actor, "hero")) {
+        if (runtime.partyActorIndex(facing.actor)) |index| {
             if (!binding.content.hasPartyScene() or !std.mem.eql(u8, binding.dialogue.schema, events.DialogueData.party_schema) or !binding.queues.isRoom()) return false;
             const queue = if (self.party_queue) |*value| value else return false;
             if (index >= queue.count) return false;
-            const direction = ([_]motion.Direction{ .down, .up, .left, .right })[command.transition.?];
             try queue.followers[index].?.selectFacing(binding.queues.graphics, direction, false);
             return true;
         }
         const packet = binding.ordinary orelse return false;
         const actors = if (self.ordinary_actors) |*value| value else return false;
-        actors.transition(packet, binding.animations, command.actor.?, command.transition.?) catch |err| switch (err) {
+        actors.transition(packet, binding.animations, facing.actor, @backingInt(facing.variant)) catch |err| switch (err) {
             error.UnknownFieldActor, error.FieldActorNotConstructed, error.FieldActorReleased => return false,
             else => return err,
         };
         return true;
     }
-    const transition: u2 = if (command.kind == .source_hero_transition) ([_]u2{ 1, 3, 0, 2 })[command.transition.?] else command.transition.?;
-    const direction: motion.Direction = switch (transition) {
-        0 => .down,
-        1 => .up,
-        2 => .left,
-        3 => .right,
-    };
     const previous_primary = self.hero_sprite.?.variant;
     self.hero_sprite.?.select(binding.hero_animation, direction, false);
     if (self.hero_descriptor_state) |*retained| {
         const source = binding.hero_descriptor orelse return error.MissingHeroDescriptorContext;
         if (try retained.auxiliary.opcode11(binding.hero_animation, previous_primary, @intCast(self.hero_sprite.?.variant), source.room_byte7, retained.tint_word)) |attr| retained.primary_attr_18 = attr;
     }
-    self.hero_flags = switch (transition) {
-        0 => self.hero_flags & 2,
-        1 => self.hero_flags | 1,
-        2 => self.hero_flags & 1,
-        3 => self.hero_flags | 2,
+    self.hero_flags = switch (facing.variant) {
+        .down => self.hero_flags & 2,
+        .up => self.hero_flags | 1,
+        .left => self.hero_flags & 1,
+        .right => self.hero_flags | 2,
     };
-    self.facing = switch (direction) {
-        .down => .down,
-        .up => .up,
-        .left => .left,
-        .right => .right,
-    };
+    self.facing = events.fieldDirection(facing.variant.direction());
     return true;
 }
 

@@ -19,7 +19,7 @@ fn dispatchPartyRecipient(self: *State, bundle: *const host.Bundle, runtime: *ho
         if (std.mem.eql(u8, resource.id, id)) break index;
     } else return error.MissingActorResource;
     runtime.actors[recipient] = try host.Actor.init(bundle.animations.resources[resource_index], position(self, recipient));
-    runtime.actors[recipient].screen_offset = self.actor_screen_offsets[recipient];
+    runtime.actors[recipient].screen_offset = self.actor_transforms[recipient].screen_offset;
     self.unite_vm.scripted_actors[recipient] = .{ .family = .enemy_magic, .leader = @intCast(owner), .resource = @intCast(resource_index) };
     try runtime.dispatch(@intCast(recipient), @intCast(owner), bundle.programs.find(program).?);
 }
@@ -34,7 +34,7 @@ pub fn beginEnemyMagic(self: *State, owner: usize, recipient: usize) !void {
     if (!self.participates(recipient) and (!retained or self.departed[recipient])) return error.InvalidActorBinding;
     if (self.active != null or self.unite_vm.ownsActor(owner) or self.unite_vm.enemy_magic_actions[owner] != null) return error.ActorAlreadyOwned;
     for (0..self.partyCount()) |actor| if (!battle.revival.committedPartyInactive(self.*, actor) and
-        (self.knockout_pending[actor] or self.coordinatorLocked(actor))) return error.ActorAlreadyOwned;
+        (self.party_knockouts[actor].pending or self.coordinatorLocked(actor))) return error.ActorAlreadyOwned;
     const resource = bundle.animations.find(enemy_id) orelse return error.MissingActorResource;
     const target_resource = bundle.animations.find(self.progress.party[recipient].id) orelse return error.MissingActorResource;
     if (area_binding) |binding| {
@@ -42,14 +42,14 @@ pub fn beginEnemyMagic(self: *State, owner: usize, recipient: usize) !void {
             const spell_art = (self.spell_scenes orelse return error.MissingEnemyMagicArt).enemy_magic_art orelse return error.MissingEnemyMagicArt;
             if (binding.kind().? == .sorcerer and spell_art.center(self.progress.party[recipient].id, target_resource.find(0).?.frames[0].pose) == null) return error.MissingEnemyMagicArt;
             if (binding.kind().? == .earth_golem and (!spell_art.hasClip(.golem_rock) or !spell_art.hasClip(.golem_impact))) return error.MissingEnemyMagicArt;
-            try physical_art.checkProgramArt(self.*, bundle, resource, binding.owner_program, 0, 0, false);
+            try physical_art.checkProgramArt(self.*, bundle.library(), resource, binding.owner_program, 0, 0, false);
             if (!binding.group) {
-                try physical_art.checkProgramArt(self.*, bundle, target_resource, binding.recipient_program, 0, 0, false);
+                try physical_art.checkProgramArt(self.*, bundle.library(), target_resource, binding.recipient_program, 0, 0, false);
             } else for (0..self.partyCount()) |slot| if (!battle.revival.committedPartyInactive(self.*, slot)) {
                 const slot_res = bundle.animations.find(self.progress.party[slot].id) orelse return error.MissingActorResource;
                 if (binding.kind().? == .earth_golem and spell_art.center(self.progress.party[slot].id, slot_res.find(0).?.frames[0].pose) == null) return error.MissingEnemyMagicArt;
-                try physical_art.checkProgramArt(self.*, bundle, slot_res, binding.recipient_program, 0, 0, false);
-                if (binding.wave_recipient_program) |wave_program| try physical_art.checkProgramArt(self.*, bundle, slot_res, wave_program, 0, 0, false);
+                try physical_art.checkProgramArt(self.*, bundle.library(), slot_res, binding.recipient_program, 0, 0, false);
+                if (binding.wave_recipient_program) |wave_program| try physical_art.checkProgramArt(self.*, bundle.library(), slot_res, wave_program, 0, 0, false);
             };
         }
         if (!binding.group) {
@@ -70,8 +70,8 @@ pub fn beginEnemyMagic(self: *State, owner: usize, recipient: usize) !void {
         if (self.content.presentation_ready) {
             const spell_art = (self.spell_scenes orelse return error.MissingEnemyMagicArt).enemy_magic_art orelse return error.MissingEnemyMagicArt;
             if (spell_art.center(self.progress.party[recipient].id, target_resource.find(0).?.frames[0].pose) == null) return error.MissingEnemyMagicArt;
-            try physical_art.checkProgramArt(self.*, bundle, resource, binding.owner_program, 0, 0, false);
-            try physical_art.checkProgramArt(self.*, bundle, target_resource, binding.recipient_program, 0, 0, false);
+            try physical_art.checkProgramArt(self.*, bundle.library(), resource, binding.owner_program, 0, 0, false);
+            try physical_art.checkProgramArt(self.*, bundle.library(), target_resource, binding.recipient_program, 0, 0, false);
         }
         if (self.runes[recipient] != null and self.runeByteFor(recipient) == null) return error.MissingBattleRuneData;
         self.unite_vm.auxiliary_capacity = @intCast(19 - self.partyCount() - self.enemyCount());
@@ -92,7 +92,7 @@ pub fn prepareEnemyMagic(self: *State, owner: usize, runtime: *host.Runtime) !vo
         if (std.mem.eql(u8, entry.id, resource.id)) break index;
     } else return error.MissingActorResource;
     runtime.actors[owner] = try @import("battle_enemy_idle.zig").prepareActor(self, owner, resource, position(self, owner));
-    runtime.actors[owner].screen_offset = self.actor_screen_offsets[owner];
+    runtime.actors[owner].screen_offset = self.actor_transforms[owner].screen_offset;
     self.unite_vm.scripted_actors[owner] = .{ .family = .enemy_magic, .leader = @intCast(owner), .resource = @intCast(resource_index) };
     playback.prepared = true;
     try runtime.dispatch(@intCast(owner), playback.recipient, bundle.programs.find(owner_program).?);
@@ -115,16 +115,7 @@ pub fn advanceEnemyMagicActor(self: *State, owner: usize, runtime: *host.Runtime
             party_q12[slot] = position(self, slot);
             party_active[slot] = !battle.revival.committedPartyInactive(self.*, slot);
         }
-        const RollCtx = struct {
-            state: *State,
-            pub fn next(ctx: *@This()) !u15 {
-                const value = ctx.state.roll();
-                if (ctx.state.replay_exhausted) return error.RandomInputExhausted;
-                return value;
-            }
-        };
-        var roll_ctx = RollCtx{ .state = self };
-        const event = try playback.advanceArea(binding, &runtime.actors[owner], party_q12, party_active, &roll_ctx);
+        const event = try playback.advanceArea(binding, &runtime.actors[owner], party_q12, party_active, self);
         if (event.camera_pulse_z_q12) |delta_z| {
             if (self.actor_camera) |*controller| {
                 controller.velocity[0][2] = delta_z;
@@ -159,9 +150,9 @@ pub fn advanceEnemyMagicActor(self: *State, owner: usize, runtime: *host.Runtime
                 const inactive = battle.revival.committedPartyInactive(self.*, recipient);
                 if (playback.amount != null) return error.DuplicateEnemyMagicDamage;
                 const rune = if (self.runes[recipient] == null) 0 else self.runeByteFor(recipient) orelse return error.MissingBattleRuneData;
-                const draw = try roll_ctx.next();
+                const draw = try battle.enemy_magic.nextBattleDraw(self);
                 const computed = binding.damage(self.stats(owner).magic, self.stats(recipient).magic, rune, draw, recipient);
-                playback.amount = if (self.protection[recipient] == 0) computed else 0;
+                playback.amount = if (self.actor_conditions[recipient].protection_rounds == 0) computed else 0;
                 self.enemy_magic_damage[recipient] = .{ .issued_at = self.camera_ticks, .amount = playback.amount.? };
                 self.progress.party[recipient].hp = @intCast(@as(u32, self.hp(recipient)) -| playback.amount.?);
                 if (!inactive) self.markPartyKnockout(recipient);
@@ -175,9 +166,9 @@ pub fn advanceEnemyMagicActor(self: *State, owner: usize, runtime: *host.Runtime
                 for (0..self.partyCount()) |slot| if (party_active[slot]) {
                     if (playback.group_amounts[slot] != null) return error.DuplicateEnemyMagicDamage;
                     const rune = if (self.runes[slot] == null) 0 else self.runeByteFor(slot) orelse return error.MissingBattleRuneData;
-                    const draw = try roll_ctx.next();
+                    const draw = try battle.enemy_magic.nextBattleDraw(self);
                     const computed = binding.damage(self.stats(owner).magic, self.stats(slot).magic, rune, draw, slot);
-                    const amount = if (self.protection[slot] == 0) computed else 0;
+                    const amount = if (self.actor_conditions[slot].protection_rounds == 0) computed else 0;
                     playback.group_amounts[slot] = amount;
                     total += amount;
                     self.enemy_magic_damage[slot] = .{ .issued_at = self.camera_ticks, .amount = amount };
@@ -220,7 +211,7 @@ pub fn advanceEnemyMagicActor(self: *State, owner: usize, runtime: *host.Runtime
         const draw = self.roll();
         if (self.replay_exhausted) return error.RandomInputExhausted;
         const computed = binding.damage(self.stats(owner).magic, self.stats(recipient).magic, rune, draw);
-        playback.amount = if (self.protection[recipient] == 0) computed else 0;
+        playback.amount = if (self.actor_conditions[recipient].protection_rounds == 0) computed else 0;
         self.enemy_magic_damage[recipient] = .{ .issued_at = self.camera_ticks, .amount = playback.amount.? };
         self.progress.party[recipient].hp = @intCast(@as(u32, self.hp(recipient)) -| playback.amount.?);
         if (!inactive) self.markPartyKnockout(recipient);
@@ -242,9 +233,9 @@ pub fn finishEnemyMagicActors(self: *State) void {
                 const current = &self.unite_vm.actors[actor];
                 if (current.machine == null or !current.machine.?.halted or current.highlights != 0 or current.palette_cycle_active) continue;
                 if (role == 1 and playback.phase != .complete) continue;
-                if (self.content.world_art == null) self.actor_screen_offsets[actor] = current.screen_offset;
+                if (self.content.world_art == null) self.actor_transforms[actor].screen_offset = current.screen_offset;
                 self.unite_vm.scripted_actors[actor] = null;
-                self.actor_node_angles[actor] = .{ 0, 0, 0 };
+                self.actor_transforms[actor].node_angles = .{ 0, 0, 0 };
                 if (role == 0) playback.recipient_done = true else {
                     playback.owner_done = true;
                     if (self.active) |effect| {
@@ -268,17 +259,17 @@ pub fn finishEnemyMagicActors(self: *State) void {
                 if (binding.family != .enemy_magic or binding.leader != owner) continue;
                 const current = &self.unite_vm.actors[slot];
                 if (current.machine == null or !current.machine.?.halted or current.highlights != 0 or current.palette_cycle_active) continue;
-                if (self.content.world_art == null) self.actor_screen_offsets[slot] = current.screen_offset;
+                if (self.content.world_art == null) self.actor_transforms[slot].screen_offset = current.screen_offset;
                 self.unite_vm.scripted_actors[slot] = null;
-                self.actor_node_angles[slot] = .{ 0, 0, 0 };
+                self.actor_transforms[slot].node_angles = .{ 0, 0, 0 };
                 playback.group_recipients_done |= @as(u8, 1) << @intCast(slot);
             }
             if (self.unite_vm.scripted_actors[owner]) |binding| if (binding.family == .enemy_magic and binding.leader == owner) {
                 const current = &self.unite_vm.actors[owner];
                 if (current.machine != null and current.machine.?.halted and current.highlights == 0 and !current.palette_cycle_active and playback.phase == .complete) {
-                    if (self.content.world_art == null) self.actor_screen_offsets[owner] = current.screen_offset;
+                    if (self.content.world_art == null) self.actor_transforms[owner].screen_offset = current.screen_offset;
                     self.unite_vm.scripted_actors[owner] = null;
-                    self.actor_node_angles[owner] = .{ 0, 0, 0 };
+                    self.actor_transforms[owner].node_angles = .{ 0, 0, 0 };
                     playback.owner_done = true;
                     if (self.active) |effect| {
                         if (effect.kind == .enemy_magic and effect.actor == owner) self.active = null;

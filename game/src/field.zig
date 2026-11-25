@@ -1,8 +1,8 @@
 const std = @import("std");
 const validation = @import("validation");
-const movement = @import("field_movement");
-const services = @import("field_services");
-const interaction = @import("field_interaction");
+const movement = @import("field_movement.zig");
+const services = @import("field_services.zig");
+const interaction = @import("field_interaction.zig");
 pub const game_state = @import("game_state.zig");
 pub const inn = @import("inn.zig");
 pub const items = game_state.items;
@@ -281,15 +281,13 @@ pub const Room = struct {
         return self.canStand(x, y);
     }
 
-    pub fn mutateScenery(self: Room, visit: *?scenery.State, command: game_state.event_runtime.Command) !void {
+    pub fn mutateScenery(self: Room, visit: *?scenery.State, operation: game_state.event_runtime.SceneryOperation) !void {
         const model = self.scenery_model orelse return error.InvalidFieldSceneryState;
-        const object = command.scenery_object orelse return error.InvalidFieldSceneryState;
         var state = visit.* orelse try scenery.State.init(model);
-        switch (command.kind) {
-            .scenery_stage => try state.stage(object),
-            .scenery_restore => try state.restore(model, object),
-            .scenery_append => _ = try state.append(model, object),
-            else => return error.InvalidFieldSceneryState,
+        switch (operation) {
+            .stage_instance => |instance| try state.stage(instance),
+            .restore_instance => |instance| try state.restore(model, instance),
+            .append_template => |template| _ = try state.append(model, template),
         }
         visit.* = state;
     }

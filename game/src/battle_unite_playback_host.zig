@@ -1,6 +1,6 @@
 const actor_host = @import("battle_actor_host.zig");
 const std = @import("std");
-const status = @import("battle_status");
+const status = @import("battle_status.zig");
 const battle_systems = @import("battle_systems");
 const unite_systems = battle_systems.unite;
 const layout = @import("battle_layout.zig");
@@ -322,7 +322,7 @@ pub fn beginUniteActors(self: *State, record: u8, leader: usize, target: usize) 
             if (std.mem.eql(u8, party.id, member.id)) break index;
         } else return error.MissingUniteParticipant;
         // shortcut: rotated Master–Pupil and Kai Flash bodies need the rotated packet footprint.
-        if ((record == 31 or (record == 10 and std.mem.eql(u8, member.id, "kai"))) and !std.mem.eql(i16, &self.actor_node_angles[slot], &.{ 0, 0, 0 })) return error.InvalidActorBinding;
+        if ((record == 31 or (record == 10 and std.mem.eql(u8, member.id, "kai"))) and !std.mem.eql(i16, &self.actor_transforms[slot].node_angles, &.{ 0, 0, 0 })) return error.InvalidActorBinding;
         const resource = bundle.animations.find(member.id).?;
         if (member.fan) |fan| if (self.content.uniteGraphicPose(member.id, resource.find(fan.animation).?.frames[0].pose, record) == null) return error.MissingUniteActorArt;
         var programs: [9][]const u8 = undefined;
@@ -373,7 +373,7 @@ pub fn beginUniteActors(self: *State, record: u8, leader: usize, target: usize) 
         if (member.leader != leader) continue;
         const position = layout.worldPosition(self, actor);
         self.unite_vm.actors[actor].position_q12 = .{ @intFromFloat(@round(position.x * 4096)), @intFromFloat(@round(position.y * 4096)), @intFromFloat(@round(position.z * 4096)) };
-        self.unite_vm.actors[actor].screen_offset = self.actor_screen_offsets[actor];
+        self.unite_vm.actors[actor].screen_offset = self.actor_transforms[actor].screen_offset;
         self.unite_vm.actors[actor].baseline_offset = self.partyProfile(actor).effect_offset orelse .{ 0, 0 };
         self.unite_vm.actors[actor].signals = self.unite_flags[actor];
     };
@@ -421,7 +421,7 @@ pub fn advanceUniteActors(self: *State) void {
             self.unite_vm.members[actor] = null;
         } else {
             // shortcut: rotated Master–Pupil and Kai Flash bodies need the rotated packet footprint.
-            if ((member.record == 31 or (member.record == 10 and std.mem.eql(u8, self.progress.party[actor].id, "kai"))) and !std.mem.eql(i16, &self.actor_node_angles[actor], &.{ 0, 0, 0 })) {
+            if ((member.record == 31 or (member.record == 10 and std.mem.eql(u8, self.progress.party[actor].id, "kai"))) and !std.mem.eql(i16, &self.actor_transforms[actor].node_angles, &.{ 0, 0, 0 })) {
                 self.replay_unsupported = .coordinator_action;
                 return;
             }
@@ -453,7 +453,7 @@ pub fn advanceUniteActors(self: *State) void {
         if (self.martial_queue) |queue| if (queue.owner == member.leader) continue;
         self.finishUniteMember(member.leader, actor);
         if (self.replay_exhausted or self.replay_unsupported != null) return;
-        if (self.content.world_art == null) self.actor_screen_offsets[actor] = self.unite_vm.actors[actor].screen_offset;
+        if (self.content.world_art == null) self.actor_transforms[actor].screen_offset = self.unite_vm.actors[actor].screen_offset;
         self.unite_returns[actor] = null;
         self.unite_vm.members[actor] = null;
     };
@@ -541,8 +541,8 @@ pub fn stepUniteScene(self: *State) !void {
     if (elapsed >= spec.recipient_at and phase_age < spec.recipient_rolls.len) {
         for (self.partyCount()..self.partyCount() + self.enemyCount()) |target| {
             if (self.hp(target) == 0) continue;
-            self.actor_node_angles[target][0] = if (phase_age + 1 < spec.recipient_rolls.len) 1 else 0;
-            self.actor_node_angles[target][2] = if (phase_age + 1 < spec.recipient_rolls.len) spec.recipient_rolls[phase_age] else 0;
+            self.actor_transforms[target].node_angles[0] = if (phase_age + 1 < spec.recipient_rolls.len) 1 else 0;
+            self.actor_transforms[target].node_angles[2] = if (phase_age + 1 < spec.recipient_rolls.len) spec.recipient_rolls[phase_age] else 0;
         }
     }
     if (spec.mode != .owner_clock and elapsed == spec.damage_at) {

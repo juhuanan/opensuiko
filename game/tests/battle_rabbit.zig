@@ -220,7 +220,7 @@ test "Rabbit live projectile owns damage protection reaction and source release 
             member.max_hp = 9999;
         }
         if (scenario == 1) state.actions[0] = .defend;
-        if (scenario == 2) state.protection[0] = 2;
+        if (scenario == 2) state.actor_conditions[0].protection_rounds = 2;
         if (scenario >= 3) members[0].hp = 1;
         if (scenario == 4) {
             state.phase = .resolving;
@@ -253,9 +253,9 @@ test "Rabbit live projectile owns damage protection reaction and source release 
         try std.testing.expectEqual(@as(?u32, 117), released);
         try std.testing.expectEqual(@as(usize, 1), draws.cursor);
         try std.testing.expect(!state.unite_vm.hasActors() and state.active == null);
-        if (scenario == 3) try std.testing.expect(members[0].status == .unconscious and !state.knockout_pending[0]);
+        if (scenario == 3) try std.testing.expect(members[0].status == .unconscious and !state.party_knockouts[0].pending);
         if (scenario == 4) {
-            try std.testing.expect(revived and members[0].status == .healthy and !state.knockout_pending[0]);
+            try std.testing.expect(revived and members[0].status == .healthy and !state.party_knockouts[0].pending);
             try std.testing.expectEqual(@as(u16, 50), members[0].hp);
             try std.testing.expectEqual(@as(usize, 0), members[0].inventory.count());
         }

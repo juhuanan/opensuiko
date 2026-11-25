@@ -224,6 +224,71 @@ pub const FieldEffectOperation = struct {
     effect: FieldEffect,
 };
 
+pub const SceneryOperation = union(enum) {
+    stage_instance: u16,
+    restore_instance: u16,
+    append_template: u16,
+};
+
+pub const RoomTransition = struct {
+    origin: u16,
+    destination: []const u8,
+    x: i32,
+    y: i32,
+    facing: ?Direction,
+    source_arrival: bool,
+    world_entry: union(enum) { reconcile, point: u8, named: []const u8 },
+};
+
+pub const WorldTransition = union(enum) {
+    pub const Cell = struct { x: u8, y: u8 };
+
+    destination: struct { room: []const u8, cell: Cell },
+    retained_region: Cell,
+    return_to_entry,
+};
+
+pub const ActorPlacement = struct {
+    actor: []const u8,
+    x: ?i32,
+    y: ?i32,
+    if_constructed: bool,
+};
+
+pub const ActorAxisMove = struct {
+    actor: []const u8,
+    axis: enum { x, y },
+    cell: u8,
+    origin: u16,
+};
+
+pub const ActorFacing = struct {
+    pub const Variant = enum(u2) {
+        down,
+        up,
+        left,
+        right,
+
+        pub fn direction(self: Variant) Direction {
+            return switch (self) {
+                .down => .down,
+                .up => .up,
+                .left => .left,
+                .right => .right,
+            };
+        }
+    };
+    actor: []const u8,
+    variant: Variant,
+    if_constructed: bool,
+};
+
+pub const ActorMotionRestore = struct {
+    actor: []const u8,
+    speed: u8,
+    if_constructed: bool,
+};
+
 pub const Command = struct {
     pub const Category = enum {
         control_flow,
@@ -430,6 +495,90 @@ pub const Command = struct {
         const y = self.y orelse return null;
         if (x < 0 or x > 2040 or @mod(x, 8) != 0 or y < 0 or y > 2040 or @mod(y, 8) != 0) return null;
         return .{ .origin = self.origin, .x = x, .y = y, .effect = self.effect orelse return null };
+    }
+
+    pub fn sceneryOperation(self: Command) ?SceneryOperation {
+        const object = self.scenery_object orelse return null;
+        return switch (self.kind) {
+            .scenery_stage => .{ .stage_instance = object },
+            .scenery_restore => .{ .restore_instance = object },
+            .scenery_append => .{ .append_template = object },
+            else => null,
+        };
+    }
+
+    pub fn roomTransition(self: Command) ?RoomTransition {
+        if (self.kind != .room_transition or self.return_to_entry or self.retain_world_region) return null;
+        if (self.world_entry != null and self.world_point != null) return null;
+        const x = self.x orelse return null;
+        const y = self.y orelse return null;
+        if (x < 0 or x > 2040 or @mod(x, 8) != 0 or y < 0 or y > 2040 or @mod(y, 8) != 0) return null;
+        return .{
+            .origin = self.origin,
+            .destination = self.destination orelse return null,
+            .x = x,
+            .y = y,
+            .facing = self.arrival_facing,
+            .source_arrival = self.source_arrival,
+            .world_entry = if (self.world_entry) |entry| .{ .named = entry } else if (self.world_point) |point| .{ .point = point } else .reconcile,
+        };
+    }
+
+    pub fn worldTransition(self: Command) ?WorldTransition {
+        if (self.kind != .world_transition or self.arrival_facing != null or self.source_arrival or self.world_entry != null or self.world_point != null) return null;
+        if (self.return_to_entry) {
+            if (self.destination != null or self.retain_world_region or self.x != null or self.y != null) return null;
+            return .return_to_entry;
+        }
+        const cell: WorldTransition.Cell = .{
+            .x = std.math.cast(u8, self.x orelse return null) orelse return null,
+            .y = std.math.cast(u8, self.y orelse return null) orelse return null,
+        };
+        if (self.retain_world_region) {
+            if (self.destination != null) return null;
+            return .{ .retained_region = cell };
+        }
+        return .{ .destination = .{ .room = self.destination orelse return null, .cell = cell } };
+    }
+
+    pub fn actorPlacement(self: Command) ?ActorPlacement {
+        if (self.kind != .place_actor or (self.x == null and self.y == null) or self.wait != null or self.requires != null) return null;
+        for ([_]?i32{ self.x, self.y }) |coordinate| if (coordinate) |value| {
+            if (value < 0 or value > 2040 or @mod(value, 8) != 0) return null;
+        };
+        return .{ .actor = self.actor orelse return null, .x = self.x, .y = self.y, .if_constructed = self.if_actor_constructed == true };
+    }
+
+    pub fn actorAxisMove(self: Command) ?ActorAxisMove {
+        if (self.kind != .actor_x and self.kind != .actor_y) return null;
+        return .{
+            .actor = self.actor orelse return null,
+            .axis = if (self.kind == .actor_x) .x else .y,
+            .cell = self.value orelse return null,
+            .origin = self.origin,
+        };
+    }
+
+    pub fn actorFacing(self: Command) ?ActorFacing {
+        const variant = self.transition orelse return null;
+        return switch (self.kind) {
+            .actor_transition => .{
+                .actor = self.actor orelse return null,
+                .variant = @fromBackingInt(@intCast(variant)),
+                .if_constructed = self.if_actor_constructed == true,
+            },
+            .source_hero_transition => .{
+                .actor = "hero",
+                .variant = ([_]ActorFacing.Variant{ .up, .right, .down, .left })[variant],
+                .if_constructed = false,
+            },
+            else => null,
+        };
+    }
+
+    pub fn actorMotionRestore(self: Command) ?ActorMotionRestore {
+        if (self.kind != .actor_motion) return null;
+        return .{ .actor = self.actor orelse return null, .speed = self.value orelse return null, .if_constructed = self.if_actor_constructed == true };
     }
 
     pub fn category(self: Command) Category {

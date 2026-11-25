@@ -1,6 +1,14 @@
 //! Enemy magic callbacks use named state; the battle owns actors, HP, RNG and art.
 const std = @import("std");
 const sin_cos = @import("battle_camera").sin_cos;
+const Actor = @import("battle_actor_host.zig").Actor;
+const CombatState = @import("battle.zig").State;
+
+pub fn nextBattleDraw(combat: *CombatState) !u15 {
+    const value = combat.roll();
+    if (combat.replay_exhausted) return error.RandomInputExhausted;
+    return value;
+}
 
 pub const ClipKind = enum { flare, impact, projectile, golem_rock, golem_impact };
 pub const Frame = struct { entry: u16, updates: u16 };
@@ -379,7 +387,7 @@ pub const Playback = struct {
         if (self.phase != .owner_script) return error.DuplicateEnemyMagicEffect;
         self.phase = .allocate;
     }
-    pub fn advance(self: *Playback, binding: Binding, actor: anytype, recipient_q12: [3]i32) Event {
+    pub fn advance(self: *Playback, binding: Binding, actor: *Actor, recipient_q12: [3]i32) Event {
         const p = binding.effect;
         var event = Event{};
         switch (self.phase) {
@@ -435,7 +443,7 @@ pub const Playback = struct {
         }
         return event;
     }
-    pub fn advanceArea(self: *Playback, binding: AreaBinding, actor: anytype, party_q12: [6][3]i32, party_active: [6]bool, roll_ctx: anytype) !Event {
+    pub fn advanceArea(self: *Playback, binding: AreaBinding, actor: *Actor, party_q12: [6][3]i32, party_active: [6]bool, combat: *CombatState) !Event {
         const w = binding.worker;
         const area = &(self.area orelse return error.MissingEnemyMagicBinding);
         var event = Event{};
@@ -471,8 +479,8 @@ pub const Playback = struct {
                 switch (area.*) {
                     .siren => |*siren| {
                         for (&siren.notes) |*note| {
-                            const draw = try roll_ctx.next();
-                            note.angle_z = @intCast(draw & 0xfff);
+                            const random = try nextBattleDraw(combat);
+                            note.angle_z = @intCast(random & 0xfff);
                         }
                     },
                     else => {},
@@ -502,21 +510,21 @@ pub const Playback = struct {
                         if (u <= lp.spawn_until) {
                             const span_x: u15 = @intCast(2 * lp.radius - 2);
                             for (lines) |*line| if (!line.enabled) {
-                                const d0 = try roll_ctx.next();
+                                const d0 = try nextBattleDraw(combat);
                                 const x: i32 = @as(i32, @intCast(d0 % span_x)) - (lp.radius - 1);
                                 const rem_xy: u32 = @intCast(lp.radius * lp.radius - x * x);
                                 const max_y = sin_cos.psxSqrt(rem_xy);
-                                const d1 = try roll_ctx.next();
+                                const d1 = try nextBattleDraw(combat);
                                 const y: i32 = if (max_y > 0) @as(i32, @intCast(d1 % @as(u15, @intCast(2 * max_y)))) - max_y else 0;
                                 const rem_z: u32 = @intCast(@max(0, @as(i32, @intCast(rem_xy)) - y * y));
                                 const z_lim = sin_cos.psxSqrt(rem_z) + 1;
                                 const z: i32 = if (((x + y) & 1) != 0) -(z_lim - 1) else (z_lim - 1);
-                                const d2 = try roll_ctx.next();
+                                const d2 = try nextBattleDraw(combat);
                                 const speed: i32 = lp.speed_base + @as(i32, d2 % lp.speed_mod);
                                 const vx = @divTrunc(-x * speed, lp.radius);
                                 const vy = @divTrunc(-y * speed, lp.radius);
                                 const vz = @divTrunc(-z * speed, lp.radius);
-                                const d3 = try roll_ctx.next();
+                                const d3 = try nextBattleDraw(combat);
                                 line.* = .{
                                     .enabled = true,
                                     .life = @intCast(d3 % lp.life_mod),

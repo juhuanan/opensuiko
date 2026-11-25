@@ -183,7 +183,7 @@ test "Dagon actor special preserves half damage poison spin return and primary-c
             member.status = .healthy;
         }
         if (mode == 1) state.actions[target] = .defend;
-        if (mode == 2) state.protection[target] = 2;
+        if (mode == 2) state.actor_conditions[target].protection_rounds = 2;
         if (mode == 3) state.runes[target] = data.systems.?.runeIndex("turtle").?;
         if (mode == 5) {
             members[target].hp = 1;
@@ -210,7 +210,7 @@ test "Dagon actor special preserves half damage poison spin return and primary-c
                     if (contact == null) contact = at;
                     try std.testing.expectEqual(@as(u32, amount), playback.amount);
                     try std.testing.expect(state.unite_vm.actors[owner].signals & 2 != 0);
-                    saw_poison = saw_poison or (state.knockout_status[target] orelse members[target].status) == .poisoned;
+                    saw_poison = saw_poison or (state.party_knockouts[target].prior_status orelse members[target].status) == .poisoned;
                 }
                 if (playback.action != null and playback.action.?.stage == .returning and returned == null) {
                     returned = state.camera_ticks;

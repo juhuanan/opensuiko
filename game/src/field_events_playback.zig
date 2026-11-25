@@ -8,22 +8,6 @@ const world_commands = @import("field_events_playback/world_commands.zig");
 const Session = events.Session;
 const Binding = events.Binding;
 
-pub const queuedBattle = handoffs.queuedBattle;
-pub const takeBattle = handoffs.takeBattle;
-pub const queuedFixedDice = handoffs.queuedFixedDice;
-pub const queuedItemOverload = handoffs.queuedItemOverload;
-pub const resumeItemOverload = handoffs.resumeItemOverload;
-pub const queuedPartySelect = handoffs.queuedPartySelect;
-pub const partySelectReservesSlot = handoffs.partySelectReservesSlot;
-pub const resumePartySelect = handoffs.resumePartySelect;
-pub const updateSelectorParty = handoffs.updateSelectorParty;
-pub const pendingFieldMusic = handoffs.pendingFieldMusic;
-pub const resumeFieldMusic = handoffs.resumeFieldMusic;
-pub const resumeFixedDice = handoffs.resumeFixedDice;
-pub const resumeBattleStory = handoffs.resumeBattleStory;
-pub const acknowledgeAudio = handoffs.acknowledgeAudio;
-pub const apply = world_commands.apply;
-
 const ItemGrant = struct { member: usize, inventory: field.items.Inventory };
 
 fn prepareChestItem(state: field.State, command: runtime.Command) !?ItemGrant {
@@ -102,7 +86,7 @@ pub noinline fn pump(self: *Session, binding: Binding, state: *field.State, stor
             self.* = staged;
             return true;
         }
-        if (staged.instance.?.pendingFixedDice() or staged.instance.?.pendingPartySelect() or staged.instance.?.pendingItemOverload() or (pendingFieldMusic(&staged) != null and program.entry != .initialization)) {
+        if (staged.instance.?.pendingFixedDice() or staged.instance.?.pendingPartySelect() or staged.instance.?.pendingItemOverload() or (handoffs.pendingFieldMusic(&staged) != null and program.entry != .initialization)) {
             self.* = staged;
             return true;
         }
@@ -112,7 +96,7 @@ pub noinline fn pump(self: *Session, binding: Binding, state: *field.State, stor
         var chest_failed_target: ?u16 = null;
         var item_grant: ?ItemGrant = null;
         for (batch.slice()) |effect| {
-            if (!try apply(&staged, binding, effect, &staged_state)) {
+            if (!try world_commands.apply(&staged, binding, effect, &staged_state)) {
                 self.blocker = .{ .entity = binding.content.program(self.instance.?.program_id).?.entity, .command = effect.origin };
                 return false;
             }

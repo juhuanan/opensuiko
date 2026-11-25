@@ -1,6 +1,4 @@
 const std = @import("std");
-const rewards = @import("battle_rewards");
-const status = @import("battle_status");
 const battle_systems = @import("battle_systems");
 const status_systems = battle_systems.status;
 const spell_systems = battle_systems.spells;
@@ -18,12 +16,14 @@ pub fn enemyAffinity(self: State, enemy_index: usize, element: systems.Element) 
 }
 pub fn spellValid(self: *const State, spell: systems.Spell, target: usize) bool {
     if (target >= self.partyCount() + self.enemyCount() or spell.allies != (target < self.partyCount())) return false;
-    if (spell.kind == .revive) return target < self.partyCount() and (!self.participates(target) or (spell.full_heal and (self.hp(target) < self.progress.party[target].max_hp or self.progress.party[target].status != .healthy or self.progress.party[target].balloons > 0 or self.asleep[target] > 0 or self.accuracy_reduced[target] or self.rune_blocked[target])));
+    const conditions = self.actor_conditions[target];
+    const has_ailment = conditions.sleep_turns > 0 or conditions.accuracy_reduced or conditions.rune_blocked;
+    if (spell.kind == .revive) return target < self.partyCount() and (!self.participates(target) or (spell.full_heal and (self.hp(target) < self.progress.party[target].max_hp or self.progress.party[target].status != .healthy or self.progress.party[target].balloons > 0 or has_ailment)));
     if (!self.participates(target)) return false;
     return switch (spell.kind) {
-        .heal => self.hp(target) < self.progress.party[target].max_hp or (spell.clear_status and (self.progress.party[target].status != .healthy or self.progress.party[target].balloons > 0 or self.asleep[target] > 0 or self.accuracy_reduced[target] or self.rune_blocked[target])),
-        .cure => self.progress.party[target].status == .poisoned or self.progress.party[target].balloons > 0 or self.asleep[target] > 0 or self.accuracy_reduced[target] or self.rune_blocked[target] or self.hp(target) < self.progress.party[target].max_hp,
-        .sleep => self.asleep[target] == 0,
+        .heal => self.hp(target) < self.progress.party[target].max_hp or (spell.clear_status and (self.progress.party[target].status != .healthy or self.progress.party[target].balloons > 0 or has_ailment)),
+        .cure => self.progress.party[target].status == .poisoned or self.progress.party[target].balloons > 0 or has_ailment or self.hp(target) < self.progress.party[target].max_hp,
+        .sleep => conditions.sleep_turns == 0,
         else => true,
     };
 }
@@ -52,10 +52,10 @@ pub fn spellTarget(self: State, index: usize) spell_systems.plan.Target {
             .max_hp = member.max_hp,
             .ko = member.status == .unconscious or self.departed[index],
             .status = self.spellStatus(index),
-            .protection = self.protection[index],
-            .sleep = self.asleep[index],
-            .skill_bonus = self.temporary_stats[index].skill_bonus,
-            .defense_bonus = self.temporary_stats[index].defense_bonus,
+            .protection = self.actor_conditions[index].protection_rounds,
+            .sleep = self.actor_conditions[index].sleep_turns,
+            .skill_bonus = self.actor_conditions[index].stat_modifiers.skill_bonus,
+            .defense_bonus = self.actor_conditions[index].stat_modifiers.defense_bonus,
         };
     }
     const enemy_index = index - self.partyCount();
@@ -77,10 +77,10 @@ pub fn spellTarget(self: State, index: usize) spell_systems.plan.Target {
         .airborne = if (enemy_index < self.enemyCount()) self.enemy(enemy_index).airborne orelse false else false,
         .death_immune = if (enemy_index < self.enemyCount()) self.enemy(enemy_index).death_immune orelse false else false,
         .ko = enemy_index >= self.enemyCount() or self.enemy_hp[enemy_index] == 0,
-        .protection = self.protection[index],
-        .sleep = self.asleep[index],
-        .skill_bonus = self.temporary_stats[index].skill_bonus,
-        .defense_bonus = self.temporary_stats[index].defense_bonus,
+        .protection = self.actor_conditions[index].protection_rounds,
+        .sleep = self.actor_conditions[index].sleep_turns,
+        .skill_bonus = self.actor_conditions[index].stat_modifiers.skill_bonus,
+        .defense_bonus = self.actor_conditions[index].stat_modifiers.defense_bonus,
     };
 }
 
@@ -89,8 +89,8 @@ pub fn spellStatus(self: State, index: usize) u16 {
     var mask: u16 = 0;
     if (member.status == .poisoned) mask |= status_systems.status.maskOf(.poison);
     for (0..member.balloons) |balloon| mask |= status_systems.status.maskOf(@fromBackingInt(@intCast(balloon + 1)));
-    if (self.accuracy_reduced[index]) mask |= status_systems.status.maskOf(.accuracy_reduced);
-    if (self.rune_blocked[index]) mask |= status_systems.status.maskOf(.rune_blocked);
+    if (self.actor_conditions[index].accuracy_reduced) mask |= status_systems.status.maskOf(.accuracy_reduced);
+    if (self.actor_conditions[index].rune_blocked) mask |= status_systems.status.maskOf(.rune_blocked);
     return mask;
 }
 
@@ -205,7 +205,7 @@ pub fn applySpellBridge(self: *State, effect: *Effect) void {
         if (after.hp < change.before.hp) effect.spell_hp_loss |= @as(u16, 1) << @intCast(index);
         effect.amounts[index] = difference;
         effect.affected |= @as(u16, 1) << @intCast(index);
-        self.temporary_stats[index] = .{ .skill_bonus = after.skill_bonus, .defense_bonus = after.defense_bonus };
+        self.actor_conditions[index].stat_modifiers = .{ .skill_bonus = after.skill_bonus, .defense_bonus = after.defense_bonus };
         if (index < self.partyCount()) {
             const member = &self.progress.party[index];
             member.hp = after.hp;
@@ -217,24 +217,24 @@ pub fn applySpellBridge(self: *State, effect: *Effect) void {
                 // shortcut: revival restores normal placement until its departure interaction is qualified.
                 self.departed[index] = false;
                 self.departures[index] = null;
-                self.knockout_pending[index] = false;
-                self.knockout_status[index] = null;
+                self.party_knockouts[index].pending = false;
+                self.party_knockouts[index].prior_status = null;
                 if (self.actions[index] == null) self.acted[index] = true;
             }
             if (after.status == 0 and change.before.status != 0 and !(after.ko and battle.revival.hasBuddha(self.*, index))) {
                 if (!after.ko) member.status = .healthy;
                 member.balloons = 0;
-                self.accuracy_reduced[index] = false;
-                self.rune_blocked[index] = false;
+                self.actor_conditions[index].accuracy_reduced = false;
+                self.actor_conditions[index].rune_blocked = false;
             }
-            self.asleep[index] = after.sleep;
-            self.protection[index] = after.protection;
+            self.actor_conditions[index].sleep_turns = after.sleep;
+            self.actor_conditions[index].protection_rounds = after.protection;
         } else {
             const enemy_index = index - self.partyCount();
             if (after.ko and !change.before.ko) effect.instant_knockouts |= @as(u16, 1) << @intCast(index);
             self.enemy_hp[enemy_index] = if (after.ko) 0 else after.hp;
-            self.asleep[index] = after.sleep;
-            self.protection[index] = after.protection;
+            self.actor_conditions[index].sleep_turns = after.sleep;
+            self.actor_conditions[index].protection_rounds = after.protection;
         }
     }
     self.progress.party[effect.actor].rune_charges = staged.actor.charges;
@@ -274,47 +274,47 @@ pub fn applySpell(self: *State, effect: *Effect) void {
         if (!self.spellValid(spell, target)) continue;
         effect.affected |= @as(u16, 1) << @intCast(target);
         if (spell.kind == .damage) {
-            const damage = if (self.protection[target] > 0) 0 else if (spell.element != null) systems.elementalDamage(spell.power, self.stats(effect.actor).magic, self.enemyAffinity(target - self.partyCount(), spell.element.?)) else @as(u32, spell.power) + self.stats(effect.actor).magic -| self.stats(target).magic;
+            const damage = if (self.actor_conditions[target].protection_rounds > 0) 0 else if (spell.element != null) systems.elementalDamage(spell.power, self.stats(effect.actor).magic, self.enemyAffinity(target - self.partyCount(), spell.element.?)) else @as(u32, spell.power) + self.stats(effect.actor).magic -| self.stats(target).magic;
             effect.amounts[target] = damage;
             self.enemy_hp[target - self.partyCount()] = @intCast(@as(u32, self.hp(target)) -| damage);
-            self.asleep[target] = 0;
+            self.actor_conditions[target].sleep_turns = 0;
         } else if (spell.kind == .skill_bonus_scale) {
-            self.temporary_stats[target].skill_bonus = @intCast(@divTrunc(@as(i32, self.temporary_stats[target].skill_bonus) * spell.power, 100));
+            self.actor_conditions[target].stat_modifiers.skill_bonus = @intCast(@divTrunc(@as(i32, self.actor_conditions[target].stat_modifiers.skill_bonus) * spell.power, 100));
         } else if (spell.kind == .defense_bonus_scale) {
-            self.temporary_stats[target].defense_bonus = @intCast(@divTrunc(@as(i32, self.temporary_stats[target].defense_bonus) * spell.power, 100));
+            self.actor_conditions[target].stat_modifiers.defense_bonus = @intCast(@divTrunc(@as(i32, self.actor_conditions[target].stat_modifiers.defense_bonus) * spell.power, 100));
         } else if (spell.kind == .protection) {
-            self.protection[target] = @intCast(spell.power);
+            self.actor_conditions[target].protection_rounds = @intCast(spell.power);
         } else if (spell.kind == .sleep) {
             if (target >= self.partyCount() and (self.enemy(target - self.partyCount()).death_immune orelse false)) continue;
             if (spell.sleep_failure_percent) |failure| {
                 if (systems.statusPercent(self.roll()) >= failure) _ = self.inflictStatus(target, .sleep);
-            } else if (self.inflictStatus(target, .sleep)) self.asleep[target] = @intCast(@min(spell.power + 1, 255));
+            } else if (self.inflictStatus(target, .sleep)) self.actor_conditions[target].sleep_turns = @intCast(@min(spell.power + 1, 255));
         } else {
             const member = &self.progress.party[target];
             const before = member.hp;
             if (spell.kind == .revive) {
-                if (self.protection[target] == 0) member.hp = if (spell.full_heal) member.max_hp else @max(1, @as(u16, @intCast(@as(u32, member.max_hp) * spell.power / 100)));
+                if (self.actor_conditions[target].protection_rounds == 0) member.hp = if (spell.full_heal) member.max_hp else @max(1, @as(u16, @intCast(@as(u32, member.max_hp) * spell.power / 100)));
                 if (member.hp > 0) {
                     // shortcut: revival restores normal placement until its departure interaction is qualified.
                     self.departed[target] = false;
                     self.departures[target] = null;
-                    self.knockout_pending[target] = false;
-                    self.knockout_status[target] = null;
+                    self.party_knockouts[target].pending = false;
+                    self.party_knockouts[target].prior_status = null;
                     member.status = .healthy;
                     if (self.actions[target] == null) self.acted[target] = true;
                 }
                 member.balloons = 0;
-                self.asleep[target] = 0;
-                self.accuracy_reduced[target] = false;
-                self.rune_blocked[target] = false;
+                self.actor_conditions[target].sleep_turns = 0;
+                self.actor_conditions[target].accuracy_reduced = false;
+                self.actor_conditions[target].rune_blocked = false;
             } else {
-                if (self.protection[target] == 0) member.hp = if (spell.full_heal) member.max_hp else @intCast(@min(member.max_hp, @as(u32, member.hp) + spell.power));
+                if (self.actor_conditions[target].protection_rounds == 0) member.hp = if (spell.full_heal) member.max_hp else @intCast(@min(member.max_hp, @as(u32, member.hp) + spell.power));
                 if (spell.kind == .cure or spell.clear_status) {
                     member.status = .healthy;
                     member.balloons = 0;
-                    self.asleep[target] = 0;
-                    self.accuracy_reduced[target] = false;
-                    self.rune_blocked[target] = false;
+                    self.actor_conditions[target].sleep_turns = 0;
+                    self.actor_conditions[target].accuracy_reduced = false;
+                    self.actor_conditions[target].rune_blocked = false;
                 }
             }
             effect.amounts[target] = member.hp - before;
@@ -322,16 +322,6 @@ pub fn applySpell(self: *State, effect: *Effect) void {
     }
     if (effect.affected == 0) effect.kind = .unavailable else actor.rune_charges[tier] -= 1;
 }
-pub fn rewardReady(self: State) bool {
-    return rewards.rewardReady(self);
-}
-pub fn commitRewards(self: *State) void {
-    rewards.commitRewards(self);
-}
-pub fn experienceAward(self: State, index: usize) u32 {
-    return rewards.experienceAward(self, index);
-}
-
 pub fn applyExperience(self: *State, index: usize) void {
     // Bounded: a legitimate award can cross several levels, but a corrupt
     // counter must not spin the reward commit.  99 is the source cap.

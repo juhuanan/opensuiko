@@ -11,6 +11,7 @@ const ui = @import("ui");
 const title_view = @import("../title_view.zig");
 const movie_player_mod = @import("../movie_player.zig");
 const journey = @import("journey");
+const Preferences = @import("pause_menu").Value;
 const duel_presentation = @import("journey_content").duel_presentation;
 const party_view = @import("../party_view.zig");
 const world_view = @import("world_view");
@@ -39,7 +40,7 @@ pub const WarRenderer = struct {
         self.* = undefined;
     }
 
-    pub fn prepare(self: *WarRenderer, allocator: std.mem.Allocator, engine: anytype, command_index: u8) !void {
+    pub fn prepare(self: *WarRenderer, allocator: std.mem.Allocator, engine: *const journey.war.Engine, command_index: u8) !void {
         if (self.manifest == null) self.manifest = try war_content.load(allocator, war_manifest_data.json);
         if (self.platform == null) self.platform = try war_view_platform.Platform.init();
         const scenario_id = engine.scenario.id;
@@ -235,7 +236,7 @@ pub const Resources = struct {
         self.audio_player.deinit();
     }
 
-    pub fn syncAudioVolumes(self: *Resources, preferences: anytype) void {
+    pub fn syncAudioVolumes(self: *Resources, preferences: Preferences) void {
         self.audio_player.setVolume(preferences.musicVolume());
         self.audio_player.setEffectsVolume(preferences.effectsVolume());
     }
@@ -251,18 +252,17 @@ pub const Resources = struct {
 
     pub fn ensureRoomScenery(self: *Resources, allocator: std.mem.Allocator, path: []const u8, room_index: usize, room: field.Room) !void {
         if (self.scenery_room == room_index) return;
-        if (self.scenery) |texture| rl.unloadTexture(texture);
-        self.scenery = null;
-        if (room.scenery_atlas) |image_path| {
+        const replacement = if (room.scenery_atlas) |image_path| load: {
             const texture = try raylib_app.loadPointTexture(allocator, path, image_path);
             errdefer rl.unloadTexture(texture);
             try room.validateSceneryAtlas(texture.width, texture.height);
-            self.scenery = texture;
-        }
+            break :load texture;
+        } else null;
+        raylib_app.replaceTexture(&self.scenery, replacement);
         self.scenery_room = room_index;
     }
 
-    pub fn ensureFieldEffectShader(self: *Resources, active: anytype) !void {
+    pub fn ensureFieldEffectShader(self: *Resources, active: journey.ActiveFieldEvent) !void {
         if (active.session.field_effect) |effect| {
             if (active.binding.field_effect_blend != .half) return error.UnqualifiedFieldEffectBlend;
             if (effect.model.ray(0)) |ray| if (ray.semitransparent and self.field_effect_half_shader == null) {

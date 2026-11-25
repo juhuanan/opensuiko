@@ -1,6 +1,8 @@
 //! Scripted crossing and flight routes own world movement until their landings.
 const std = @import("std");
 const field = @import("field");
+pub const SceneSource = @import("scene_population").Source;
+const Program = field.game_state.event_runtime.Program;
 const travel = @import("travel_modes");
 const boat_core = @import("travel").boat;
 const world_map = @import("world");
@@ -12,7 +14,7 @@ pub const teleport = @import("travel").teleport;
 const cell_pixels = 8;
 const flight_world = "world_f";
 
-fn flightSelector(origin: anytype, entity: u8) ?u8 {
+fn flightSelector(origin: SceneSource, entity: u8) ?u8 {
     if (origin.room != 0) return null;
     if (std.mem.endsWith(u8, origin.file, "/VF3.BIN") and (entity == 1 or entity == 3)) return 0;
     if (std.mem.endsWith(u8, origin.file, "/VF2.BIN") and entity == 1) return 1;
@@ -231,8 +233,7 @@ pub fn validatePackage(package: field.Package) !void {
         !island.contains(source.spawn[0], source.spawn[1])) return error.InvalidCrossingPackage;
 }
 
-pub fn validateContent(package: field.Package, binding: anytype, program: anytype) !void {
-    const origin = binding.population.source;
+pub fn validateContent(package: field.Package, origin: SceneSource, program: Program) !void {
     if (flightSelector(origin, program.entity)) |number| {
         const world = package.rooms[package.roomIndex(flight_world) orelse return error.InvalidFlightDeparture];
         var in_flight = false;
@@ -284,16 +285,16 @@ pub const Active = struct {
     saved_field_facing: field.Direction,
     flight: bool = false,
 
-    pub fn begin(package: field.Package, world: field.State, binding: anytype, program: anytype) !Active {
-        try validateContent(package, binding, program);
+    pub fn begin(package: field.Package, world: field.State, origin: SceneSource, program: Program) !Active {
+        try validateContent(package, origin, program);
         const story = world.progress.story.scenario orelse return error.MissingSourceStoryState;
-        if (flightSelector(binding.population.source, program.entity)) |number| {
+        if (flightSelector(origin, program.entity)) |number| {
             if (!std.mem.eql(u8, package.rooms[world.room].id, flight_world) or
                 world.auto_route_id != number or story.world_mode != 2 or world.remaining != 0 or
                 world.dialogue != null) return error.InvalidFlightDeparture;
             var controller = try travel.Controller.open(.{
                 .id = program.id,
-                .content_sha256 = binding.population.source.sha256,
+                .content_sha256 = origin.sha256,
                 .location = flight_world,
                 .position = .{ .x = @intCast(@divExact(world.x, cell_pixels)), .y = @intCast(@divExact(world.y, cell_pixels)) },
                 .heading = if (number == 0) .west else .east,
@@ -309,9 +310,25 @@ pub const Active = struct {
             world.progress.story.recruitment_tier != 0 or story.scenario[29] & 32 != 0 or
             story.scenario[231] & 32 != 0 or
             story.scenario[38] & 8 == 0) return error.InvalidCrossingDeparture;
-        var controller = try travel.Controller.open(.{ .id = program.id, .content_sha256 = binding.population.source.sha256, .location = source.world_room, .position = .{ .x = source.start[0], .y = source.start[1] }, .heading = .west });
+        var controller = try travel.Controller.open(.{ .id = program.id, .content_sha256 = origin.sha256, .location = source.world_room, .position = .{ .x = source.start[0], .y = source.start[1] }, .heading = .west });
         try controller.startRoute(source.selector);
         return .{ .controller = controller, .saved_field_facing = world.facing };
+    }
+
+    pub fn motion(self: *const Active) world_map.State {
+        const controller = self.controller.state;
+        return .{
+            .camera = .{ .x = controller.position.x, .y = controller.position.y },
+            .heading = switch (controller.heading) {
+                .north => .north,
+                .east => .east,
+                .south => .south,
+                .west => .west,
+            },
+            .remaining = controller.remaining,
+            .boat = true,
+            .scripted = true,
+        };
     }
 
     pub fn tick(self: *Active, package: field.Package, world: *field.State) !bool {
@@ -321,9 +338,9 @@ pub const Active = struct {
             current.world_mode != @as(u8, if (self.flight) 2 else 1)) return error.StaleCrossingOwner;
         var next = self.*;
         const complete = try next.controller.tickRoute();
-        const motion = next.controller.state;
-        if (!self.flight and motion.position.x >= source.point[0] and motion.position.x <= source.point[0] + 1 and
-            motion.position.y >= source.point[1] and motion.position.y <= source.point[1] + 1)
+        const crossing = next.controller.state;
+        if (!self.flight and crossing.position.x >= source.point[0] and crossing.position.x <= source.point[0] + 1 and
+            crossing.position.y >= source.point[1] and crossing.position.y <= source.point[1] + 1)
         {
             const story = if (world.progress.story.scenario) |*value| value else return error.MissingSourceStoryState;
             if (world.progress.story.recruitment_tier != 0 or story.scenario[29] & 32 != 0) return error.StaleCrossingArrival;
@@ -335,22 +352,22 @@ pub const Active = struct {
             return true;
         }
         if (complete) return error.MissingCrossingArrival;
-        world.destination = .{ .x = @as(i32, motion.position.x) * cell_pixels, .y = @as(i32, motion.position.y) * cell_pixels };
+        world.destination = .{ .x = @as(i32, crossing.position.x) * cell_pixels, .y = @as(i32, crossing.position.y) * cell_pixels };
         world.x = world.destination.x;
         world.y = world.destination.y;
-        world.facing = switch (motion.heading) {
+        world.facing = switch (crossing.heading) {
             .north => .up,
             .east => .right,
             .south => .down,
             .west => .left,
         };
-        if (motion.remaining != 0) switch (motion.heading) {
+        if (crossing.remaining != 0) switch (crossing.heading) {
             .north => world.y += cell_pixels,
             .east => world.x -= cell_pixels,
             .south => world.y -= cell_pixels,
             .west => world.x += cell_pixels,
         };
-        world.remaining = motion.remaining;
+        world.remaining = crossing.remaining;
         world.step_duration = 16;
         world.walking = true;
         world.action_pending = false;

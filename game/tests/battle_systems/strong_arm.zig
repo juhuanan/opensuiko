@@ -41,7 +41,7 @@ test "Strong Arm live branches preserve ally selection protector HP KO Buddha an
             if (index != 1) combat.enemy_hp[index] = 0;
         };
         if (covered) combat.progress.party[0].hp = 1;
-        if (scenario == 4) combat.protection[victim] = 2;
+        if (scenario == 4) combat.actor_conditions[victim].protection_rounds = 2;
         if (scenario == 5 or scenario == 6) combat.progress.party[victim].hp = 1;
         if (scenario == 6) combat.progress.party[victim].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
         if (scenario == 7) try combat.beginMelee(combat.partyCount(), 1, true);

@@ -18,35 +18,19 @@ const dice_view = @import("../dice_view.zig");
 const side_game_view = @import("../side_game_view.zig");
 const world_view = @import("world_view");
 const world = @import("world");
-const war_view = @import("war_view");
 const chapters = @import("chapters");
 const resources_mod = @import("resources.zig");
 const dialogue_presentation = journey.field_dialogue_view.presentation;
 
-fn crossingMotion(motion: anytype) world.State {
-    return .{
-        .camera = .{ .x = motion.position.x, .y = motion.position.y },
-        .heading = switch (motion.heading) {
-            .north => .north,
-            .east => .east,
-            .south => .south,
-            .west => .west,
-        },
-        .remaining = motion.remaining,
-        .boat = true,
-        .scripted = true,
-    };
-}
-
 pub fn crossingState(state: *const journey.State) ?world.State {
     if (state.auto_travel) |active| {
-        if (!active.flight) return crossingMotion(active.controller.state);
+        if (!active.flight) return active.motion();
     }
     if (state.boat_travel) |active| return active.motion();
     return null;
 }
 
-fn findPortraitRect(rooms: anytype, prefix: []const u8) ?field.Rect {
+fn findPortraitRect(rooms: @FieldType(journey.State, "room_battles"), prefix: []const u8) ?field.Rect {
     const rb = rooms orelse return null;
     for (rb.bindings) |binding| {
         for (binding.dialogue.images) |image| {
@@ -322,7 +306,7 @@ pub fn prepareSubRenderers(
     }
 }
 
-fn drawDiceScene(boot_state: *const boot.Boot, state: *journey.State, active: anytype, res: *resources_mod.Resources) !void {
+fn drawDiceScene(boot_state: *const boot.Boot, state: *journey.State, active: journey.dice.Active, res: *resources_mod.Resources) !void {
     if (journey.dice.usesModel(state)) {
         const model = boot_state.bundle.dice_model.?.*;
         if (active.cursor) |cursor| dice_view.drawCursor(model, cursor);
@@ -333,7 +317,7 @@ fn drawDiceScene(boot_state: *const boot.Boot, state: *journey.State, active: an
     } else side_game_view.drawDice(state);
 }
 
-fn drawTeleportOverlay(session: anytype) void {
+fn drawTeleportOverlay(session: journey.travel.teleport.Session) void {
     const catalogue = journey.travel.teleport.catalogue;
     var buffer: [catalogue.max_destinations]u8 = undefined;
     const destinations = session.eligible(&buffer);
@@ -347,7 +331,7 @@ fn drawTeleportOverlay(session: anytype) void {
     ui.text(if (destinations.len > catalogue.rows_per_page) "Left/Right: Page    Cancel: Return" else "Cancel: Return", 126, 379, 16, .gold);
 }
 
-fn drawPartySelectionScene(state: *journey.State, active: anytype, boot_state: *const boot.Boot, res: *resources_mod.Resources) !void {
+fn drawPartySelectionScene(state: *journey.State, active: journey.party_selection.Active, boot_state: *const boot.Boot, res: *resources_mod.Resources) !void {
     res.party_background.?.draw(active.menu.fade);
     var projection: journey.party_selection.View = .{};
     const roster_view = try projection.read(state);
@@ -491,7 +475,7 @@ pub fn drawActiveScene(
     } else if (crossing) |motion| {
         try drawCrossingScene(boot_state, res, motion);
     } else if (state.mode == .field) {
-        rl.drawTextureRec(res.field_canvas.texture, .{ .x = 0, .y = 0, .width = 512, .height = -432 }, .{ .x = 64, .y = 0 }, .white);
+        rl.drawTextureRec(res.field_canvas.texture, raylib_app.canvasSource(res.field_canvas.texture), .{ .x = 64, .y = 0 }, .white);
         if (state.episodeObjective()) |guide| {
             ui.panel(6, 440, 628, 34);
             ui.text(guide, 14, 450, 13, .gold);
@@ -502,7 +486,7 @@ pub fn drawActiveScene(
         if (state.active_war != null) {
             rl.drawTexturePro(
                 res.war_renderer.canvas.texture,
-                .{ .x = 0, .y = 0, .width = @floatFromInt(war_view.width), .height = -@as(f32, @floatFromInt(war_view.height)) },
+                raylib_app.canvasSource(res.war_renderer.canvas.texture),
                 .{ .x = 0, .y = 0, .width = 640, .height = 480 },
                 .{ .x = 0, .y = 0 },
                 0,
@@ -527,7 +511,6 @@ pub fn presentFrame(
     fade_updates: u8,
     crossing: ?world.State,
 ) !void {
-    const frame_source: rl.Rectangle = .{ .x = 0, .y = 0, .width = 640, .height = -480 };
     const next_mode: ?journey.Mode = if (title.phase == .playing)
         (if (state.mode == .defeat) .battle else state.mode)
     else
@@ -539,16 +522,18 @@ pub fn presentFrame(
         if (!mode_fade.showsOutgoing()) {
             rl.beginTextureMode(res.outgoing_canvas);
             rl.clearBackground(.black);
-            rl.drawTextureRec(res.canvas.texture, frame_source, .{ .x = 0, .y = 0 }, .white);
+            rl.drawTextureRec(res.canvas.texture, raylib_app.canvasSource(res.canvas.texture), .{ .x = 0, .y = 0 }, .white);
             rl.endTextureMode();
         }
         mode_fade.begin();
     }
     presented_mode.* = next_mode;
-    rl.beginTextureMode(res.canvas);
-    rl.clearBackground(.black);
-    try drawActiveScene(boot_state, state, title, res, crossing);
-    rl.endTextureMode();
+    {
+        rl.beginTextureMode(res.canvas);
+        defer rl.endTextureMode();
+        rl.clearBackground(.black);
+        try drawActiveScene(boot_state, state, title, res, crossing);
+    }
 
     // One integer layout policy; an unsupported transient size keeps
     // the last valid layout instead of drawing a clipped canvas.
@@ -556,7 +541,7 @@ pub fn presentFrame(
     rl.beginDrawing();
     rl.clearBackground(.black);
     const frame = if (mode_fade.showsOutgoing()) res.outgoing_canvas.texture else res.canvas.texture;
-    rl.drawTexturePro(frame, frame_source, .{ .x = @floatFromInt(layout.x), .y = @floatFromInt(layout.y), .width = @floatFromInt(layout.width), .height = @floatFromInt(layout.height) }, .{ .x = 0, .y = 0 }, 0, .white);
+    rl.drawTexturePro(frame, raylib_app.canvasSource(frame), .{ .x = @floatFromInt(layout.x), .y = @floatFromInt(layout.y), .width = @floatFromInt(layout.width), .height = @floatFromInt(layout.height) }, .{ .x = 0, .y = 0 }, 0, .white);
     const opacity = mode_fade.alpha();
     if (opacity != 0) {
         rl.drawRectangle(layout.x, layout.y, layout.width, layout.height, .{ .r = 0, .g = 0, .b = 0, .a = opacity });

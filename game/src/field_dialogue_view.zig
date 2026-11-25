@@ -1,5 +1,6 @@
 const std = @import("std");
 const field = @import("field");
+const events = @import("field_events");
 const opening = @import("opening");
 pub const presentation = opening.presentation;
 
@@ -65,7 +66,7 @@ fn bounds(rect: field.Rect, width: i32, height: i32) !void {
     if (rect.x < 0 or rect.y < 0 or rect.w <= 0 or rect.h <= 0 or rect.x >= width or rect.y >= height or rect.w > width - rect.x or rect.h > height - rect.y) return error.InvalidFieldDialogueArt;
 }
 pub const FollowerDraw = struct { character: u8, rect: field.Rect, x: f32, y: f32, depth: f32, variant: u2, frame: u8 };
-pub fn hero(scene: anytype, package: field.Package, camera: field.CameraOffset) !?FollowerDraw {
+pub fn hero(scene: *const events.Session, package: field.Package, camera: field.CameraOffset) !?FollowerDraw {
     if (!scene.busy()) return null;
     const sprite = scene.hero_sprite orelse return error.InvalidFieldHeroAnimation;
     const clip = package.player_clips[sprite.variant];
@@ -79,7 +80,7 @@ pub const Followers = struct {
     unsupported: [5]u8 = undefined,
     unsupported_count: usize = 0,
 };
-pub fn followers(scene: anytype, art: ?Art, camera: field.CameraOffset) !Followers {
+pub fn followers(scene: *const events.Session, art: ?Art, camera: field.CameraOffset) !Followers {
     var result: Followers = .{};
     const queue = scene.party_queue orelse return result;
     for (queue.followers[0..queue.count]) |slot| {
@@ -108,7 +109,7 @@ pub fn load(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Parsed(Ar
 }
 
 // shortcut: project the existing prototype field camera into the source UI viewport; canonical field camera integration is separate.
-pub fn compose(art: anytype, scene: anytype, data: anytype, camera: field.CameraOffset, list: *presentation.List, choice_box: ?u8) !void {
+pub fn compose(art: anytype, scene: *const events.Session, data: events.DialogueData, camera: field.CameraOffset, list: *presentation.List, choice_box: ?u8) !void {
     list.length = 0;
     for (scene.boxes, 0..) |source, slot| {
         if (source.phase == .closed) continue;

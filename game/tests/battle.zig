@@ -538,7 +538,8 @@ test "physical weapon weakness and rune pieces apply before critical damage" {
     state.weapon_augments[0] = .{ .rune = .fire, .fragments = 3 };
     var draws = battle.systems.Draws{ .values = &.{ 0, 99, 0 } };
     state.replay_draws = &draws;
-    state.beginAttack(0, 0, false, null);
+    state.beginAttack(0, target, .ordinary);
+    try std.testing.expectEqual(target, state.active.?.target);
     try std.testing.expectEqual(@as(u32, 94), state.active.?.amount);
     try std.testing.expectEqual(@as(usize, 3), draws.cursor);
     party[0].weapon.?.element = null;
@@ -1816,12 +1817,12 @@ test "legacy Unite eligibility uses the source poison sleep recovery mask for ei
         var state = try battle.State.init(parsed.value, rules.value, &members, 17);
         switch (condition) {
             0 => state.progress.party[member].status = .poisoned,
-            1 => state.asleep[member] = 1,
+            1 => state.actor_conditions[member].sleep_turns = 1,
             2 => state.unbalanced[member] = 1,
             3 => state.progress.party[member].balloons = 1,
-            4 => state.accuracy_reduced[member] = true,
-            5 => state.rune_blocked[member] = true,
-            6 => state.protection[member] = 3,
+            4 => state.actor_conditions[member].accuracy_reduced = true,
+            5 => state.actor_conditions[member].rune_blocked = true,
+            6 => state.actor_conditions[member].protection_rounds = 3,
             7 => {},
             else => unreachable,
         }
@@ -1841,7 +1842,7 @@ test "legacy battle items consume on no effect and protection without changing f
         state.progress.party[1].hp = if (condition == 0) 1000 else 1;
         state.progress.party[1].status = if (condition == 0) .healthy else .poisoned;
         state.progress.party[1].balloons = if (condition == 0) 0 else 3;
-        state.protection[1] = if (condition == 1) 3 else 0;
+        state.actor_conditions[1].protection_rounds = if (condition == 1) 3 else 0;
         state.progress.party[0].inventory.slots = @splat(null);
         state.progress.party[0].inventory.slots[0] = .{ .id = id, .uses = 1 };
         state.progress.party[0].inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
@@ -2342,7 +2343,7 @@ test "legacy sleep adapter honors the exported ward before drawing" {
     state.applySpell(&effect);
     try std.testing.expect(!state.replay_exhausted);
     try std.testing.expectEqual(@as(usize, 0), draws.cursor);
-    for (state.asleep[state.partyCount() .. state.partyCount() + state.enemyCount()]) |sleep| try std.testing.expectEqual(@as(u8, 0), sleep);
+    for (state.actor_conditions[state.partyCount() .. state.partyCount() + state.enemyCount()]) |conditions| try std.testing.expectEqual(@as(u8, 0), conditions.sleep_turns);
     try std.testing.expectEqual(@as(u8, 8), state.progress.party[0].rune_charges[0]);
 }
 
@@ -3681,18 +3682,18 @@ test "Unite screen offsets use signed interpolation target anchors and return re
     enemies[1].effect_offset = .{ -10, 10 };
     combat.active = null;
     try std.testing.expectEqual([2]i8{ 0, 0 }, combat.uniteScreenOffset(2));
-    combat.actor_screen_offsets[2] = .{ 5, -5 };
+    combat.actor_transforms[2].screen_offset = .{ 5, -5 };
     combat.content.world_art = art.value;
     try std.testing.expectEqual([2]i8{ 0, 0 }, combat.uniteScreenOffset(2));
     combat.content.world_art = null;
     profiles[2].revival_art = null;
     const revival_origin = battle.layout.homePosition(&combat, 2);
-    combat.revivals[2] = .{ .started_at = combat.camera_ticks, .origin = revival_origin, .screen_offset = .{ 5, -5 }, .original_status = .healthy };
+    combat.party_knockouts[2].revival = .{ .started_at = combat.camera_ticks, .origin = revival_origin, .screen_offset = .{ 5, -5 }, .original_status = .healthy };
     const old_revival = battle.layout.actorLayout(combat, 2);
     const old_origin = battle.layout.worldPoint(combat, revival_origin);
     try std.testing.expectApproxEqAbs(old_origin.y - 5 * old_revival.scale, old_revival.point.y, 0.001);
-    combat.revivals[2] = null;
-    combat.actor_screen_offsets[2] = .{ 0, 0 };
+    combat.party_knockouts[2].revival = null;
+    combat.actor_transforms[2].screen_offset = .{ 0, 0 };
     var bad = offsets;
     scenes[0].track.screen_offsets = &bad;
     bad[0].updates = 0;

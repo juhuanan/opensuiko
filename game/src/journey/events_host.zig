@@ -1,8 +1,8 @@
 //! Room-event binding, scripted battle/party/inventory mutations, and active event ticking.
 const std = @import("std");
 const item_ledger = @import("item_ledger");
-const roster = @import("journey_roster");
-const battle_flow = @import("journey_battle");
+const roster = @import("../journey_roster.zig");
+const battle_flow = @import("../journey_battle.zig");
 const party_session = @import("party_session");
 const field = @import("field");
 const field_events = @import("field_events");
@@ -195,7 +195,7 @@ pub noinline fn admitRoomEvent(state: *journey.State, input: field.Input, select
         for (binding.population.entities) |entity| {
             if (entity.trigger != .interaction or entity.event.status != .resolved) continue;
             const point = binding.interactionPosition(entity.source_order, actors) orelse continue;
-            if (!field.interactionReaches(entry, state.package, point.x, point.y)) continue;
+            if (!field.interactionReaches(&entry, state.package, point.x, point.y)) continue;
             rooms.session = field_events.Session.beginInteraction(rooms.active_binding, entry, serial, entity.source_order, construction) catch |err| switch (err) {
                 error.IneligibleFieldInteraction, error.UnavailableFieldInteraction, error.EventConditionFalse => continue,
                 else => return err,
@@ -534,7 +534,7 @@ pub fn tickActiveFieldEvent(state: *journey.State, owner: journey.ActiveFieldEve
                 if (owner.session.busy()) return error.PendingCrossingDeparture;
                 const receipt = owner.session.receipt orelse return error.MissingCrossingReceipt;
                 const program = binding.content.program(receipt.program) orelse return error.UnknownEventProgram;
-                state.auto_travel = try journey.travel.Active.begin(state.package, state.field_state, binding, program);
+                state.auto_travel = try journey.travel.Active.begin(state.package, state.field_state, binding.population.source, program);
             } else if (std.mem.eql(u8, state.package.rooms[state.field_state.room].id, journey.travel.source.world_room) and
                 state.field_state.progress.story.scenario.?.world_mode == 1)
             {

@@ -211,12 +211,12 @@ test "source archer knockout and Buddha retain reaction ownership through the ne
         var revival_offset: ?[2]i16 = null;
         for (0..1000) |_| {
             combat.tickReplay(.{}, &draws) catch |err| {
-                std.debug.print("archer KO buddha={} time={d} hp={d} pending={} clock={any} draws={d} error={s}\n", .{ buddha, combat.camera_ticks, combat.hp(1), combat.knockout_pending[1], combat.coordinator, draws.cursor, @errorName(err) });
+                std.debug.print("archer KO buddha={} time={d} hp={d} pending={} clock={any} draws={d} error={s}\n", .{ buddha, combat.camera_ticks, combat.hp(1), combat.party_knockouts[1].pending, combat.coordinator, draws.cursor, @errorName(err) });
                 return err;
             };
-            pending = pending or combat.knockout_pending[1];
+            pending = pending or combat.party_knockouts[1].pending;
             revived = revived or combat.revivalAge(1) != null;
-            if (combat.revivals[1]) |revival| {
+            if (combat.party_knockouts[1].revival) |revival| {
                 revival_offset = revival.screen_offset;
                 const actor = battle.layout.actorLayout(combat, 1);
                 const projected = battle.layout.worldPoint(combat, revival.origin);
@@ -317,8 +317,8 @@ test "source and legacy archer rounds retain sleep and suppress protected HP los
         }
         if (modern) combat.promoteRearMembers();
         try std.testing.expectEqual(battle.Row.front, combat.partyRow(target));
-        combat.asleep[target] = @intFromBool(sleeping);
-        combat.protection[target] = if (protected) 2 else 0;
+        combat.actor_conditions[target].sleep_turns = @intFromBool(sleeping);
+        combat.actor_conditions[target].protection_rounds = if (protected) 2 else 0;
         var draws = h.rules.Draws{ .values = &.{ 51, 0, 51 } };
         var contact = false;
         var returned = false;
@@ -338,8 +338,7 @@ test "source and legacy archer rounds retain sleep and suppress protected HP los
                     try std.testing.expectEqualDeep(combat.front_projectiles, refused.front_projectiles);
                     try std.testing.expectEqualDeep(combat.front_hurt_at, refused.front_hurt_at);
                     try std.testing.expectEqual(combat.camera_ticks, refused.camera_ticks);
-                    try std.testing.expectEqualDeep(combat.asleep, refused.asleep);
-                    try std.testing.expectEqualDeep(combat.protection, refused.protection);
+                    try std.testing.expectEqualDeep(combat.actor_conditions, refused.actor_conditions);
                     try std.testing.expectEqual(draws.cursor, short.cursor);
                     rollback = true;
                 }
@@ -349,7 +348,7 @@ test "source and legacy archer rounds retain sleep and suppress protected HP los
                 contact = true;
                 if (protected) try std.testing.expectEqual(@as(u16, 1000), combat.hp(target)) else try std.testing.expect(combat.hp(target) < 1000);
             }
-            if (contact) try std.testing.expectEqual(@as(u8, @intFromBool(sleeping)), combat.asleep[target]);
+            if (contact) try std.testing.expectEqual(@as(u8, @intFromBool(sleeping)), combat.actor_conditions[target].sleep_turns);
             if (combat.phase == .battle_menu) {
                 returned = true;
                 break;
@@ -358,7 +357,7 @@ test "source and legacy archer rounds retain sleep and suppress protected HP los
         if (!(contact and returned and rollback)) std.debug.print("archer status scenario={d} contact={} return={} rollback={} time={d} phase={s} draws={d} clock={any}\n", .{ scenario, contact, returned, rollback, combat.camera_ticks, @tagName(combat.phase), draws.cursor, combat.coordinator });
         try std.testing.expect(contact and returned and rollback);
         try std.testing.expectEqual(@as(usize, 3), draws.cursor);
-        try std.testing.expectEqual(@as(u8, if (protected) 1 else 0), combat.protection[target]);
+        try std.testing.expectEqual(@as(u8, if (protected) 1 else 0), combat.actor_conditions[target].protection_rounds);
         if (mode == 2) {
             try std.testing.expectEqual(h.field.game_state.Status.poisoned, members[target].status);
             try std.testing.expectEqual(@as(u16, 1000), members[target].hp);

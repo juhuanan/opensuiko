@@ -80,8 +80,8 @@ test "later enemy source formations finish defended rounds including self sleep"
                 for (combat.unite_vm.commander_actions) |maybe| if (maybe) |action| {
                     if (action.action != null and action.action.?.launched) attempted |= @as(u8, 1) << @as(u3, @intCast(action.owner - combat.partyCount()));
                 };
-                for (combat.accuracy_reduced[0..combat.partyCount()]) |value| reduced = reduced or value;
-                for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |actor| slept = slept or combat.asleep[actor] != 0;
+                for (combat.actor_conditions[0..combat.partyCount()]) |conditions| reduced = reduced or conditions.accuracy_reduced;
+                for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |actor| slept = slept or combat.actor_conditions[actor].sleep_turns != 0;
                 if (ivy) for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |actor| {
                     const bit = @as(u8, 1) << @as(u3, @intCast(actor - combat.partyCount()));
                     if (rendered & bit != 0 or actor >= combat.unite_vm.actors.len) continue;
@@ -168,7 +168,7 @@ test "later enemy source hurt ward knockout and miss routes finish queued party 
         combat.acted = @splat(true);
         combat.actions[0] = .{ .attack = 0 };
         combat.coordinator = .{ .stage = .dispatch, .current_actor = 0 };
-        if (variant == 1) combat.protection[combat.partyCount()] = 1;
+        if (variant == 1) combat.actor_conditions[combat.partyCount()].protection_rounds = 1;
         if (variant == 2) combat.enemy_hp[0] = 1;
         const initial_hp = combat.enemy_hp[0];
         var values: [4096]u15 = @splat(51);

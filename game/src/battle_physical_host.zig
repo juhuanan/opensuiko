@@ -25,9 +25,9 @@ pub fn beginSourcePhysicalRune(self: *State, owner: usize, recipient: usize) !vo
     try packet.validateProgram(binding.owner_program, resource);
     try packet.validateProgram(binding.recipient_program, target);
     if (self.content.presentation_ready) {
-        try checkProgramArt(self.*, packet, resource, binding.owner_program, 0, 0, false);
-        try checkProgramArt(self.*, packet, target, binding.recipient_program, 0, 0, false);
-        if (binding.auxiliary) |child| try checkProgramArt(self.*, packet, packet.animations.find(child.resource).?, child.program, child.animation, 0, false);
+        try checkProgramArt(self.*, packet.library(), resource, binding.owner_program, 0, 0, false);
+        try checkProgramArt(self.*, packet.library(), target, binding.recipient_program, 0, 0, false);
+        if (binding.auxiliary) |child| try checkProgramArt(self.*, packet.library(), packet.animations.find(child.resource).?, child.program, child.animation, 0, false);
     }
     const pose = self.uniteReactionPose(recipient) orelse return error.MissingPhysicalKnockout;
     if (pose.knockout == null) return error.MissingPhysicalKnockout;
@@ -76,8 +76,8 @@ pub fn applyPhysicalRuneContact(self: *State, owner: usize) !void {
     if (self.replay_exhausted) return error.RandomInputExhausted;
     const base = self.resolvePhysicalDamage(owner, recipient, roll, false);
     const amount = @import("battle_systems").techniques.physical.damage(self.physical_numerator, base);
-    playback.amount = if (self.protection[recipient] == 0) amount else 0;
-    if (self.protection[recipient] == 0) {
+    playback.amount = if (self.actor_conditions[recipient].protection_rounds == 0) amount else 0;
+    if (self.actor_conditions[recipient].protection_rounds == 0) {
         self.enemy_hp[recipient - self.partyCount()] = @intCast(@as(u32, self.enemy_hp[recipient - self.partyCount()]) -| amount);
     }
     if (self.active) |*effect| if (effect.rune_attack and effect.actor == owner) {
@@ -93,7 +93,7 @@ pub fn finishPhysicalRuneActors(self: *State) void {
             const binding = self.unite_vm.scripted_actors[actor] orelse continue;
             if (binding.family != .physical or binding.leader != leader) continue;
             const current = &self.unite_vm.actors[actor];
-            self.actor_node_angles[actor] = current.draw_angles;
+            self.actor_transforms[actor].node_angles = current.draw_angles;
             if (current.machine == null or !current.machine.?.halted or current.highlights != 0 or (role == 1 and playback.action.?.damage_pending)) continue;
             if (role == 1 and self.hp(actor) == 0) {
                 if (playback.knockout_at == null) playback.knockout_at = self.camera_ticks;
@@ -101,10 +101,10 @@ pub fn finishPhysicalRuneActors(self: *State) void {
                 if (self.camera_ticks - playback.knockout_at.? < ko.duration) continue;
             }
             const home = self.uniteVmHome(actor);
-            self.actor_world_offsets[actor] = .{ .x = @as(f32, @floatFromInt(current.position_q12[0])) / 4096 - home.x, .y = @as(f32, @floatFromInt(current.position_q12[1])) / 4096 - home.y, .z = @as(f32, @floatFromInt(current.position_q12[2])) / 4096 - home.z };
-            if (self.content.world_art == null) self.actor_screen_offsets[actor] = current.screen_offset;
+            self.actor_transforms[actor].world_offset = .{ .x = @as(f32, @floatFromInt(current.position_q12[0])) / 4096 - home.x, .y = @as(f32, @floatFromInt(current.position_q12[1])) / 4096 - home.y, .z = @as(f32, @floatFromInt(current.position_q12[2])) / 4096 - home.z };
+            if (self.content.world_art == null) self.actor_transforms[actor].screen_offset = current.screen_offset;
             self.unite_vm.scripted_actors[actor] = null;
-            self.actor_node_angles[actor] = .{ 0, 0, 0 };
+            self.actor_transforms[actor].node_angles = .{ 0, 0, 0 };
             if (role == 0) playback.owner_done = true else {
                 playback.recipient_done = true;
                 self.dodge_idle_at[actor - self.partyCount()] = self.presentation_tick;
@@ -166,16 +166,16 @@ pub fn physicalRuneReaction(self: State, actor: usize) ?battle.spell_scene.React
     } else pose.entry;
     return .{ .entry = entry, .offset = .{ 0, 0 } };
 }
-pub fn checkProgramArt(self: State, packet: anytype, resource: host.Resource, program: []const u8, initial_animation: u16, depth: u8, secondary: bool) !void {
+pub fn checkProgramArt(self: State, library: host.Library, resource: host.Resource, program: []const u8, initial_animation: u16, depth: u8, secondary: bool) !void {
     if (depth >= 19) return error.InvalidPhysicalBindings;
     var animation = initial_animation;
     try checkClipArt(self, resource, animation, secondary);
-    for (packet.programs.find(program).?.instructions) |instruction| if (instruction == .command) switch (instruction.command) {
+    for (library.programs.find(program).?.instructions) |instruction| if (instruction == .command) switch (instruction.command) {
         .animation => |id| {
             animation = id;
             try checkClipArt(self, resource, id, secondary);
         },
-        .child => |child| try checkProgramArt(self, packet, packet.animations.find(child.resource).?, child.program, child.animation, depth + 1, child.draw_record),
+        .child => |child| try checkProgramArt(self, library, library.resources.find(child.resource).?, child.program, child.animation, depth + 1, child.draw_record),
         .effect => |effect| if (std.mem.eql(u8, effect.id, "blue_afterimages")) {
             const pose = resource.find(animation).?.frames[0].pose;
             const found = search: for (self.content.unite_graphics) |graphic| {

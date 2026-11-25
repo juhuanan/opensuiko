@@ -36,8 +36,8 @@ pub fn attachUniteActors(self: *State, bundle: *const actor_host.Bundle) !void {
         const art = @import("battle_physical_host.zig");
         const resource = bundle.animations.find(enemy.id) orelse return error.MissingActorResource;
         if (self.content.presentation_ready) {
-            try art.checkProgramArt(self.*, bundle, resource, binding.order_program, 0, 0, false);
-            try art.checkProgramArt(self.*, bundle, resource, binding.solo_program.?, 0, 0, false);
+            try art.checkProgramArt(self.*, bundle.library(), resource, binding.order_program, 0, 0, false);
+            try art.checkProgramArt(self.*, bundle.library(), resource, binding.solo_program.?, 0, 0, false);
         }
     };
     for (self.content.enemies) |enemy| if (enemy.action_policy == .source_rabbit) {
@@ -47,8 +47,8 @@ pub fn attachUniteActors(self: *State, bundle: *const actor_host.Bundle) !void {
         const resource = packet.animations.find(enemy.id) orelse return error.MissingActorResource;
         if (self.content.presentation_ready) {
             const art = @import("battle_physical_host.zig");
-            try art.checkProgramArt(self.*, packet, resource, projectile.owner_program, 0, 0, false);
-            try art.checkProgramArt(self.*, packet, resource, projectile.child_program, projectile.animation, 0, true);
+            try art.checkProgramArt(self.*, packet.library(), resource, projectile.owner_program, 0, 0, false);
+            try art.checkProgramArt(self.*, packet.library(), resource, projectile.child_program, projectile.animation, 0, true);
         }
     };
     for (self.content.enemies) |enemy| if (enemy.action_policy == .source_ninja) {
@@ -62,7 +62,7 @@ pub fn attachUniteActors(self: *State, bundle: *const actor_host.Bundle) !void {
         const resource = packet.animations.find(enemy.id) orelse return error.MissingActorResource;
         if (self.content.presentation_ready) {
             const art = @import("battle_physical_host.zig");
-            for ([_][]const u8{ melee.attack_program, melee.return_program, special.attack_program, special.return_program.?, defender.response_program, defender.strike_program }) |program| try art.checkProgramArt(self.*, packet, resource, program, 0, 0, false);
+            for ([_][]const u8{ melee.attack_program, melee.return_program, special.attack_program, special.return_program.?, defender.response_program, defender.strike_program }) |program| try art.checkProgramArt(self.*, packet.library(), resource, program, 0, 0, false);
         }
     };
     for (self.content.enemies) |enemy| if (enemy.action_policy == .source_dagon) {
@@ -75,7 +75,7 @@ pub fn attachUniteActors(self: *State, bundle: *const actor_host.Bundle) !void {
         if (self.content.presentation_ready) {
             const art = @import("battle_physical_host.zig");
             const resource = packet.animations.find(enemy.id) orelse return error.MissingActorResource;
-            for ([_][]const u8{ melee.attack_program, melee.return_program, special.attack_program }) |program| try art.checkProgramArt(self.*, packet, resource, program, 0, 0, false);
+            for ([_][]const u8{ melee.attack_program, melee.return_program, special.attack_program }) |program| try art.checkProgramArt(self.*, packet.library(), resource, program, 0, 0, false);
         }
     };
     for (self.content.enemies) |enemy| if (enemy.action_policy == .source_whip_wolf) {
@@ -86,7 +86,7 @@ pub fn attachUniteActors(self: *State, bundle: *const actor_host.Bundle) !void {
         if (self.content.presentation_ready) {
             const art = @import("battle_physical_host.zig");
             const resource = bundle.animations.find(enemy.id) orelse return error.MissingActorResource;
-            for ([_][]const u8{ binding.order_program, melee.attack_program, melee.return_program }) |program| try art.checkProgramArt(self.*, bundle, resource, program, 0, 0, false);
+            for ([_][]const u8{ binding.order_program, melee.attack_program, melee.return_program }) |program| try art.checkProgramArt(self.*, bundle.library(), resource, program, 0, 0, false);
         }
     };
     for (self.content.enemies) |enemy| if (enemy.action_policy == .source_holly_fairy) {
@@ -102,7 +102,7 @@ pub fn attachUniteActors(self: *State, bundle: *const actor_host.Bundle) !void {
         try packet.validateProgram(idle, resource);
         if (self.content.presentation_ready) {
             const art = @import("battle_physical_host.zig");
-            for ([_][]const u8{ idle, binding.owner_program, melee.attack_program, melee.return_program, parry.response_program, parry.strike_program }) |program| try art.checkProgramArt(self.*, bundle, resource, program, 0, 0, false);
+            for ([_][]const u8{ idle, binding.owner_program, melee.attack_program, melee.return_program, parry.response_program, parry.strike_program }) |program| try art.checkProgramArt(self.*, bundle.library(), resource, program, 0, 0, false);
         }
     };
     for (self.content.enemies) |enemy| if (enemy.action_policy == .source_sorcerer or enemy.action_policy == .source_siren or enemy.action_policy == .source_earth_golem) {
@@ -115,8 +115,8 @@ pub fn attachUniteActors(self: *State, bundle: *const actor_host.Bundle) !void {
         if (self.content.presentation_ready) {
             const art = @import("battle_physical_host.zig");
             const resource = bundle.animations.find(enemy.id) orelse return error.MissingActorResource;
-            for ([_][]const u8{ melee.attack_program, melee.return_program, binding.owner_program }) |program| try art.checkProgramArt(self.*, bundle, resource, program, 0, 0, false);
-            if (self.spell_scenes != null) try art.checkProgramArt(self.*, bundle, resource, dodge.response_program, 0, 0, false);
+            for ([_][]const u8{ melee.attack_program, melee.return_program, binding.owner_program }) |program| try art.checkProgramArt(self.*, bundle.library(), resource, program, 0, 0, false);
+            if (self.spell_scenes != null) try art.checkProgramArt(self.*, bundle.library(), resource, dodge.response_program, 0, 0, false);
             if (binding.worker.waves) |waves| for (waves.note_poses) |pose| {
                 if (self.content.uniteGraphicPose(enemy.id, pose, null) == null) return error.InvalidUniteGraphics;
             };
@@ -140,21 +140,21 @@ pub fn attachUniteActors(self: *State, bundle: *const actor_host.Bundle) !void {
         if (self.content.presentation_ready) {
             const art = @import("battle_physical_host.zig");
             const resource = bundle.animations.find(enemy.id) orelse return error.MissingActorResource;
-            try art.checkProgramArt(self.*, bundle, resource, melee.attack_program, 0, 0, false);
-            if (!regional.direct_attack) try art.checkProgramArt(self.*, bundle, resource, melee.return_program, 0, 0, false);
-            if (melee.special) |special| try art.checkProgramArt(self.*, bundle, resource, special.attack_program, 0, 0, false);
-            if (self.spell_scenes != null) try art.checkProgramArt(self.*, bundle, resource, dodge.response_program, 0, 0, false);
+            try art.checkProgramArt(self.*, bundle.library(), resource, melee.attack_program, 0, 0, false);
+            if (!regional.direct_attack) try art.checkProgramArt(self.*, bundle.library(), resource, melee.return_program, 0, 0, false);
+            if (melee.special) |special| try art.checkProgramArt(self.*, bundle.library(), resource, special.attack_program, 0, 0, false);
+            if (self.spell_scenes != null) try art.checkProgramArt(self.*, bundle.library(), resource, dodge.response_program, 0, 0, false);
             for (0..self.partyCount()) |slot| {
                 const party_id = self.progress.party[slot].id;
                 const party_res = bundle.animations.find(party_id) orelse return error.MissingActorResource;
                 if (regional.direct_attack) {
                     const reaction = packet.partyReaction(party_id) orelse return error.MissingCounterProgram;
                     const ret_prog = reaction.return_program orelse return error.MissingCounterProgram;
-                    if (self.spell_scenes != null) try art.checkProgramArt(self.*, bundle, party_res, melee.hurt_program, 0, 0, false);
-                    try art.checkProgramArt(self.*, bundle, party_res, ret_prog, 0, 0, false);
+                    if (self.spell_scenes != null) try art.checkProgramArt(self.*, bundle.library(), party_res, melee.hurt_program, 0, 0, false);
+                    try art.checkProgramArt(self.*, bundle.library(), party_res, ret_prog, 0, 0, false);
                 }
                 if (self.spell_scenes != null) {
-                    if (regional.special_recipient_return) |ret| try art.checkProgramArt(self.*, bundle, party_res, ret, 0, 0, false);
+                    if (regional.special_recipient_return) |ret| try art.checkProgramArt(self.*, bundle.library(), party_res, ret, 0, 0, false);
                 }
             }
         }
@@ -404,7 +404,7 @@ pub fn spellActorPosition(self: *const State, index: usize) ?Position {
     return null;
 }
 pub fn actorSize(self: State, index: usize) f32 {
-    return @as(f32, @floatFromInt(self.actor_sizes[index])) / 4096;
+    return @as(f32, @floatFromInt(self.actor_transforms[index].scale_q12)) / 4096;
 }
 pub fn hasBackgroundWarp(self: State) bool {
     return self.backgroundCaptureMinimum() != null;
@@ -740,10 +740,10 @@ pub fn advanceSpellScene(self: *State, action_update: u16) void {
             return;
         };
         if (transformed) |sample| {
-            self.actor_sizes[index] = sample.size;
+            self.actor_transforms[index].scale_q12 = sample.size;
             const home = target.home orelse target.position;
-            if (update >= motion.start + motion.updates - 1 and update < motion.returning) self.actor_world_offsets[index] = .{ .x = @floatFromInt(motion.destination[0] - home[0]), .y = @floatFromInt(motion.destination[1] - home[1]), .z = @floatFromInt(motion.destination[2] - home[2]) };
-            if (update >= motion.returning + motion.updates - 1) self.actor_world_offsets[index] = .{ .x = 0, .y = 0, .z = 0 };
+            if (update >= motion.start + motion.updates - 1 and update < motion.returning) self.actor_transforms[index].world_offset = .{ .x = @floatFromInt(motion.destination[0] - home[0]), .y = @floatFromInt(motion.destination[1] - home[1]), .z = @floatFromInt(motion.destination[2] - home[2]) };
+            if (update >= motion.returning + motion.updates - 1) self.actor_transforms[index].world_offset = .{ .x = 0, .y = 0, .z = 0 };
         }
     };
     if (self.replay_draws == null) self.random = local.prng.?;

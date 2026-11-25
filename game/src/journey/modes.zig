@@ -1,7 +1,7 @@
 //! Duel, war, ending, and battle mode lifecycle & update handlers for journey.State.
 const std = @import("std");
-const battle_flow = @import("journey_battle");
-const roster = @import("journey_roster");
+const battle_flow = @import("../journey_battle.zig");
+const roster = @import("../journey_roster.zig");
 const party_session = @import("party_session");
 const battle = @import("battle");
 const duel = @import("duel");

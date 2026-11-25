@@ -41,7 +41,7 @@ pub fn homePosition(state: *const battle.State, index: usize) battle.Position {
 }
 pub fn worldPosition(state: *const battle.State, index: usize) battle.Position {
     if (departurePosition(state, index)) |flight_position| return flight_position;
-    if (index < state.partyCount()) if (state.revivals[index]) |instance| return instance.origin;
+    if (index < state.partyCount()) if (state.party_knockouts[index].revival) |instance| return instance.origin;
     if (!state.unite_vm.ownsActor(index) and state.unite_vm.idle[index] != null) {
         if (state.spellActorPosition(index)) |spell_position| return spell_position;
     }
@@ -60,7 +60,7 @@ pub fn departurePosition(state: *const battle.State, index: usize) ?battle.Posit
 }
 pub fn ambientWorldPosition(state: *const battle.State, index: usize) battle.Position {
     const p = ambientPositionWithoutOffset(state, index);
-    const shift = state.actor_world_offsets[index];
+    const shift = state.actor_transforms[index].world_offset;
     return .{ .x = p.x + shift.x, .y = p.y + shift.y, .z = p.z + shift.z };
 }
 fn ambientPositionWithoutOffset(state: *const battle.State, index: usize) battle.Position {
@@ -301,7 +301,7 @@ pub fn actorLayout(state: battle.State, index: usize) battle.ActorLayout {
         source_pose = if (anchors) |value| (if (response.animation == 0) value.idle_pose else value.hurt_pose) else null;
     };
     const enemy_magic_reaction = if (index < state.unite_vm.scripted_actors.len) if (state.unite_vm.scripted_actors[index]) |binding| binding.family == .enemy_magic and scripted_pose != null else false else false;
-    if (index < state.partyCount() and state.hp(index) == 0 and !state.knockout_pending[index] and !enemy_magic_reaction) if (profile.revival_art) |art| {
+    if (index < state.partyCount() and state.hp(index) == 0 and !state.party_knockouts[index].pending and !enemy_magic_reaction) if (profile.revival_art) |art| {
         sprite = art.down.frames[0].pose;
         source_pose = art.down.frames[0].source_pose;
     };
@@ -310,7 +310,7 @@ pub fn actorLayout(state: battle.State, index: usize) battle.ActorLayout {
         const frame = if (age < spec.recovery_start) art.down.frameAt(age) else art.recovery.frameAt(age - spec.recovery_start);
         sprite = frame.pose;
         source_pose = frame.source_pose;
-        const offset = state.revivals[index].?.screen_offset;
+        const offset = state.party_knockouts[index].revival.?.screen_offset;
         point.x += @as(f32, @floatFromInt(offset[0])) * scale;
         point.y += @as(f32, @floatFromInt(offset[1])) * scale;
     };
@@ -508,10 +508,11 @@ pub fn applySpellReaction(state: battle.State, index: usize, point: *presentatio
 
 pub const AuxiliaryQuad = struct { vertices: [4]presentation.ScreenPoint, sprite: battle.Pose, translucent: bool, depth: f32, effect: bool = false, color: [3]u8 = @splat(128), blend: battle.spell_scene.Blend = .@"opaque" };
 pub fn rotatedActorQuad(state: battle.State, index: usize, sprite: battle.Pose, point: presentation.ScreenPoint) ?AuxiliaryQuad {
-    const angles = state.actor_node_angles[index];
+    const transform = state.actor_transforms[index];
+    const angles = transform.node_angles;
     if (std.mem.eql(i16, &angles, &.{ 0, 0, 0 })) return null;
     var block = currentCamera(state);
-    for (&block.scale) |*value| value.* = @intCast(@divTrunc(@as(i64, value.*) * state.actor_sizes[index], 4096));
+    for (&block.scale) |*value| value.* = @intCast(@divTrunc(@as(i64, value.*) * transform.scale_q12, 4096));
     return ordinaryRotatedNodeQuad(block, point, sprite, angles);
 }
 pub fn uniteAuxiliary(state: battle.State, index: usize) ?AuxiliaryQuad {

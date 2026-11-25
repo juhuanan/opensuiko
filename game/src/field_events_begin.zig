@@ -31,6 +31,7 @@ const Room2Descriptor = events.Room2Descriptor;
 const validate_mod = @import("field_events_validate.zig");
 const validate = validate_mod.validate;
 
+/// Start an admitted interaction using the caller's room actor construction.
 pub fn beginInteraction(binding: Binding, state: field.State, serial: u64, entity: u8, construction: ?ordinary.State) !Session {
     try binding.validateContext();
     try population.validate(binding.population);

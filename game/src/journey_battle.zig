@@ -1,11 +1,18 @@
 //! Battle entry/return flow for the journey state.
 const std = @import("std");
+const State = @import("journey.zig").State;
 const battle = @import("battle");
 const field = @import("field");
 const encounter_policy = @import("campaign_policies").encounter;
 const party = @import("party_session");
-const save = @import("journey_save");
+const save = @import("journey_save.zig");
 const events = field.game_state.event_runtime;
+
+pub const FieldEncounterClock = struct {
+    updates: u16 = 0,
+    ready: bool = false,
+    enabled: bool = true,
+};
 
 pub fn encounterIndex(content: battle.Content, id: []const u8) ?usize {
     for (content.encounters, 0..) |encounter, i| if (std.mem.eql(u8, encounter.id, id)) return i;
@@ -54,13 +61,13 @@ pub const FieldEncounters = struct {
     }
 };
 
-pub fn initialFieldEncounterClock(data: ?FieldEncounters, story: ?events.StoryState) save.Snapshot.EncounterClock {
+pub fn initialFieldEncounterClock(data: ?FieldEncounters, story: ?events.StoryState) FieldEncounterClock {
     const suppress_when = (data orelse return .{}).suppress_when orelse return .{};
     const current = story orelse events.StoryState{};
     return .{ .enabled = !current.matches(&.{suppress_when}) };
 }
 
-pub fn beginReadyFieldEncounter(state: anytype) !bool {
+pub fn beginReadyFieldEncounter(state: *State) !bool {
     const world = &state.field_state;
     if (!state.field_encounter_clock.ready or state.mode != .field or state.field_event != null or
         state.menu.phase != .closed or state.menu.pending or world.remaining != 0 or
@@ -99,14 +106,14 @@ pub fn beginReadyFieldEncounter(state: anytype) !bool {
     return false;
 }
 
-pub fn beginEncounter(state: anytype, index: usize) !void {
+pub fn beginEncounter(state: *State, index: usize) !void {
     if (index >= state.data.encounters.len) return error.GameBusy;
     const encounter = encounterIndex(state.combat.content, state.data.encounters[index].encounter) orelse return error.UnknownEncounter;
     try beginCombat(state, encounter);
     state.encounter_trigger = index;
 }
 
-pub fn beginCombat(state: anytype, encounter: usize) !void {
+pub fn beginCombat(state: *State, encounter: usize) !void {
     if (state.mode != .field or state.scripted_battle != null or state.menu.phase != .closed or state.field_state.dialogue != null or state.field_state.remaining != 0) return error.GameBusy;
     if (encounter >= state.combat.content.encounters.len) return error.UnknownEncounter;
     if (state.field_state.progress.party.len > state.extras.len) return error.InvalidExtras;
@@ -122,7 +129,7 @@ pub fn beginCombat(state: anytype, encounter: usize) !void {
     startCombat(state, encounter);
 }
 
-pub fn retryCombat(state: anytype) !void {
+pub fn retryCombat(state: *State) !void {
     const checkpoint = state.checkpoint orelse return error.MissingBattleCheckpoint;
     const encounter = state.combat.encounter;
     const trigger = state.encounter_trigger;
@@ -148,7 +155,7 @@ pub fn retryCombat(state: anytype) !void {
     if (scripted != null) state.suppressed_trigger = suppressed_trigger;
 }
 
-fn startCombat(state: anytype, encounter: usize) void {
+fn startCombat(state: *State, encounter: usize) void {
     for (0..state.combat.partyCount()) |member| {
         state.combat.weapon_augments[member] = party.weaponAugment(state.extras[member]);
     }
@@ -161,7 +168,7 @@ fn startCombat(state: anytype, encounter: usize) void {
     state.field_state.action_pending = false;
 }
 
-pub fn returnFromBattle(state: anytype, won: bool) void {
+pub fn returnFromBattle(state: *State, won: bool) void {
     if (state.encounter_trigger) |index| {
         if (won) {
             state.combat.progress.story.complete(state.data.encounters[index].flag);
@@ -173,7 +180,7 @@ pub fn returnFromBattle(state: anytype, won: bool) void {
         }
         state.suppressed_trigger = index;
     }
-    state.combat.asleep = @splat(0);
+    state.combat.clearSleep();
     state.combat.clearTemporaryStats();
     state.combat.unbalanced = @splat(0);
     state.encounter_trigger = null;

@@ -96,7 +96,10 @@ const battle_scene_host_mod = @import("battle_scene_host.zig");
 const battle_stats_mod = @import("battle_stats.zig");
 const battle_gear_runes_mod = @import("battle_gear_runes.zig");
 const battle_turn_tick_mod = @import("battle_turn_tick.zig");
+const battle_rewards = @import("battle_rewards.zig");
+const battle_status = @import("battle_status.zig");
 const battle_turn_dispatch_mod = @import("battle_turn_dispatch.zig");
+const presentation_flow = @import("battle_presentation_flow.zig");
 const battle_coordinator_mod = @import("battle_coordinator.zig");
 const battle_actions_mod = @import("battle_actions.zig");
 const battle_unite_host_mod = @import("battle_unite_host.zig");
@@ -107,6 +110,27 @@ const battle_enemy_magic_host_mod = @import("battle_enemy_magic_host.zig");
 const battle_commander_host_mod = @import("battle_commander_host.zig");
 const battle_enemy_wave_host_mod = @import("battle_enemy_wave_host.zig");
 pub const revival = @import("battle_revival.zig");
+
+const ActorTransform = struct {
+    node_angles: [3]i16 = @splat(0),
+    scale_q12: i32 = 4096,
+    world_offset: Position = .{ .x = 0, .y = 0, .z = 0 },
+    screen_offset: [2]i8 = .{ 0, 0 },
+};
+
+const ActorConditions = struct {
+    sleep_turns: u8 = 0,
+    accuracy_reduced: bool = false,
+    rune_blocked: bool = false,
+    stat_modifiers: TemporaryStats = .{},
+    protection_rounds: u8 = 0,
+};
+
+const PartyKnockout = struct {
+    pending: bool = false,
+    prior_status: ?field.game_state.Status = null,
+    revival: ?revival.Revival = null,
+};
 
 pub const State = struct {
     content: Content,
@@ -122,7 +146,6 @@ pub const State = struct {
     unite_scene: ?UniteScenePlayback = null,
     trick_wave: ?struct { owner: usize, wave: unite_trick.State, updated_at: ?u32 = null } = null,
     martial_queue: ?struct { owner: usize, queue: unite_queue.State, updated_at: ?u32 = null } = null,
-    actor_node_angles: [12][3]i16 = @splat(@splat(0)),
     source_camera_hold: ?@import("battle_camera").Block = null,
     source_camera_return: ?struct { from: @import("battle_camera").Block, started: u32 } = null,
     unite_trails: [6]UniteTrailState = @splat(.{}),
@@ -144,9 +167,7 @@ pub const State = struct {
     last_targets: [6]i8 = @splat(-1),
     presentation_tick: u32 = 0,
     camera_ticks: u32 = 0,
-    actor_sizes: [12]i32 = @splat(4096),
-    actor_world_offsets: [12]Position = @splat(.{ .x = 0, .y = 0, .z = 0 }),
-    actor_screen_offsets: [12][2]i8 = @splat(.{ 0, 0 }),
+    actor_transforms: [12]ActorTransform = @splat(.{}),
     formation_shifts: [6]?struct { from_slot: usize, started_at: u32 } = @splat(null),
     pending_enemy_actor: ?usize = null,
     pending_party_actor: ?usize = null,
@@ -159,9 +180,7 @@ pub const State = struct {
     front_projectiles: [6]?FrontProjectile = @splat(null),
     medicine_action: ?MedicineAction = null,
     item_impacts: [6]?types_mod.ItemImpact = @splat(null),
-    revivals: [6]?revival.Revival = @splat(null),
-    knockout_pending: [6]bool = @splat(false),
-    knockout_status: [6]?field.game_state.Status = @splat(null),
+    party_knockouts: [6]PartyKnockout = @splat(.{}),
     round_menu_pending: bool = false,
     roc_cover: bool = false,
     roc_attack_from_settled: bool = false,
@@ -213,12 +232,8 @@ pub const State = struct {
     spark_pending: bool = false,
     departed: [6]bool = @splat(false),
     departures: [6]?struct { started_at: u32, origin: Position } = @splat(null),
-    asleep: [12]u8 = @splat(0),
-    status_icons: [6]@import("battle_status").IconClock = @splat(.{}),
-    accuracy_reduced: [12]bool = @splat(false),
-    rune_blocked: [12]bool = @splat(false),
-    temporary_stats: [12]TemporaryStats = @splat(.{}),
-    protection: [12]u8 = @splat(0),
+    actor_conditions: [12]ActorConditions = @splat(.{}),
+    status_icons: [6]battle_status.IconClock = @splat(.{}),
     unbalanced: [6]u8 = @splat(0),
     escape_allowed: bool = true,
     rewards_committed: bool = false,
@@ -260,7 +275,6 @@ pub const State = struct {
         }
         self.formation = .{ 0, 1, 2, 3, 4, 5 };
         self.weapon_augments = @splat(.{});
-        self.asleep = @splat(0);
         self.unbalanced = @splat(0);
         self.escape_allowed = true;
         self.reward_drop = false;
@@ -271,6 +285,10 @@ pub const State = struct {
         self.quit_requested = false;
         self.startEncounter();
         self.phase = .intro;
+    }
+
+    pub fn clearSleep(self: *State) void {
+        for (&self.actor_conditions) |*conditions| conditions.sleep_turns = 0;
     }
 
     pub fn partyCount(self: *const State) usize {
@@ -464,10 +482,10 @@ pub const State = struct {
     pub const attachRune = battle_gear_runes_mod.attachRune;
     pub const detachRune = battle_gear_runes_mod.detachRune;
     pub const hasRune = battle_gear_runes_mod.hasRune;
-    pub const statusImmune = battle_gear_runes_mod.statusImmune;
-    pub const requestUniteRecovery = battle_gear_runes_mod.requestUniteRecovery;
-    pub const requestActorStatus = battle_gear_runes_mod.requestActorStatus;
-    pub const inflictStatus = battle_gear_runes_mod.inflictStatus;
+    pub const statusImmune = battle_status.statusImmune;
+    pub const requestUniteRecovery = battle_status.requestUniteRecovery;
+    pub const requestActorStatus = battle_status.requestActorStatus;
+    pub const inflictStatus = battle_status.inflictStatus;
     pub const runeHint = battle_gear_runes_mod.runeHint;
     pub const spellTier = battle_gear_runes_mod.spellTier;
     pub const canCast = battle_gear_runes_mod.canCast;
@@ -503,13 +521,11 @@ pub const State = struct {
     pub const beginDeparture = battle_turn_dispatch_mod.beginDeparture;
     pub const advanceDefeatDeparture = battle_turn_tick_mod.advanceDefeatDeparture;
     pub const hasDepartureFlights = battle_turn_tick_mod.hasDepartureFlights;
-    pub const applyRoundBoundaryStatuses = battle_turn_dispatch_mod.applyRoundBoundaryStatuses;
-    pub const resolveTick = battle_turn_dispatch_mod.resolveTick;
-    pub const attachEffects = battle_turn_dispatch_mod.attachEffects;
-    pub const beginCastPresentation = battle_turn_dispatch_mod.beginCastPresentation;
-    pub const beginAttackPresentation = battle_turn_dispatch_mod.beginAttackPresentation;
-    pub const advancePresentation = battle_turn_dispatch_mod.advancePresentation;
-    pub const effectFrame = battle_turn_dispatch_mod.effectFrame;
+    pub const advanceStatusIcons = battle_status.advanceIcons;
+    pub const applyRoundBoundaryStatuses = battle_status.applyRoundBoundaryStatuses;
+    pub const attachEffects = presentation_flow.attachEffects;
+    pub const advancePresentation = presentation_flow.advancePresentation;
+    pub const effectFrame = presentation_flow.effectFrame;
     pub const beginSpellAction = battle_turn_dispatch_mod.beginSpellAction;
     pub const beginUniteAction = battle_turn_dispatch_mod.beginUniteAction;
     pub const startUniteAction = battle_turn_dispatch_mod.startUniteAction;
@@ -572,10 +588,8 @@ pub const State = struct {
     pub const advanceMedicine = battle_coordinator_mod.advanceMedicine;
     pub const partyAttackTiming = battle_coordinator_mod.partyAttackTiming;
     pub const resolvePhysicalDamage = battle_stats_mod.resolvePhysicalDamage;
-    pub const beginPartyStrike = battle_coordinator_mod.beginPartyStrike;
     pub const startRangedStrike = battle_coordinator_mod.startRangedStrike;
     pub const advancePartyStrike = battle_coordinator_mod.advancePartyStrike;
-    pub const clearKnockoutStatuses = battle_actions_mod.clearKnockoutStatuses;
     pub const markPartyKnockout = revival.markPartyKnockout;
     pub const commitPartyKnockout = revival.commitPartyKnockout;
     pub const hasPendingRevival = revival.hasPendingRevival;
@@ -602,7 +616,7 @@ pub const State = struct {
     pub const followupTarget = battle_actions_mod.followupTarget;
     pub const usesProfileAttack = battle_actions_mod.usesProfileAttack;
     pub const beginAttack = battle_actions_mod.beginAttack;
-    pub const recoverSleep = battle_actions_mod.recoverSleep;
+    pub const recoverSleep = battle_status.recoverSleep;
     pub const chooseEnemyTarget = battle_actions_mod.chooseEnemyTarget;
     pub const applyFieldStatuses = battle_actions_mod.applyFieldStatuses;
     pub const castFieldSpell = battle_actions_mod.castFieldSpell;
@@ -640,9 +654,9 @@ pub const State = struct {
     pub const spellStatus = battle_spell_rewards_mod.spellStatus;
     pub const applySpellBridge = battle_spell_rewards_mod.applySpellBridge;
     pub const applySpell = battle_spell_rewards_mod.applySpell;
-    pub const rewardReady = battle_spell_rewards_mod.rewardReady;
-    pub const commitRewards = battle_spell_rewards_mod.commitRewards;
-    pub const experienceAward = battle_spell_rewards_mod.experienceAward;
+    pub const rewardReady = battle_rewards.rewardReady;
+    pub const commitRewards = battle_rewards.commitRewards;
+    pub const experienceAward = battle_rewards.experienceAward;
     pub const applyExperience = battle_spell_rewards_mod.applyExperience;
     pub const sceneExperience = battle_spell_rewards_mod.sceneExperience;
     pub const levelUp = battle_spell_rewards_mod.levelUp;

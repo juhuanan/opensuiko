@@ -226,7 +226,7 @@ test "Ninja actor special uses contact damage and its separate return for every 
             member.max_hp = 9999;
         }
         if (mode == 1) state.actions[target] = .defend;
-        if (mode == 2) state.protection[target] = 2;
+        if (mode == 2) state.actor_conditions[target].protection_rounds = 2;
         if (mode == 3) state.runes[target] = data.systems.?.runeIndex("turtle").?;
         if (mode == 5) {
             members[target].hp = 1;
@@ -249,7 +249,7 @@ test "Ninja actor special uses contact damage and its separate return for every 
             for (state.unite_vm.counter_actions) |maybe| if (maybe) |playback| {
                 if (playback.contact_at) |at| {
                     if (contact == null) contact = at;
-                    saw_block = saw_block or state.rune_blocked[target];
+                    saw_block = saw_block or state.actor_conditions[target].rune_blocked;
                     try std.testing.expectEqual(@as(u32, expected), playback.amount);
                     try std.testing.expect(state.unite_vm.actors[owner].signals & 2 == 0);
                 }
@@ -267,8 +267,8 @@ test "Ninja actor special uses contact damage and its separate return for every 
         const immune = state.hasRune(target, "turtle");
         try std.testing.expectEqual(@as(usize, if (immune) 1 else 2), draws.cursor);
         try std.testing.expectEqual(!immune and mode != 4, saw_block);
-        try std.testing.expectEqual(!immune and mode != 4 and mode != 5, state.rune_blocked[target]);
-        if (mode == 5) try std.testing.expect(members[target].status == .unconscious and !state.knockout_pending[target]);
+        try std.testing.expectEqual(!immune and mode != 4 and mode != 5, state.actor_conditions[target].rune_blocked);
+        if (mode == 5) try std.testing.expect(members[target].status == .unconscious and !state.party_knockouts[target].pending);
         try std.testing.expect(state.active == null and !state.unite_vm.hasActors());
     };
 }
@@ -376,11 +376,11 @@ test "Ninja actor contact rolls HP and rune block atomically and refuses stale b
         try std.testing.expectEqual(clock, state.camera_ticks);
         try std.testing.expectEqual(pc, state.unite_vm.actors[owner].machine.?.pc);
         try std.testing.expectEqual(@as(usize, 0), missing.cursor);
-        try std.testing.expect(!state.rune_blocked[0] and state.unite_vm.counter_actions[0].?.contact_at == null);
+        try std.testing.expect(!state.actor_conditions[0].rune_blocked and state.unite_vm.counter_actions[0].?.contact_at == null);
     }
     var complete = battle.systems.Draws{ .values = &.{ 0, 0 } };
     try state.tickReplay(.{}, &complete);
-    try std.testing.expect(members[0].hp < hp and state.rune_blocked[0]);
+    try std.testing.expect(members[0].hp < hp and state.actor_conditions[0].rune_blocked);
     try std.testing.expectEqual(@as(usize, 2), complete.cursor);
 }
 
@@ -418,6 +418,6 @@ test "Ninja actor ordinary and special decisions finish complete source-coordina
         try std.testing.expectEqual(@as(u32, 2), state.round);
         try std.testing.expect(state.phase == .battle_menu and state.active == null and !state.unite_vm.hasActors());
         try std.testing.expect(members[0].hp < 9999);
-        try std.testing.expectEqual(special, state.rune_blocked[0]);
+        try std.testing.expectEqual(special, state.actor_conditions[0].rune_blocked);
     }
 }

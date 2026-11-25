@@ -1309,12 +1309,12 @@ test "package field battle choices wait for confirmation and select battle or fi
             try std.testing.expectEqual(@as(usize, 1), state.combat.partyCount());
             try std.testing.expect(!state.field_encounter_clock.enabled);
             try state.field_state.local_flags.orByte(0, 2);
-            try journey.save(io, std.testing.allocator, temp.dir, state);
+            try journey.save(io, std.testing.allocator, temp.dir, state.*);
             try journey.restore(io, std.testing.allocator, temp.dir, state);
             try std.testing.expect(state.field_state.local_flags.matches(0, 2, true));
             const before_exit = try std.testing.allocator.create(journey.Snapshot);
             defer std.testing.allocator.destroy(before_exit);
-            before_exit.* = try journey.Snapshot.capture(state);
+            before_exit.* = try journey.Snapshot.capture(state.*);
             for (0..state.package.step_ticks) |_| _ = try state.tickWithFieldEvents(.{ .field = .{ .direction = .down } }, .{});
             try std.testing.expectEqual(.world, state.route.stage);
             try std.testing.expectEqual(@as(u64, 4), state.route.journal);
@@ -1324,7 +1324,7 @@ test "package field battle choices wait for confirmation and select battle or fi
             try std.testing.expect(state.field_encounter_clock.enabled);
             try std.testing.expectEqual(@as(u8, 0), state.combat.progress.story.scenario.?.scenario[1]);
             try std.testing.expectEqualDeep(initial_rng, state.combat.random);
-            try journey.save(io, std.testing.allocator, temp.dir, state);
+            try journey.save(io, std.testing.allocator, temp.dir, state.*);
             try journey.restore(io, std.testing.allocator, temp.dir, state);
             try std.testing.expectEqual(.up, state.field_state.facing);
             try before_exit.apply(state);
@@ -1336,7 +1336,7 @@ test "package field battle choices wait for confirmation and select battle or fi
             state.data.encounters = &fallback;
             const before_arrival = try std.testing.allocator.create(journey.Snapshot);
             defer std.testing.allocator.destroy(before_arrival);
-            before_arrival.* = try journey.Snapshot.capture(state);
+            before_arrival.* = try journey.Snapshot.capture(state.*);
             var story = state.room_battles.?.initial_story;
             try story.clear(.{ .id = "scenario_0001", .mask = 4 });
             state.combat.progress.story.scenario = story;
@@ -1355,7 +1355,7 @@ test "package field battle choices wait for confirmation and select battle or fi
             try std.testing.expect(state.field_event != null);
             state.data.encounters = encounters;
             try before_arrival.apply(state);
-            try journey.save(io, std.testing.allocator, temp.dir, state);
+            try journey.save(io, std.testing.allocator, temp.dir, state.*);
             try journey.restore(io, std.testing.allocator, temp.dir, state);
             const x = state.field_state.x;
             _ = try state.tickWithFieldEvents(.{ .field = .{ .direction = .right } }, .{});
@@ -2386,12 +2386,13 @@ test "field event compatibility preserves versioned restoration, world context, 
     const hp_restore: []const runtime.Command = &.{ .{ .kind = .party_restore, .hp_only = true }, .{ .kind = .end_stream } };
     const static_world: []const runtime.Command = &.{.{ .kind = .world_transition, .destination = "world_a", .x = 20, .y = 25 }};
     const retained_world: []const runtime.Command = &.{.{ .kind = .world_transition, .retain_world_region = true, .x = 20, .y = 25 }};
+    const return_world: []const runtime.Command = &.{.{ .kind = .world_transition, .return_to_entry = true }};
     const effect: []const runtime.Command = &.{
         .{ .kind = .field_effect, .x = 256, .y = 208, .effect = .appearance },
         .{ .kind = .wait_field_effect },
         .{ .kind = .end_stream },
     };
-    const Case = struct { schema: []const u8, commands: []const runtime.Command, outcome: enum { full, hp, rejected, static_world, retained_world, effect } };
+    const Case = struct { schema: []const u8, commands: []const runtime.Command, outcome: enum { full, hp, rejected, static_world, retained_world, return_world, effect } };
     for ([_]Case{
         .{ .schema = runtime.campaign_schema, .commands = full_restore, .outcome = .full },
         .{ .schema = runtime.scene_schema, .commands = full_restore, .outcome = .rejected },
@@ -2399,12 +2400,18 @@ test "field event compatibility preserves versioned restoration, world context, 
         .{ .schema = runtime.branch_history_schema, .commands = static_world, .outcome = .static_world },
         .{ .schema = runtime.branch_history_schema, .commands = retained_world, .outcome = .rejected },
         .{ .schema = runtime.world_entry_schema, .commands = retained_world, .outcome = .retained_world },
+        .{ .schema = runtime.branch_history_schema, .commands = return_world, .outcome = .rejected },
+        .{ .schema = runtime.world_entry_schema, .commands = return_world, .outcome = .return_world },
         .{ .schema = runtime.field_effect_schema, .commands = effect, .outcome = .effect },
     }) |case| {
         var state = try boot.newState();
         state.field_state.enterRoom(state.package.roomIndex("vb6_inn").?, .{ .x = 256, .y = 208 });
         var binding = template;
-        binding.room_package = state.package;
+        var package = state.package;
+        if (case.outcome == .return_world) package.world_entries = &.{
+            .{ .id = "test_gate", .world_room = "world_a", .point = 3, .area = "vb6", .return_x = 168, .return_y = 216 },
+        };
+        binding.room_package = package;
         binding.scripted_motion = case.outcome == .effect;
         const host = state.combat.integrationHost() orelse return error.MissingBattleIntegration;
         var party_ids: [6]u8 = undefined;
@@ -2457,6 +2464,21 @@ test "field event compatibility preserves versioned restoration, world context, 
                 try std.testing.expectEqual(world_room, field_state.room);
                 try std.testing.expectEqual(field.Point{ .x = 160, .y = 200 }, field_state.destination);
                 try std.testing.expect(field_state.crossed_world_exit);
+            },
+            .return_world => {
+                const world_room = package.roomIndex("world_a").?;
+                const old_entries = field_state.room_entries;
+                const old_pc = session.instance.?.execution.pc;
+                try std.testing.expectError(error.MissingWorldEntry, session.tick(binding, field_state, false));
+                try std.testing.expectEqual(old_entries, field_state.room_entries);
+                try std.testing.expectEqual(old_pc, session.instance.?.execution.pc);
+                field_state.setWorldEntry(package, "test_gate");
+                _ = try session.tick(binding, field_state, false);
+                try std.testing.expectEqual(world_room, field_state.room);
+                try std.testing.expectEqual(field.Point{ .x = 168, .y = 216 }, field_state.destination);
+                try std.testing.expect(field_state.crossed_world_exit);
+                try std.testing.expectEqual(old_entries + 1, field_state.room_entries);
+                try std.testing.expect(!session.instance.?.execution.active);
             },
             .effect => {
                 const pending = (try runtime.step(binding.content, &session.instance.?, &field_state.progress.story.scenario.?, .{})).batch.?;

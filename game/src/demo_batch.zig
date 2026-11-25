@@ -234,7 +234,9 @@ pub const Snapshot = struct {
 
     pub fn capture(session: Session) !Snapshot {
         if (!canSave(session)) return error.SaveAtRoundStart;
-        return .{ .schema = "suikoden-demo-save/2", .encounter = session.battle.encounter, .round = session.battle.round, .money = session.battle.progress.money, .party = session.battle.progress.party[0..6].*, .levels = session.battle.levels, .stats = session.battle.base_stats, .experience = session.battle.experience, .formation = session.battle.formation, .equipment = session.battle.headEquipment(), .runes = session.battle.runes, .asleep = session.battle.asleep, .enemy_hp = session.battle.enemy_hp, .random = session.battle.random };
+        var asleep: [12]u8 = undefined;
+        for (&asleep, session.battle.actor_conditions) |*turns, conditions| turns.* = conditions.sleep_turns;
+        return .{ .schema = "suikoden-demo-save/2", .encounter = session.battle.encounter, .round = session.battle.round, .money = session.battle.progress.money, .party = session.battle.progress.party[0..6].*, .levels = session.battle.levels, .stats = session.battle.base_stats, .experience = session.battle.experience, .formation = session.battle.formation, .equipment = session.battle.headEquipment(), .runes = session.battle.runes, .asleep = asleep, .enemy_hp = session.battle.enemy_hp, .random = session.battle.random };
     }
     pub fn restore(self: Snapshot, session: *Session) !void {
         if (!std.mem.eql(u8, self.schema, "suikoden-demo-save/2") or self.encounter >= session.battle.content.encounters.len or self.round == 0 or self.round > 1000000) return error.InvalidDemoSave;
@@ -279,7 +281,7 @@ pub const Snapshot = struct {
         session.battle.formation = self.formation;
         session.battle.loadouts = battle.systems.legacyLoadouts(self.equipment);
         session.battle.runes = self.runes;
-        session.battle.asleep = self.asleep;
+        for (&session.battle.actor_conditions, self.asleep) |*conditions, turns| conditions.sleep_turns = turns;
         session.battle.enemy_hp = self.enemy_hp;
         session.battle.random = self.random;
         session.battle.round = self.round;

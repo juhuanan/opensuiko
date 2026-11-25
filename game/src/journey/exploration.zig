@@ -1,7 +1,7 @@
 //! Field exploration, encounters, room transitions, crossings, and episode objectives.
 const std = @import("std");
-const roster = @import("journey_roster");
-const battle_flow = @import("journey_battle");
+const roster = @import("../journey_roster.zig");
+const battle_flow = @import("../journey_battle.zig");
 const field = @import("field");
 const pause = @import("pause_menu");
 const journey = @import("../journey.zig");

@@ -220,18 +220,18 @@ test "sleep skips actions, physical attacks wake and poison is curable" {
     session.start(7);
     session.suggested();
     try resolve(&session);
-    try equal(@as(u8, 2), session.battle.asleep[6]);
+    try equal(@as(u8, 2), session.battle.actor_conditions[6].sleep_turns);
     try equal(@as(u16, 114), members[1].hp);
     session.suggested();
     try resolve(&session);
     try equal(.healthy, members[1].status);
-    try equal(@as(u8, 1), session.battle.asleep[6]);
+    try equal(@as(u8, 1), session.battle.actor_conditions[6].sleep_turns);
     session.battle.actions = @splat(.defend);
     session.battle.actions[0] = .{ .attack = 0 };
     session.battle.base_stats[0].skill = 999;
     session.battle.phase = .confirm_round;
     try resolve(&session);
-    try equal(@as(u8, 0), session.battle.asleep[6]);
+    try equal(@as(u8, 0), session.battle.actor_conditions[6].sleep_turns);
 }
 
 test "demo checkpoint round trips separately and rejects corrupt state before mutation" {
@@ -243,6 +243,8 @@ test "demo checkpoint round trips separately and rejects corrupt state before mu
     var session = try demo.Session.init(content.value, rules.value, &members);
     session.start(11);
     members[0].hp = 54;
+    session.battle.actor_conditions[3].sleep_turns = 2;
+    session.battle.actor_conditions[session.battle.partyCount()].sleep_turns = 4;
     session.battle.runes[0] = content.value.systems.?.runeIndex("fire").?;
     try session.battle.swapFormation(0, 5);
     try session.battle.equip(0, 1);
@@ -250,12 +252,15 @@ test "demo checkpoint round trips separately and rejects corrupt state before mu
     defer temporary.cleanup();
     try demo.save(std.testing.io, allocator, temporary.dir, session);
     const before = try demo.Snapshot.capture(session);
+    try std.testing.expectEqual([12]u8{ 0, 0, 0, 2, 0, 0, 4, 0, 0, 0, 0, 0 }, before.asleep);
     session.start(0);
     var profiles: [6]battle.Profile = undefined;
     @memcpy(&profiles, content.value.party);
     std.mem.reverse(battle.Profile, &profiles);
     session.battle.content.party = &profiles;
     try demo.load(std.testing.io, allocator, temporary.dir, &session);
+    try std.testing.expectEqual(@as(u8, 2), session.battle.actor_conditions[3].sleep_turns);
+    try std.testing.expectEqual(@as(u8, 4), session.battle.actor_conditions[session.battle.partyCount()].sleep_turns);
     const after = try demo.Snapshot.capture(session);
     try std.testing.expectEqualDeep(before, after);
     for (members, 0..) |member, i| try std.testing.expectEqualStrings(member.id, session.battle.partyProfile(i).id);
@@ -270,6 +275,9 @@ test "demo checkpoint round trips separately and rejects corrupt state before mu
     try std.testing.expectError(error.InvalidDemoSave, bad.restore(&session));
     bad = before;
     bad.formation[1] = bad.formation[0];
+    try std.testing.expectError(error.InvalidDemoSave, bad.restore(&session));
+    bad = before;
+    bad.asleep[3] = 11;
     try std.testing.expectError(error.InvalidDemoSave, bad.restore(&session));
     try std.testing.expectEqualDeep(before, try demo.Snapshot.capture(session));
     session.battle.queue(.defend);
@@ -770,7 +778,7 @@ test "Talisman synchronizes both participants, commits once to its chosen enemy 
         session.tick(.{ .confirm = true });
         session.tick(.{});
         try equal(.unite, session.battle.active.?.kind);
-        if (sleep) session.battle.asleep[2] = 1 else {
+        if (sleep) session.battle.actor_conditions[2].sleep_turns = 1 else {
             members[2].hp = 0;
             members[2].status = .unconscious;
         }

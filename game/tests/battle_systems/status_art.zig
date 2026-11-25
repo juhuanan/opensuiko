@@ -11,9 +11,9 @@ fn allStatuses(state: *battle.State) void {
     for (state.progress.party, 0..) |*member, index| {
         member.status = .poisoned;
         member.balloons = 3;
-        state.asleep[index] = 1;
-        state.accuracy_reduced[index] = true;
-        state.rune_blocked[index] = true;
+        state.actor_conditions[index].sleep_turns = 1;
+        state.actor_conditions[index].accuracy_reduced = true;
+        state.actor_conditions[index].rune_blocked = true;
         state.unbalanced[index] = 2;
     }
 }
@@ -197,15 +197,15 @@ test "Balloon departure uses source motion and keeps symbols attached in both vi
         try std.testing.expect(!combat.departed[1] and combat.departures[1] == null);
         combat.markPartyKnockout(1);
         combat.beginDeparture(1);
-        try std.testing.expect(combat.knockout_pending[1] and !combat.departed[1] and combat.departures[1] == null);
-        combat.knockout_pending[1] = false;
-        combat.knockout_status[1] = null;
+        try std.testing.expect(combat.party_knockouts[1].pending and !combat.departed[1] and combat.departures[1] == null);
+        combat.party_knockouts[1].pending = false;
+        combat.party_knockouts[1].prior_status = null;
         combat.progress.party[1].hp = 1;
         combat.progress.party[1].status = .healthy;
-        combat.revivals[1] = .{ .started_at = start, .origin = battle.layout.worldPosition(&combat, 1), .original_status = .healthy };
+        combat.party_knockouts[1].revival = .{ .started_at = start, .origin = battle.layout.worldPosition(&combat, 1), .original_status = .healthy };
         combat.beginDeparture(1);
-        try std.testing.expect(combat.revivals[1] != null and !combat.departed[1] and combat.departures[1] == null);
-        combat.revivals[1] = null;
+        try std.testing.expect(combat.party_knockouts[1].revival != null and !combat.departed[1] and combat.departures[1] == null);
+        combat.party_knockouts[1].revival = null;
         const checks = [_]struct { age: u32, x: i32, y: i32, z: i32 }{
             .{ .age = 0, .x = 0, .y = 0, .z = 0 },
             .{ .age = 1, .x = 14180, .y = 8208, .z = -8533 },
@@ -289,7 +289,7 @@ test "Status art attaches to the current source body pose and scale in both worl
         combat.content.world_art = art;
         combat.phase = .command;
         for (0..6) |actor| {
-            combat.actor_sizes[actor] = size;
+            combat.actor_transforms[actor].scale_q12 = size;
             combat.progress.party[actor].hp = combat.progress.party[actor].max_hp / 8;
             try std.testing.expect(combat.inflictStatus(actor, .sleep));
         }

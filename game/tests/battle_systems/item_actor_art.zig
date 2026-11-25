@@ -123,8 +123,8 @@ test "Item actor frozen body copies share source positions scale tint and opacit
         }
         const captured = combat.medicine_action.?;
         for (0..6) |member| {
-            combat.actor_world_offsets[member] = .{ .x = 100, .y = -50, .z = 20 };
-            combat.actor_sizes[member] = 8192;
+            combat.actor_transforms[member].world_offset = .{ .x = 100, .y = -50, .z = 20 };
+            combat.actor_transforms[member].scale_q12 = 8192;
         }
         const effect = fixture.items.value.consumable(id).?.battle.?;
         for (0..29) |age| {

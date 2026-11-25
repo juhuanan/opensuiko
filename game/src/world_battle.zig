@@ -382,7 +382,7 @@ pub const Adapter = struct {
             }
             next.formation = result.formation;
             next.progress.money = result.money;
-            next.asleep = @splat(0);
+            next.clearSleep();
             next.clearTemporaryStats();
             next.unbalanced = @splat(0);
             next.medicine_action = null;
@@ -464,7 +464,7 @@ pub const Adapter = struct {
             };
             const outcome: world.Outcome = if (combat.phase == .victory) .victory else if (combat.released_enemies) .released else .fled;
             try session.finishBattle(outcome, combat.progress);
-            combat.asleep = @splat(0);
+            combat.clearSleep();
             combat.clearTemporaryStats();
             combat.unbalanced = @splat(0);
             combat.medicine_action = null;

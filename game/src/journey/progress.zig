@@ -1,7 +1,7 @@
 //! Journey room and battle share the caller-owned progress backing.
 const battle = @import("battle");
 const field = @import("field");
-const roster = @import("journey_roster");
+const roster = @import("../journey_roster.zig");
 const journey = @import("../journey.zig");
 
 pub fn current(state: *const journey.State) *const field.game_state.Progress {

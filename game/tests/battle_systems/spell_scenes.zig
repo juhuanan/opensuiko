@@ -169,9 +169,9 @@ test "imported Fog retains enemy bonuses and applies its group modifier only on 
     try combat.attachSpellScenes(&packet.value);
     combat.enemy_hp[0] = 0;
     const party = combat.partyCount();
-    combat.temporary_stats[party].skill_bonus = 70;
-    combat.temporary_stats[party + 1] = .{ .skill_bonus = 50, .defense_bonus = 91 };
-    combat.temporary_stats[party + 2] = .{ .skill_bonus = -51, .defense_bonus = -7 };
+    combat.actor_conditions[party].stat_modifiers.skill_bonus = 70;
+    combat.actor_conditions[party + 1].stat_modifiers = .{ .skill_bonus = 50, .defense_bonus = 91 };
+    combat.actor_conditions[party + 2].stat_modifiers = .{ .skill_bonus = -51, .defense_bonus = -7 };
     combat.runes[0] = fixture.view.systems.?.runeIndex("water");
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
@@ -194,11 +194,11 @@ test "imported Fog retains enemy bonuses and applies its group modifier only on 
         while (combat.active != null) {
             const tick = combat.effectTicks();
             const expected: i16 = if (cast == 0) (if (tick < 223) 50 else 40) else (if (tick < 223) 40 else 32);
-            try std.testing.expectEqual(expected, combat.temporary_stats[party + 1].skill_bonus);
-            try std.testing.expectEqual(@as(i16, if (cast == 0 and tick < 223) -51 else -expected), combat.temporary_stats[party + 2].skill_bonus);
-            try std.testing.expectEqual(@as(i16, 70), combat.temporary_stats[party].skill_bonus);
-            try std.testing.expectEqual(@as(i16, 91), combat.temporary_stats[party + 1].defense_bonus);
-            try std.testing.expectEqual(@as(i16, -7), combat.temporary_stats[party + 2].defense_bonus);
+            try std.testing.expectEqual(expected, combat.actor_conditions[party + 1].stat_modifiers.skill_bonus);
+            try std.testing.expectEqual(@as(i16, if (cast == 0 and tick < 223) -51 else -expected), combat.actor_conditions[party + 2].stat_modifiers.skill_bonus);
+            try std.testing.expectEqual(@as(i16, 70), combat.actor_conditions[party].stat_modifiers.skill_bonus);
+            try std.testing.expectEqual(@as(i16, 91), combat.actor_conditions[party + 1].stat_modifiers.defense_bonus);
+            try std.testing.expectEqual(@as(i16, -7), combat.actor_conditions[party + 2].stat_modifiers.defense_bonus);
             try std.testing.expectEqualDeep(hp, combat.enemy_hp);
             try combat.tickReplay(.{}, &draws);
         }
@@ -271,9 +271,9 @@ test "generated Water heals living allies at246 and binds four orbits per party 
         member.hp = if (index == 2) 0 else @intCast(10 + index);
         member.status = if (index == 2) .unconscious else .poisoned;
     }
-    combat.protection[3] = 2;
-    combat.rune_blocked[4] = true;
-    combat.accuracy_reduced[4] = true;
+    combat.actor_conditions[3].protection_rounds = 2;
+    combat.actor_conditions[4].rune_blocked = true;
+    combat.actor_conditions[4].accuracy_reduced = true;
     const enemy_hp = combat.enemy_hp;
     var spell_index: usize = 0;
     for (fixture.view.systems.?.spells, 0..) |spell, index| if (std.mem.eql(u8, spell.id, "spell_11")) {
@@ -300,8 +300,8 @@ test "generated Water heals living allies at246 and binds four orbits per party 
         try std.testing.expectEqualDeep(enemy_hp, combat.enemy_hp);
         try std.testing.expect(combat.spellReaction(2) == null);
         if (tick >= 246) {
-            try std.testing.expect(!combat.rune_blocked[4]);
-            try std.testing.expect(!combat.accuracy_reduced[4]);
+            try std.testing.expect(!combat.actor_conditions[4].rune_blocked);
+            try std.testing.expect(!combat.actor_conditions[4].accuracy_reduced);
             try std.testing.expectEqual(@as(u8, 0), combat.spellReaction(0).?.animation);
         }
         try combat.tickReplay(.{}, &draws);
@@ -325,10 +325,10 @@ test "all four source consumables dispatch with exact effects and separate owner
         combat.progress.party[target].hp = 100;
         combat.progress.party[target].status = .poisoned;
         combat.progress.party[target].balloons = 2;
-        combat.rune_blocked[target] = true;
-        combat.accuracy_reduced[target] = true;
+        combat.actor_conditions[target].rune_blocked = true;
+        combat.actor_conditions[target].accuracy_reduced = true;
         combat.unbalanced[target] = 2;
-        combat.protection[target] = if (protected) 3 else 0;
+        combat.actor_conditions[target].protection_rounds = if (protected) 3 else 0;
         combat.progress.party[user].inventory.slots = @splat(null);
         combat.progress.party[user].inventory.slots[0] = .{ .id = id, .uses = 1 };
         combat.progress.party[user].inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
@@ -374,9 +374,9 @@ test "all four source consumables dispatch with exact effects and separate owner
         try std.testing.expect(combat.medicine_action.?.owner_released);
         try std.testing.expect(combat.medicine_action.?.target_released);
         try std.testing.expectEqual(@as(usize, 0), draws.cursor);
-        try std.testing.expect(combat.rune_blocked[target] and combat.accuracy_reduced[target]);
+        try std.testing.expect(combat.actor_conditions[target].rune_blocked and combat.actor_conditions[target].accuracy_reduced);
         try std.testing.expectEqual(@as(u8, 2), combat.unbalanced[target]);
-        try std.testing.expectEqual(@as(u8, if (protected) 3 else 0), combat.protection[target]);
+        try std.testing.expectEqual(@as(u8, if (protected) 3 else 0), combat.actor_conditions[target].protection_rounds);
     };
 }
 
@@ -437,12 +437,12 @@ test "direct Earth buffs preserve ailments and accept a Turtle target in both sp
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         combat.progress.party[1].status = .poisoned;
         combat.progress.party[1].balloons = 2;
-        combat.asleep[1] = 1;
+        combat.actor_conditions[1].sleep_turns = 1;
         combat.unbalanced[1] = 2;
-        combat.accuracy_reduced[1] = true;
-        combat.rune_blocked[1] = true;
-        combat.temporary_stats[1] = .{ .defense_bonus = -51, .skill_bonus = 73 };
-        combat.temporary_stats[2].defense_bonus = 50;
+        combat.actor_conditions[1].accuracy_reduced = true;
+        combat.actor_conditions[1].rune_blocked = true;
+        combat.actor_conditions[1].stat_modifiers = .{ .defense_bonus = -51, .skill_bonus = 73 };
+        combat.actor_conditions[2].stat_modifiers.defense_bonus = 50;
         var draws = rules.Draws{ .values = &.{} };
         combat.replay_draws = &draws;
         const before = combat.progress.party[1].hp;
@@ -451,16 +451,16 @@ test "direct Earth buffs preserve ailments and accept a Turtle target in both sp
         combat.replay_draws = null;
         try std.testing.expectEqual(@as(@FieldType(battle.Effect, "kind"), .cast), effect.kind);
         const copper = std.mem.eql(u8, name, "Copper Flesh");
-        try std.testing.expectEqual(@as(i16, if (copper) -51 else -76), combat.temporary_stats[1].defense_bonus);
-        try std.testing.expectEqual(@as(i16, 73), combat.temporary_stats[1].skill_bonus);
-        try std.testing.expectEqual(@as(u8, if (copper) 3 else 0), combat.protection[1]);
-        try std.testing.expectEqual(@as(i16, if (std.mem.eql(u8, name, "Guardian of Earth")) 75 else 50), combat.temporary_stats[2].defense_bonus);
+        try std.testing.expectEqual(@as(i16, if (copper) -51 else -76), combat.actor_conditions[1].stat_modifiers.defense_bonus);
+        try std.testing.expectEqual(@as(i16, 73), combat.actor_conditions[1].stat_modifiers.skill_bonus);
+        try std.testing.expectEqual(@as(u8, if (copper) 3 else 0), combat.actor_conditions[1].protection_rounds);
+        try std.testing.expectEqual(@as(i16, if (std.mem.eql(u8, name, "Guardian of Earth")) 75 else 50), combat.actor_conditions[2].stat_modifiers.defense_bonus);
         try std.testing.expectEqual(before, combat.progress.party[1].hp);
         try std.testing.expectEqual(field.game_state.Status.poisoned, combat.progress.party[1].status);
         try std.testing.expectEqual(@as(u8, 2), combat.progress.party[1].balloons);
-        try std.testing.expectEqual(@as(u8, 1), combat.asleep[1]);
+        try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[1].sleep_turns);
         try std.testing.expectEqual(@as(u8, 2), combat.unbalanced[1]);
-        try std.testing.expect(combat.accuracy_reduced[1] and combat.rune_blocked[1]);
+        try std.testing.expect(combat.actor_conditions[1].accuracy_reduced and combat.actor_conditions[1].rune_blocked);
         try std.testing.expectEqual(@as(usize, 0), draws.cursor);
     };
 }
@@ -482,7 +482,7 @@ test "generated Clay applies one Turtle-compatible buff and rolls back a late pa
         combat.runes[0] = combat.content.systems.?.runeIndex("earth").?;
         combat.runes[1] = combat.content.systems.?.runeIndex("turtle").?;
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        combat.temporary_stats[1].defense_bonus = -51;
+        combat.actor_conditions[1].stat_modifiers.defense_bonus = -51;
         const spell = for (combat.content.systems.?.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.name, "Clay Guardian")) break i;
         } else unreachable;
@@ -497,7 +497,7 @@ test "generated Clay applies one Turtle-compatible buff and rolls back a late pa
         combat.nextAction();
         combat.replay_draws = null;
         while (combat.effectTicks() < 176) try combat.tickReplay(.{}, &draws);
-        try std.testing.expectEqual(@as(i16, -51), combat.temporary_stats[1].defense_bonus);
+        try std.testing.expectEqual(@as(i16, -51), combat.actor_conditions[1].stat_modifiers.defense_bonus);
         if (exhaust) {
             const before = try stateBytes(combat);
             defer allocator.free(before);
@@ -514,7 +514,7 @@ test "generated Clay applies one Turtle-compatible buff and rolls back a late pa
         while (combat.active != null) {
             const age = combat.effectTicks();
             if (age == 272) stopped_draws = draws.cursor;
-            try std.testing.expectEqual(@as(i16, if (age < 177) -51 else -76), combat.temporary_stats[1].defense_bonus);
+            try std.testing.expectEqual(@as(i16, if (age < 177) -51 else -76), combat.actor_conditions[1].stat_modifiers.defense_bonus);
             try std.testing.expectEqual(hp, combat.progress.party[1].hp);
             if (age == 210 or age == 244) try std.testing.expectEqualDeep([3]u8{ 128, 128, 128 }, combat.spellReaction(1).?.color);
             try combat.tickReplay(.{}, &draws);
@@ -551,11 +551,11 @@ test "generated Guardian of Earth buffs living allies once at289 and releases353
     } else unreachable;
     combat.runes[1] = systems.runeIndex("turtle").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.temporary_stats[1].defense_bonus = -51;
-    combat.temporary_stats[2].defense_bonus = 50;
+    combat.actor_conditions[1].stat_modifiers.defense_bonus = -51;
+    combat.actor_conditions[2].stat_modifiers.defense_bonus = 50;
     combat.progress.party[2].hp = 0;
     combat.progress.party[2].status = .unconscious;
-    combat.protection[1] = 2;
+    combat.actor_conditions[1].protection_rounds = 2;
     const hp = combat.progress.party[1].hp;
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 1 } };
@@ -571,8 +571,8 @@ test "generated Guardian of Earth buffs living allies once at289 and releases353
     while (combat.active != null) {
         const age = combat.effectTicks();
         if (age == 320) stop_draws = draws.cursor;
-        try std.testing.expectEqual(@as(i16, if (age < 289) -51 else -76), combat.temporary_stats[1].defense_bonus);
-        try std.testing.expectEqual(@as(i16, 50), combat.temporary_stats[2].defense_bonus);
+        try std.testing.expectEqual(@as(i16, if (age < 289) -51 else -76), combat.actor_conditions[1].stat_modifiers.defense_bonus);
+        try std.testing.expectEqual(@as(i16, 50), combat.actor_conditions[2].stat_modifiers.defense_bonus);
         try std.testing.expectEqual(hp, combat.progress.party[1].hp);
         try std.testing.expect(combat.spellReaction(2) == null);
         if (age == 161 or age == 193 or age == 225 or age == 257) try std.testing.expectEqualDeep([3]u8{ 128, 128, 128 }, combat.spellReaction(1).?.color);
@@ -618,7 +618,7 @@ test "generated Copper Flesh protects a Turtle target at225 and releases449" {
     const cursor = draws.cursor;
     while (combat.active != null) {
         const age = combat.effectTicks();
-        try std.testing.expectEqual(@as(u8, if (age < 225) 0 else 3), combat.protection[1]);
+        try std.testing.expectEqual(@as(u8, if (age < 225) 0 else 3), combat.actor_conditions[1].protection_rounds);
         try std.testing.expectEqual(hp, combat.progress.party[1].hp);
         try std.testing.expectEqual(field.game_state.Status.poisoned, combat.progress.party[1].status);
         if (age == 225 or age == 259 or age == 293) try std.testing.expectEqualDeep([3]u8{ 128, 128, 128 }, combat.spellReaction(1).?.color);
@@ -663,22 +663,22 @@ test "generated Mother Ocean binds fallen allies and heals once at366 before rel
     combat.progress.party[3].hp = combat.progress.party[3].max_hp / 2;
     combat.progress.party[3].balloons = 3;
     combat.beginDeparture(3);
-    combat.protection[1] = 2;
+    combat.actor_conditions[1].protection_rounds = 2;
     combat.progress.party[4].hp = 0;
     combat.progress.party[4].status = .unconscious;
-    combat.rune_blocked[4] = true;
-    combat.protection[4] = 2;
+    combat.actor_conditions[4].rune_blocked = true;
+    combat.actor_conditions[4].protection_rounds = 2;
     var fallback_members = members;
     var fallback = combat;
     fallback.integration = null;
     fallback.progress.party = &fallback_members;
-    fallback.knockout_pending[2] = true;
+    fallback.party_knockouts[2].pending = true;
     var effect: battle.Effect = .{ .kind = .cast, .actor = 0, .target = 1, .spell = spell };
     fallback.applySpell(&effect);
-    try std.testing.expect(!fallback.knockout_pending[2]);
+    try std.testing.expect(!fallback.party_knockouts[2].pending);
     try std.testing.expectEqual(@as(u16, 0), fallback_members[4].hp);
     try std.testing.expectEqual(.unconscious, fallback_members[4].status);
-    try std.testing.expect(!fallback.rune_blocked[4]);
+    try std.testing.expect(!fallback.actor_conditions[4].rune_blocked);
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 1 } };
     combat.actions[2] = null;
@@ -706,8 +706,8 @@ test "generated Mother Ocean binds fallen allies and heals once at366 before rel
         try std.testing.expectEqual(@as(u8, if (age < 366) 3 else 0), combat.progress.party[3].balloons);
         try std.testing.expectEqual(@as(u16, 0), combat.progress.party[4].hp);
         try std.testing.expectEqual(.unconscious, combat.progress.party[4].status);
-        try std.testing.expect(!combat.knockout_pending[4]);
-        try std.testing.expectEqual(age < 366, combat.rune_blocked[4]);
+        try std.testing.expect(!combat.party_knockouts[4].pending);
+        try std.testing.expectEqual(age < 366, combat.actor_conditions[4].rune_blocked);
         if (age == 247) try std.testing.expect(combat.spellReaction(2) != null);
         try combat.tickReplay(.{}, &draws);
     }
@@ -750,7 +750,7 @@ test "generated Rain of Kindness heals living allies once396 and releases397" {
     combat.progress.party[1].hp = 1;
     combat.progress.party[2].hp = 0;
     combat.progress.party[2].status = .unconscious;
-    combat.protection[1] = 2;
+    combat.actor_conditions[1].protection_rounds = 2;
     combat.progress.party[3].hp = 1;
     combat.progress.party[3].status = .poisoned;
     combat.actions = @splat(.defend);
@@ -855,7 +855,7 @@ test "generated Rainstorm keeps KO formation gaps reacts289 damages345 and relea
     };
     try std.testing.expectEqual(@as(usize, 3), combat.enemyCount());
     combat.enemy_hp[0] = 0;
-    combat.protection[combat.partyCount() + 2] = 2;
+    combat.actor_conditions[combat.partyCount() + 2].protection_rounds = 2;
     try combat.attachSpellScenes(&packet.value);
     const systems = combat.content.systems.?;
     const spell = for (systems.spells, 0..) |entry, i| {
@@ -1088,7 +1088,7 @@ test "generated Storm keeps KO formation gaps reacts171 damages224 and releases2
     };
     try std.testing.expectEqual(@as(usize, 3), combat.enemyCount());
     combat.enemy_hp[0] = 0;
-    combat.protection[combat.partyCount() + 2] = 2;
+    combat.actor_conditions[combat.partyCount() + 2].protection_rounds = 2;
     try combat.attachSpellScenes(&packet.value);
     const systems = combat.content.systems.?;
     const spell = for (systems.spells, 0..) |entry, i| {
@@ -1205,7 +1205,7 @@ test "generated Healing Wind respects HP protection cures288 and releases289 wit
         combat.progress.party[1].hp = 1;
         combat.progress.party[2].hp = 0;
         combat.progress.party[2].status = .unconscious;
-        combat.protection[1] = protection;
+        combat.actor_conditions[1].protection_rounds = protection;
         combat.actions = @splat(.defend);
         combat.actions[0] = .{ .spell = .{ .index = spell, .target = 1 } };
         combat.acted = @splat(true);
@@ -1255,7 +1255,7 @@ test "generated Wind of Sleep preserves KO gaps wards and HP protection and roll
             break;
         };
         combat.enemy_hp[0] = 0;
-        combat.protection[combat.partyCount() + 2] = 2;
+        combat.actor_conditions[combat.partyCount() + 2].protection_rounds = 2;
         try combat.attachSpellScenes(&packet.value);
         const systems = combat.content.systems.?;
         const spell = for (systems.spells, 0..) |entry, i| {
@@ -1281,10 +1281,10 @@ test "generated Wind of Sleep preserves KO gaps wards and HP protection and roll
             try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
             try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[1]);
             try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
-            try std.testing.expectEqual(@as(u8, 2), combat.protection[combat.partyCount() + 2]);
+            try std.testing.expectEqual(@as(u8, 2), combat.actor_conditions[combat.partyCount() + 2].protection_rounds);
             if (age < 361 or immune) {
-                try std.testing.expectEqual(@as(u8, 0), combat.asleep[combat.partyCount() + 1]);
-                try std.testing.expectEqual(@as(u8, 0), combat.asleep[combat.partyCount() + 2]);
+                try std.testing.expectEqual(@as(u8, 0), combat.actor_conditions[combat.partyCount() + 1].sleep_turns);
+                try std.testing.expectEqual(@as(u8, 0), combat.actor_conditions[combat.partyCount() + 2].sleep_turns);
             }
             try std.testing.expectEqual(@as(u8, if (age < 361) 9 else 8), combat.progress.party[0].rune_charges[0]);
             try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
@@ -1313,8 +1313,8 @@ test "generated Wind of Sleep preserves KO gaps wards and HP protection and roll
             try combat.tickReplay(.{}, &draws);
         }
         try std.testing.expectEqual(@as(u16, 417), combat.action_ticks);
-        try std.testing.expectEqual(expected_sleep[0], combat.asleep[combat.partyCount() + 1]);
-        try std.testing.expectEqual(expected_sleep[1], combat.asleep[combat.partyCount() + 2]);
+        try std.testing.expectEqual(expected_sleep[0], combat.actor_conditions[combat.partyCount() + 1].sleep_turns);
+        try std.testing.expectEqual(expected_sleep[1], combat.actor_conditions[combat.partyCount() + 2].sleep_turns);
     }
 }
 
@@ -1340,7 +1340,7 @@ test "generated Dancing Flames repeats target reactions preserves KO gaps damage
         break;
     };
     combat.enemy_hp[0] = 0;
-    combat.protection[combat.partyCount() + 2] = 2;
+    combat.actor_conditions[combat.partyCount() + 2].protection_rounds = 2;
     try combat.attachSpellScenes(&packet.value);
     const systems = combat.content.systems.?;
     const spell = for (systems.spells, 0..) |entry, i| {
@@ -1410,7 +1410,7 @@ test "generated Judgment retargets KO respects protection and ignores death ward
             break;
         };
         combat.enemy_hp[0] = 0;
-        if (protected) combat.protection[combat.partyCount() + 1] = 2;
+        if (protected) combat.actor_conditions[combat.partyCount() + 1].protection_rounds = 2;
         try combat.attachSpellScenes(&packet.value);
         const systems = combat.content.systems.?;
         const spell = for (systems.spells, 0..) |entry, i| {
@@ -1489,15 +1489,15 @@ test "generated Shining Wind heals cures and damages384 with distinct reactions 
             break;
         };
         combat.enemy_hp[0] = 0;
-        if (protected) combat.protection[combat.partyCount() + 1] = 2;
+        if (protected) combat.actor_conditions[combat.partyCount() + 1].protection_rounds = 2;
         for (combat.progress.party, 0..) |*member, i| {
             member.max_hp = 1000;
             member.hp = if (i == 2) 0 else @intCast(10 + i);
             member.status = if (i == 2) .unconscious else .poisoned;
         }
-        combat.protection[3] = 2;
-        combat.rune_blocked[4] = true;
-        combat.accuracy_reduced[4] = true;
+        combat.actor_conditions[3].protection_rounds = 2;
+        combat.actor_conditions[4].rune_blocked = true;
+        combat.actor_conditions[4].accuracy_reduced = true;
         try combat.attachSpellScenes(&packet.value);
         combat.runes[0] = fixture.view.systems.?.runeIndex("cyclone");
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
@@ -1558,7 +1558,7 @@ test "generated Shining Wind heals cures and damages384 with distinct reactions 
             try combat.tickReplay(.{}, &draws);
         }
         try std.testing.expectEqual(@as(u16, 385), combat.action_ticks);
-        try std.testing.expect(!combat.rune_blocked[4] and !combat.accuracy_reduced[4]);
+        try std.testing.expect(!combat.actor_conditions[4].rune_blocked and !combat.actor_conditions[4].accuracy_reduced);
     }
 }
 
@@ -1584,7 +1584,7 @@ test "generated Explosion preserves RNG scale KO gaps protection damages448 and 
         break;
     };
     combat.enemy_hp[0] = 0;
-    combat.protection[combat.partyCount() + 2] = 2;
+    combat.actor_conditions[combat.partyCount() + 2].protection_rounds = 2;
     try combat.attachSpellScenes(&packet.value);
     const systems = combat.content.systems.?;
     const spell = for (systems.spells, 0..) |entry, i| {
@@ -1659,7 +1659,7 @@ test "generated Earthquake preserves bounce RNG KO gaps protection damages257 an
         break;
     };
     combat.enemy_hp[0] = 0;
-    combat.protection[combat.partyCount() + 2] = 2;
+    combat.actor_conditions[combat.partyCount() + 2].protection_rounds = 2;
     try combat.attachSpellScenes(&packet.value);
     const systems = combat.content.systems.?;
     const spell = for (systems.spells, 0..) |entry, i| {
@@ -1729,7 +1729,7 @@ test "generated Thunder God keeps radial draws KO gaps protection damage484 and 
         break;
     };
     combat.enemy_hp[0] = 0;
-    combat.protection[combat.partyCount() + 2] = 2;
+    combat.actor_conditions[combat.partyCount() + 2].protection_rounds = 2;
     try combat.attachSpellScenes(&packet.value);
     const systems = combat.content.systems.?;
     const spell = for (systems.spells, 0..) |entry, i| {
@@ -1799,7 +1799,7 @@ test "generated Final Flame keeps staged draws KO gaps protection damage584 and 
         break;
     };
     combat.enemy_hp[0] = 0;
-    combat.protection[combat.partyCount() + 2] = 2;
+    combat.actor_conditions[combat.partyCount() + 2].protection_rounds = 2;
     try combat.attachSpellScenes(&packet.value);
     const systems = combat.content.systems.?;
     const spell = for (systems.spells, 0..) |entry, i| {
@@ -1894,7 +1894,7 @@ test "generated Charm Arrow keeps erosion draws KO gaps protection damage224 and
         break;
     };
     combat.enemy_hp[0] = 0;
-    combat.protection[combat.partyCount() + 2] = 2;
+    combat.actor_conditions[combat.partyCount() + 2].protection_rounds = 2;
     try combat.attachSpellScenes(&packet.value);
     const systems = combat.content.systems.?;
     const spell = for (systems.spells, 0..) |entry, i| {
@@ -1967,8 +1967,8 @@ test "generated Voice of Earth keeps grounded motion protection airborne immunit
         combat.enemy_hp[0] = 0;
         const living = combat.partyCount() + 1;
         const protected = living + 1;
-        combat.protection[protected] = 2;
-        combat.asleep[living] = 1;
+        combat.actor_conditions[protected].protection_rounds = 2;
+        combat.actor_conditions[living].sleep_turns = 1;
         try combat.attachSpellScenes(&packet.value);
         const systems = combat.content.systems.?;
         const spell = for (systems.spells, 0..) |entry, i| {
@@ -1998,12 +1998,12 @@ test "generated Voice of Earth keeps grounded motion protection airborne immunit
                 try std.testing.expectEqual(age >= 129 and age < 320, combat.hasBackgroundWarp());
                 try std.testing.expect(combat.spellReaction(protected) == null);
                 if (airborne) {
-                    try std.testing.expectEqual(@as(i32, 4096), combat.actor_sizes[living]);
+                    try std.testing.expectEqual(@as(i32, 4096), combat.actor_transforms[living].scale_q12);
                     try std.testing.expect(combat.spellReaction(living) == null);
-                    try std.testing.expectEqual(@as(u8, 1), combat.asleep[living]);
+                    try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[living].sleep_turns);
                 } else {
                     const delta = packet.value.spells[21].program.?.actor_motion.?.size_delta[age];
-                    try std.testing.expectEqual(@as(i32, @intCast(4096 + 85 * cast_index)) + delta, combat.actor_sizes[living]);
+                    try std.testing.expectEqual(@as(i32, @intCast(4096 + 85 * cast_index)) + delta, combat.actor_transforms[living].scale_q12);
                     if (age == 176) try std.testing.expectEqualDeep(battle.Position{ .x = -120, .y = 0, .z = 0 }, battle.layout.worldPosition(&combat, living));
                     if (age == 304) try std.testing.expectEqualDeep(battle.layout.homePosition(&combat, living), battle.layout.worldPosition(&combat, living));
                     try std.testing.expectEqual(age >= 273 and age < 305, combat.spellReaction(living) != null);
@@ -2012,8 +2012,8 @@ test "generated Voice of Earth keeps grounded motion protection airborne immunit
             }
             try std.testing.expectEqual(@as(u16, 322), combat.action_ticks);
             try std.testing.expectEqual(@as(usize, 1), draws.cursor);
-            try std.testing.expectEqual(@as(i32, if (airborne) 4096 else @intCast(4096 + 85 * (cast_index + 1))), combat.actor_sizes[living]);
-            try std.testing.expectEqualDeep(battle.Position{ .x = 0, .y = 0, .z = 0 }, combat.actor_world_offsets[living]);
+            try std.testing.expectEqual(@as(i32, if (airborne) 4096 else @intCast(4096 + 85 * (cast_index + 1))), combat.actor_transforms[living].scale_q12);
+            try std.testing.expectEqualDeep(battle.Position{ .x = 0, .y = 0, .z = 0 }, combat.actor_transforms[living].world_offset);
         }
         if (airborne) continue;
 
@@ -2059,7 +2059,7 @@ test "generated Deadly Fingertips keeps retargeting immunity result306 charge an
         };
         combat.enemy_hp[0] = 0;
         const target = combat.partyCount() + 1;
-        if (case.protected) combat.protection[target] = 2;
+        if (case.protected) combat.actor_conditions[target].protection_rounds = 2;
         try combat.attachSpellScenes(&packet.value);
         const systems = combat.content.systems.?;
         const spell = for (systems.spells, 0..) |entry, i| {
@@ -2200,7 +2200,7 @@ test "approved Soul casts use the canonical library and preserve outcomes charge
             combat.enemy_hp[0] = 0;
             const living = combat.partyCount() + 1;
             const protected = living + 1;
-            combat.protection[protected] = 2;
+            combat.actor_conditions[protected].protection_rounds = 2;
             try combat.attachSpellScenes(packet);
             const systems = combat.content.systems.?;
             const spell = for (systems.spells, 0..) |entry, i| {

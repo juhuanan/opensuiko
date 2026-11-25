@@ -244,7 +244,7 @@ pub const CombatCaller = struct {
         }
         next.progress.money = result.money;
         next.formation = result.formation;
-        next.asleep = @splat(0);
+        next.clearSleep();
         next.clearTemporaryStats();
         next.unbalanced = @splat(0);
         next.medicine_action = null;

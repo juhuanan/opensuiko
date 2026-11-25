@@ -53,7 +53,7 @@ test "Commander source admission validates art and plays normal solo and formati
         if (group) {
             for (members[0..3]) |member| try std.testing.expect(member.hp < 9999);
         } else {
-            try std.testing.expect(state.asleep[0] > 0);
+            try std.testing.expect(state.actor_conditions[0].sleep_turns > 0);
             try std.testing.expectEqual(@as(u16, 9999), members[0].hp);
         }
     }
@@ -138,7 +138,7 @@ test "Commander live bridge completes its original three Squirrel formation thro
     try std.testing.expect(!state.unite_vm.hasActors() and state.active == null);
     for (0..3) |index| {
         try std.testing.expect(members[index].hp > 0 and members[index].hp < 9999);
-        try std.testing.expect(state.accuracy_reduced[index]);
+        try std.testing.expect(state.actor_conditions[index].accuracy_reduced);
     }
     for (3..6) |index| try std.testing.expectEqual(@as(u16, 9999), members[index].hp);
     try std.testing.expectEqual(@as(u32, 350), state.progress.money);
@@ -165,7 +165,7 @@ test "Commander live bridge retains protected defended Turtle and lethal recipie
             member.hp = if (lethal) 1 else 9999;
             member.max_hp = 9999;
         }
-        state.protection[0] = 2;
+        state.actor_conditions[0].protection_rounds = 2;
         state.actions[1] = .defend;
         state.runes[2] = state.content.systems.?.runeIndex("turtle").?;
         const damage = state.resolvePhysicalDamage(state.partyCount() + 1, 1, 0, true);
@@ -175,8 +175,8 @@ test "Commander live bridge retains protected defended Turtle and lethal recipie
         for (1..211) |update| {
             try state.tickReplay(.{}, &draws);
             if (update == 119) {
-                try std.testing.expect(state.accuracy_reduced[0] and state.accuracy_reduced[1]);
-                try std.testing.expect(!state.accuracy_reduced[2]);
+                try std.testing.expect(state.actor_conditions[0].accuracy_reduced and state.actor_conditions[1].accuracy_reduced);
+                try std.testing.expect(!state.actor_conditions[2].accuracy_reduced);
             }
         }
         try std.testing.expectEqual(@as(u16, if (lethal) 1 else 9999), members[0].hp);
@@ -186,7 +186,7 @@ test "Commander live bridge retains protected defended Turtle and lethal recipie
             for (1..3) |target| {
                 try std.testing.expectEqual(@as(u16, 0), members[target].hp);
                 try std.testing.expectEqual(.unconscious, members[target].status);
-                try std.testing.expect(!state.accuracy_reduced[target] and !state.knockout_pending[target]);
+                try std.testing.expect(!state.actor_conditions[target].accuracy_reduced and !state.party_knockouts[target].pending);
             }
         }
         try std.testing.expect(!state.unite_vm.hasActors());
@@ -228,7 +228,7 @@ test "Commander live bridge rolls back all group contacts and status children on
         try std.testing.expectEqual(before.camera_ticks, state.camera_ticks);
         try std.testing.expectEqualDeep(before.unite_vm, state.unite_vm);
         try std.testing.expectEqualDeep(before.active, state.active);
-        try std.testing.expectEqualDeep(before.accuracy_reduced, state.accuracy_reduced);
+        try std.testing.expectEqualDeep(before.actor_conditions, state.actor_conditions);
         try std.testing.expectEqualDeep(before_members, members);
         try state.tickReplay(.{}, &draws);
     }
@@ -308,8 +308,10 @@ test "Commander live bridge checkpoints rebind active child and ordered return a
             try resumed.tick(.{}, &other_draws);
             try std.testing.expectEqual(draws.cursor, other_draws.cursor);
             try std.testing.expectEqualDeep(original.state.unite_vm, resumed.state.unite_vm);
-            try std.testing.expectEqualDeep(original.state.asleep, resumed.state.asleep);
-            try std.testing.expectEqualDeep(original.state.accuracy_reduced, resumed.state.accuracy_reduced);
+            for (original.state.actor_conditions, resumed.state.actor_conditions) |before, after| {
+                try std.testing.expectEqual(before.sleep_turns, after.sleep_turns);
+                try std.testing.expectEqual(before.accuracy_reduced, after.accuracy_reduced);
+            }
             try std.testing.expectEqualDeep(original.state.progress.party, resumed.state.progress.party);
         }
         try std.testing.expect(!resumed.state.unite_vm.hasActors());
@@ -343,7 +345,7 @@ test "Commander live bridge completes solo status and releases owner before reci
         try state.tickReplay(.{}, &draws);
         if (owner_release == null and !state.unite_vm.ownsActor(owner)) owner_release = state.camera_ticks;
         if (update > 1 and recipient_release == null and !state.unite_vm.ownsActor(0)) recipient_release = state.camera_ticks;
-        if (status == null and state.asleep[0] != 0) status = state.camera_ticks;
+        if (status == null and state.actor_conditions[0].sleep_turns != 0) status = state.camera_ticks;
         if (update < 120) try std.testing.expectEqual(@as(usize, 0), draws.cursor);
         try std.testing.expectEqual(hp, members[0].hp);
     }
@@ -397,7 +399,7 @@ test "Commander live bridge dispatches zero through three allies with independen
             }
             for (0..count) |target| {
                 if (hits[target] == null and members[target].hp < 9999) hits[target] = state.camera_ticks;
-                if (statuses[target] == null and state.accuracy_reduced[target]) statuses[target] = state.camera_ticks;
+                if (statuses[target] == null and state.actor_conditions[target].accuracy_reduced) statuses[target] = state.camera_ticks;
                 if (update > 12 and released[target] == null and !state.unite_vm.ownsActor(state.partyCount() + target)) released[target] = state.camera_ticks;
             }
             if (owner_release == null and !state.unite_vm.ownsActor(owner)) owner_release = state.camera_ticks;

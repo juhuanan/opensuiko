@@ -1,6 +1,5 @@
 const std = @import("std");
 const damage_rules = @import("battle_damage");
-const turn = @import("battle_turn");
 const dispatch = @import("battle_turn_dispatch.zig");
 const battle = @import("battle.zig");
 const types_mod = @import("battle_types.zig");
@@ -21,7 +20,7 @@ pub fn coordinatorLocked(self: *const State, actor: usize) bool {
         if (actor == playback.recipient and playback.knockout_at != null and !playback.recipient_done) return true;
     };
     if (actor < self.unite_vm.scripted_actors.len and self.unite_vm.scripted_actors[actor] != null and self.unite_vm.actors[actor].highlights != 0) return true;
-    if (actor < self.partyCount() and self.revivals[actor] != null) return true;
+    if (actor < self.partyCount() and self.party_knockouts[actor].revival != null) return true;
     const unite_reaction = if (actor < self.unite_reactions.len) self.unite_reactions[actor] else null;
     if (unite_reaction != null and self.uniteRecipientLocked(actor)) return true;
     const separate_knockout = if (unite_reaction) |reaction| reaction.knockout_ticks != 0 else false;
@@ -44,7 +43,7 @@ pub fn coordinatorLocked(self: *const State, actor: usize) bool {
 pub fn coordinatorActed(self: *const State, actor: usize) bool {
     for (self.front_projectiles) |maybe| if (maybe) |shot| if (shot.target == actor and !shot.target_released) return false;
     if (self.acted[actor]) return true;
-    if (actor < self.partyCount() and self.knockout_pending[actor]) return false;
+    if (actor < self.partyCount() and self.party_knockouts[actor].pending) return false;
     // HP-zero targets keep their pending turn/lock until the reaction commits their down state.
     if (self.active) |effect| if (effect.damage_at_impact and self.enemy(effect.actor - self.partyCount()).action_policy == .roc) {
         if (effect.protector == actor and !effect.protector_released) return false;
@@ -71,7 +70,7 @@ pub fn coordinatorChoice(self: *State) Coordinator.Choice {
     var waiting = false;
     for (0..self.partyCount() + self.enemyCount()) |actor| {
         if (self.coordinatorActed(actor)) continue;
-        if (self.coordinatorLocked(actor) or self.primaryEffectBusy(actor) or (actor < self.partyCount() and self.knockout_pending[actor])) {
+        if (self.coordinatorLocked(actor) or self.primaryEffectBusy(actor) or (actor < self.partyCount() and self.party_knockouts[actor].pending)) {
             waiting = true;
             continue;
         }
@@ -86,7 +85,7 @@ pub fn coordinatorChoice(self: *State) Coordinator.Choice {
         for (0..self.partyCount()) |actor| {
             if (self.coordinatorActed(actor)) continue;
             pending = true;
-            if (self.coordinatorLocked(actor) or self.primaryEffectBusy(actor) or self.knockout_pending[actor]) continue;
+            if (self.coordinatorLocked(actor) or self.primaryEffectBusy(actor) or self.party_knockouts[actor].pending) continue;
             chosen = commandOwner(self, actor);
             break;
         }
@@ -156,15 +155,15 @@ pub fn advanceCoordinator(self: *State) void {
             const party_actor = actor < self.partyCount();
             const party_inactive = party_actor and battle.revival.committedPartyInactive(self.*, actor);
             const enemy_inactive = !party_actor and self.hp(actor) == 0;
-            if (party_actor and !party_inactive and (!self.participates(actor) or self.revivals[actor] != null)) return;
+            if (party_actor and !party_inactive and (!self.participates(actor) or self.party_knockouts[actor].revival != null)) return;
             const action_interrupted = party_actor and switch (self.actions[actor] orelse .defend) {
                 .attack => self.unbalanced[actor] > 0,
-                .spell, .rune_attack => self.rune_blocked[actor] or self.unbalanced[actor] > 0,
+                .spell, .rune_attack => self.actor_conditions[actor].rune_blocked or self.unbalanced[actor] > 0,
                 else => false,
             };
             if (enemy_inactive) {
                 self.retireDefeatedEnemyTurn(actor);
-            } else if (party_inactive or self.asleep[actor] > 0 or action_interrupted) {
+            } else if (party_inactive or self.actor_conditions[actor].sleep_turns > 0 or action_interrupted) {
                 if (party_inactive) self.discardUnite(actor);
                 self.acted[actor] = true;
                 clock.completed = true;
@@ -188,7 +187,7 @@ pub fn advanceCoordinator(self: *State) void {
                 if (self.active != null) return;
                 for (0..self.partyCount()) |target| if (self.coordinatorLocked(target)) return;
                 if (self.chooseEnemyTarget(actor - self.partyCount())) |target| {
-                    self.beginAttack(actor, target, false, null);
+                    self.beginAttack(actor, target, .ordinary);
                     if (self.replay_exhausted or self.replay_unsupported != null) return;
                     self.active.?.started_at = clock.elapsed -| 1;
                 } else {
@@ -209,10 +208,10 @@ pub fn advanceCoordinator(self: *State) void {
                     const requested = self.actions[actor].?.attack;
                     const resolved: ?usize = if (self.canAttackTarget(actor, requested)) requested else self.firstAttackTarget(actor);
                     if (resolved) |target| if (self.coordinatorLocked(self.partyCount() + target)) return;
-                    self.beginAttack(actor, requested, false, null);
+                    self.beginAttack(actor, self.partyCount() + requested, .ordinary);
                     if (self.replay_exhausted or self.replay_unsupported != null or self.active == null) return;
                     self.active.?.started_at = clock.elapsed -| 1;
-                } else if (!self.beginPartyStrike(actor, self.actions[actor].?.attack)) return;
+                } else if (!startPartyStrike(self, actor, self.actions[actor].?.attack, null)) return;
                 self.acted[actor] = true;
                 clock.remaining = 0;
                 clock.stage = .select;
@@ -377,7 +376,7 @@ fn startMedicine(self: *State, actor: usize) ItemStart {
         self.replay_unsupported = .coordinator_action;
         return .wait;
     }
-    if (selected.target >= self.partyCount() or self.asleep[actor] > 0) {
+    if (selected.target >= self.partyCount() or self.actor_conditions[actor].sleep_turns > 0) {
         self.replay_unsupported = .coordinator_action;
         return .wait;
     }
@@ -390,7 +389,7 @@ fn startMedicine(self: *State, actor: usize) ItemStart {
         return .wait;
     }
     if (!definition.partyWide() and !self.participates(selected.target)) {
-        if (!self.departed[selected.target] and (self.knockout_pending[selected.target] or !self.partyInactive(selected.target))) return .wait;
+        if (!self.departed[selected.target] and (self.party_knockouts[selected.target].pending or !self.partyInactive(selected.target))) return .wait;
         return .rejected;
     }
     if (definition.uses != 0) inventory.spendUse(selected.slot, selected.id) catch unreachable;
@@ -429,7 +428,7 @@ pub fn advanceMedicine(self: *State) void {
     if (item.ticks == timing.pending_tick) {
         for (0..self.partyCount()) |index| if (item.affects(index) and !item.interrupted(index) and self.participates(index)) {
             var pending = self.progress.party[index];
-            item.amounts[index] = definition.applyTo(&pending, self.protection[index] > 0);
+            item.amounts[index] = definition.applyTo(&pending, self.actor_conditions[index].protection_rounds > 0);
         };
         item.amount = item.amounts[item.target];
     }
@@ -455,9 +454,6 @@ pub fn partyAttackTiming(self: *const State, actor: usize) ?PartyAttackTiming {
     for (self.content.party_attacks) |timing| if (std.mem.eql(u8, timing.id, self.progress.party[actor].id)) return timing;
     return null;
 }
-pub fn beginPartyStrike(self: *State, actor: usize, requested: usize) bool {
-    return startPartyStrike(self, actor, requested, null);
-}
 fn startPartyStrike(self: *State, actor: usize, requested: usize, origin: ?battle.Position) bool {
     // shortcut: only exported owner/target tracks; counters and other formations remain gated.
     if (requested < self.enemyCount() and self.enemy_hp[requested] == 0) {
@@ -477,7 +473,7 @@ fn startPartyStrike(self: *State, actor: usize, requested: usize, origin: ?battl
     if (self.usesProfileAttack(requested)) {
         const target = self.partyCount() + requested;
         if (self.active != null or self.coordinatorLocked(target)) return false;
-        self.beginAttack(actor, requested, false, null);
+        self.beginAttack(actor, target, .ordinary);
         if (self.replay_exhausted or self.replay_unsupported != null) return false;
         self.active.?.started_at = self.coordinator.?.elapsed -| 1;
         self.active.?.motion_origin = origin;
@@ -488,7 +484,7 @@ fn startPartyStrike(self: *State, actor: usize, requested: usize, origin: ?battl
         if (packet.partyAttacker(self.progress.party[actor].id, .melee_hit) != null) return startMeleeStrike(self, actor, requested);
     };
     const tracks = if (self.content.world_art) |art| art.attackTracks(self.progress.party[actor].id, requested) else null;
-    if ((!std.mem.eql(u8, self.progress.party[actor].id, "hero") and tracks == null) or self.party_strikes[actor] != null or self.partyAttackTiming(actor) == null or requested >= self.enemyCount() or self.asleep[actor] > 0 or self.unbalanced[actor] > 0) {
+    if ((!std.mem.eql(u8, self.progress.party[actor].id, "hero") and tracks == null) or self.party_strikes[actor] != null or self.partyAttackTiming(actor) == null or requested >= self.enemyCount() or self.actor_conditions[actor].sleep_turns > 0 or self.unbalanced[actor] > 0) {
         self.replay_unsupported = .coordinator_action;
         return false;
     }
@@ -514,7 +510,7 @@ fn startPartyStrike(self: *State, actor: usize, requested: usize, origin: ?battl
         self.double_beat_pending[actor] = !self.double_beat_pending[actor];
     }
     if (self.hasRune(actor, "spark")) self.spark_pending = true;
-    const hit = hitsWithAccuracyPenalty(self.stats(actor).skill, self.stats(target).skill, self.roll(), self.accuracy_reduced[actor]);
+    const hit = hitsWithAccuracyPenalty(self.stats(actor).skill, self.stats(target).skill, self.roll(), self.actor_conditions[actor].accuracy_reduced);
     const missed = !hit and self.enemy(resolved).dodges_attacks;
     if (missed) {
         const art = self.content.world_art;
@@ -556,7 +552,7 @@ pub fn startRangedStrike(self: *State, actor: usize, requested: usize) bool {
     return startActorStrike(self, actor, requested, false);
 }
 fn startActorStrike(self: *State, actor: usize, requested: usize, melee: bool) bool {
-    if (actor >= self.partyCount() or requested >= self.enemyCount() or !self.participates(actor) or self.enemy_hp[requested] == 0 or self.asleep[actor] > 0 or self.unbalanced[actor] > 0 or (!self.sharedPartyMelee() and !self.canAttackTarget(actor, requested))) {
+    if (actor >= self.partyCount() or requested >= self.enemyCount() or !self.participates(actor) or self.enemy_hp[requested] == 0 or self.actor_conditions[actor].sleep_turns > 0 or self.unbalanced[actor] > 0 or (!self.sharedPartyMelee() and !self.canAttackTarget(actor, requested))) {
         self.replay_unsupported = .coordinator_action;
         return false;
     }
@@ -564,7 +560,7 @@ fn startActorStrike(self: *State, actor: usize, requested: usize, melee: bool) b
     if (self.coordinatorLocked(target) or self.unite_vm.ownsActor(actor) or self.unite_vm.ownsActor(target)) return false;
     if (self.hasRune(actor, "double-beat")) self.double_beat_pending[actor] = !self.double_beat_pending[actor];
     if (self.hasRune(actor, "spark")) self.spark_pending = true;
-    const hit = hitsWithAccuracyPenalty(self.stats(actor).skill, self.stats(target).skill, self.roll(), self.accuracy_reduced[actor]);
+    const hit = hitsWithAccuracyPenalty(self.stats(actor).skill, self.stats(target).skill, self.roll(), self.actor_conditions[actor].accuracy_reduced);
     if (melee and !hit) {
         const parry = self.parryAvailable(actor, target) catch {
             self.replay_unsupported = .coordinator_action;
@@ -665,7 +661,7 @@ pub fn advancePartyStrike(self: *State) void {
         if (!strike.missed and strike.ticks == timing.impact_tick) {
             self.dodge_idle_at[strike.target - self.partyCount()] = null;
             const damage = self.resolvePhysicalDamage(strike.actor, strike.target, self.roll(), false) * @as(u32, if (strike.critical) 3 else 1);
-            strike.amount = if (self.protection[strike.target] > 0) 0 else damage;
+            strike.amount = if (self.actor_conditions[strike.target].protection_rounds > 0) 0 else damage;
             self.enemy_hp[strike.target - self.partyCount()] -|= @intCast(@min(strike.amount, 65535));
         }
         captureStrikeImpacts(self, strike);

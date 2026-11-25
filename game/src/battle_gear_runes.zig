@@ -1,6 +1,4 @@
 const std = @import("std");
-const status = @import("battle_status");
-const turn = @import("battle_turn");
 const field = @import("field");
 const battle_systems = @import("battle_systems");
 const technique_systems = battle_systems.techniques;
@@ -10,7 +8,6 @@ const battle = @import("battle.zig");
 const types_mod = @import("battle_types.zig");
 const State = battle.State;
 const Member = types_mod.Member;
-const Ailment = types_mod.Ailment;
 const Frame = types_mod.Frame;
 const Input = types_mod.Input;
 
@@ -82,20 +79,8 @@ pub fn hasRune(self: *const State, member: usize, id: []const u8) bool {
     const owned = self.rune(member) orelse return false;
     return std.mem.eql(u8, owned.id, id);
 }
-pub fn statusImmune(self: State, actor: usize) bool {
-    return status.statusImmune(self, actor);
-}
-pub fn requestUniteRecovery(self: *State, actor: usize, round_boundaries: u8) !void {
-    try status.requestUniteRecovery(self, actor, round_boundaries);
-}
-pub fn requestActorStatus(self: *State, actor: usize, attempt: @import("battle_actor_program.zig").Status) !void {
-    try status.requestActorStatus(self, actor, attempt);
-}
-pub fn inflictStatus(self: *State, target: usize, ailment: Ailment) bool {
-    return status.inflictStatus(self, target, ailment);
-}
 pub fn runeHint(self: *const State, member: usize) []const u8 {
-    if (self.rune_blocked[member]) return "Runes are blocked by a status condition.";
+    if (self.actor_conditions[member].rune_blocked) return "Runes are blocked by a status condition.";
     if (self.hasRune(member, "double-beat")) return "Passive: follow-up physical attacks.";
     if (self.hasRune(member, "spark")) return "Passive: allies follow an ordinary attack.";
     if (self.hasRune(member, "turtle")) return "Passive: blocks new status changes.";
@@ -123,7 +108,7 @@ pub fn canCast(self: *const State, member: usize, spell: usize) bool {
     if (member >= self.partyCount() or spell >= rules.spells.len) return false;
     if (rules.spells[spell].kind == .source_rule and self.integration == null) return false;
     const tier = self.spellTier(member, spell) orelse return false;
-    return self.participates(member) and self.asleep[member] == 0 and self.unbalanced[member] == 0 and !self.rune_blocked[member] and self.progress.party[member].rune_charges[tier] > 0;
+    return self.participates(member) and self.actor_conditions[member].sleep_turns == 0 and self.unbalanced[member] == 0 and !self.actor_conditions[member].rune_blocked and self.progress.party[member].rune_charges[tier] > 0;
 }
 pub fn physicalRune(self: *const State, member: usize) ?systems.PhysicalRune {
     const owned = self.rune(member) orelse return null;
@@ -131,13 +116,13 @@ pub fn physicalRune(self: *const State, member: usize) ?systems.PhysicalRune {
 }
 pub fn canPhysicalRune(self: *const State, member: usize) bool {
     if (self.unite_actors) |bundle| if (bundle.physicalPacket()) |packet| {
-        if (!(member < self.partyCount() and self.participates(member) and self.unbalanced[member] == 0 and self.asleep[member] == 0 and !self.rune_blocked[member])) return false;
+        if (!(member < self.partyCount() and self.participates(member) and self.unbalanced[member] == 0 and self.actor_conditions[member].sleep_turns == 0 and !self.actor_conditions[member].rune_blocked)) return false;
         const technique = technique_systems.physical.techniqueForRune(self.runeByteFor(member) orelse return false) orelse return false;
         for (packet.find(technique).?.members) |id| if (std.mem.eql(u8, id, self.progress.party[member].id)) return true;
         return false;
     };
     if (member < self.partyCount() and self.partyProfile(member).motion == null and self.partyProfile(member).attack.len == 0) return false;
-    if (!(member < self.partyCount() and self.participates(member) and self.unbalanced[member] == 0 and self.asleep[member] == 0 and !self.rune_blocked[member])) return false;
+    if (!(member < self.partyCount() and self.participates(member) and self.unbalanced[member] == 0 and self.actor_conditions[member].sleep_turns == 0 and !self.actor_conditions[member].rune_blocked)) return false;
     if (self.physicalRune(member) != null) return true;
     // Battle techniques add Shrike/Falcon/Trick, which the shared systems catalogue
     // does not list as physical techniques; the source rune byte is the
@@ -188,7 +173,7 @@ pub fn unitePartner(self: *const State, actor: usize) ?usize {
     const definition = self.uniteDefinition(actor) orelse return null;
     const id = self.partyProfile(actor).id;
     const other = if (std.mem.eql(u8, id, definition.members[0])) definition.members[1] else definition.members[0];
-    for (self.progress.party, 0..) |member, i| if (std.mem.eql(u8, member.id, other) and self.participates(i) and member.status != .poisoned and self.asleep[i] == 0 and self.unbalanced[i] == 0) return i;
+    for (self.progress.party, 0..) |member, i| if (std.mem.eql(u8, member.id, other) and self.participates(i) and member.status != .poisoned and self.actor_conditions[i].sleep_turns == 0 and self.unbalanced[i] == 0) return i;
     return null;
 }
 pub fn actionMotion(self: *const State, member: usize) ?presentation.Motion {
@@ -206,7 +191,7 @@ pub fn attackFrames(self: *const State, member: usize) []const Frame {
 pub fn canUnite(self: *const State, actor: usize) bool {
     if (self.integration != null) return self.canUniteIntegrated(actor);
     const partner = self.unitePartner(actor) orelse return false;
-    return self.participates(actor) and self.progress.party[actor].status != .poisoned and self.asleep[actor] == 0 and self.unbalanced[actor] == 0 and (self.actions[partner] == null or (self.actions[partner].? == .assist and self.actions[partner].?.assist == actor));
+    return self.participates(actor) and self.progress.party[actor].status != .poisoned and self.actor_conditions[actor].sleep_turns == 0 and self.unbalanced[actor] == 0 and (self.actions[partner] == null or (self.actions[partner].? == .assist and self.actions[partner].?.assist == actor));
 }
 pub fn roll(self: *State) u15 {
     if (self.replay_draws) |draws| return draws.next() catch {
@@ -242,7 +227,7 @@ pub fn tickReplay(self: *State, input: Input, draws: *systems.Draws) !void {
 }
 pub fn uniteScreenOffset(self: *const State, member: usize) [2]i8 {
     if (self.unite_vm.pose(member) != null) return self.unite_vm.actors[member].screen_offset;
-    const retained = if (self.content.world_art == null and member < self.actor_screen_offsets.len) self.actor_screen_offsets[member] else [2]i8{ 0, 0 };
+    const retained = if (self.content.world_art == null and member < self.actor_transforms.len) self.actor_transforms[member].screen_offset else [2]i8{ 0, 0 };
     if (member >= self.partyCount() or (!self.activeUniteMember(member) and self.uniteReturnFor(member) == null) or self.uniteMemberWaiting(member)) return retained;
     const track = self.uniteTrack(member) orelse return retained;
     const elapsed = self.animationTick(member);

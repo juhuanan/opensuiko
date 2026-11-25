@@ -274,18 +274,18 @@ pub fn proposeRoomTransition(self: *const Session, binding: Binding) !?RoomTrans
     const owner = self.instance orelse return null;
     const pending = owner.pending orelse return null;
     if (pending.batch.effect_count != 1 or pending.batch.effects[0].kind != .room_transition) return null;
-    const effect = try sourceRequest(self, binding, .room_transition);
+    const transition = (try sourceRequest(self, binding, .room_transition)).roomTransition() orelse return error.InvalidFieldEventReceipt;
     return .{
         .content_id = binding.content.id,
         .content_sha256 = binding.content.content_sha256,
         .program = owner.program_id,
         .instance = self.serial,
         .batch = owner.pending.?.batch.id,
-        .origin = effect.origin,
-        .destination = effect.destination orelse return error.InvalidFieldEventReceipt,
-        .x = effect.x orelse return error.InvalidFieldEventReceipt,
-        .y = effect.y orelse return error.InvalidFieldEventReceipt,
-        .arrival_facing = if (effect.arrival_facing) |facing| events.fieldDirection(facing) else null,
+        .origin = transition.origin,
+        .destination = transition.destination,
+        .x = transition.x,
+        .y = transition.y,
+        .arrival_facing = if (transition.facing) |facing| events.fieldDirection(facing) else null,
     };
 }
 
@@ -300,14 +300,14 @@ pub fn acknowledgeRoomTransition(
     source_state: field.State,
 ) !TransitionCommit {
     try validate(self, binding);
-    const effect = try sourceRequest(self, binding, .room_transition);
+    const transition = (try sourceRequest(self, binding, .room_transition)).roomTransition() orelse return error.InvalidFieldEventReceipt;
     const owner = self.instance.?;
     if (!std.mem.eql(u8, proposal.content_id, binding.content.id) or
         !std.mem.eql(u8, proposal.content_sha256, binding.content.content_sha256) or
         !std.mem.eql(u8, proposal.program, owner.program_id) or proposal.instance != self.serial or
-        proposal.batch != owner.pending.?.batch.id or proposal.origin != effect.origin or
-        !std.mem.eql(u8, proposal.destination, effect.destination.?) or proposal.x != effect.x.? or proposal.y != effect.y.? or
-        proposal.arrival_facing != (if (effect.arrival_facing) |facing| events.fieldDirection(facing) else null)) return error.InvalidFieldEventReceipt;
+        proposal.batch != owner.pending.?.batch.id or proposal.origin != transition.origin or
+        !std.mem.eql(u8, proposal.destination, transition.destination) or proposal.x != transition.x or proposal.y != transition.y or
+        proposal.arrival_facing != (if (transition.facing) |facing| events.fieldDirection(facing) else null)) return error.InvalidFieldEventReceipt;
     try destination.validateContext();
     if (!std.mem.eql(u8, destination.room, proposal.destination) or proposal.x < 0 or proposal.y < 0 or
         proposal.x >= destination_room.width or proposal.y >= destination_room.height or
@@ -370,7 +370,9 @@ pub fn reconstruct(self: *Session, binding: Binding, state: *field.State) !bool 
     const initial = self.initializations[0] orelse return error.InvalidFieldEventReceipt;
     var owner = self.instance orelse return error.InvalidFieldEventReceipt;
     const pending = owner.pending orelse return error.InvalidFieldEventReceipt;
-    if (pending.batch.effect_count != 1 or pending.batch.effects[0].kind != .room_transition or pending.batch.effects[0].origin != 12 or pending.batch.effects[0].destination == null or !std.mem.eql(u8, pending.batch.effects[0].destination.?, binding.room) or pending.batch.effects[0].x != 216 or pending.batch.effects[0].y != 200 or pending.story_write_count != 0) return error.InvalidFieldEventReceipt;
+    if (pending.batch.effect_count != 1 or pending.story_write_count != 0) return error.InvalidFieldEventReceipt;
+    const transition = pending.batch.effects[0].roomTransition() orelse return error.InvalidFieldEventReceipt;
+    if (transition.origin != 12 or !std.mem.eql(u8, transition.destination, binding.room) or transition.x != 216 or transition.y != 200) return error.InvalidFieldEventReceipt;
     var draft: field.game_state.Progress = undefined;
     var next_state = state.stageProgress(&draft);
     var story = next_state.progress.story.scenario orelse return error.MissingSourceStoryState;

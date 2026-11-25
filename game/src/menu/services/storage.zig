@@ -19,7 +19,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
             }
         },
         .storage_items => {
-            nav.cycleLeftRight(&state.member, game.progress.party.len, input.left, input.right);
+            nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
             const count = if (state.storage_withdraw) game.progress.storage.count() else game.progress.party[state.member].inventory.count();
             if (count == 0) {
                 state.slot = 0;

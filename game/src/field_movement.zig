@@ -1,7 +1,7 @@
 //! Field step completion, exit transitions and event triggers.
-//! Parameterized over the field state so it does not import field.zig.
+const field = @import("field.zig");
 
-pub fn advance(state: anytype) bool {
+pub fn advance(state: *field.State) bool {
     state.movement_updates +%= 1;
     state.remaining -= 1;
     state.animation_ticks +%= 1;
@@ -11,7 +11,7 @@ pub fn advance(state: anytype) bool {
     return true;
 }
 
-pub fn finish(state: anytype, package: anytype) void {
+pub fn finish(state: *field.State, package: field.Package) void {
     const room = package.rooms[state.room];
     for (room.exits) |exit| {
         if (exit.direction != null and exit.direction.? != state.facing) continue;
@@ -30,7 +30,7 @@ pub fn finish(state: anytype, package: anytype) void {
     _ = triggerEvent(state, package.rooms[state.room]);
 }
 
-pub fn triggerEvent(state: anytype, room: anytype) bool {
+pub fn triggerEvent(state: *field.State, room: field.Room) bool {
     for (room.events, 0..) |event, i| {
         if ((event.requires == null or state.progress.story.has(event.requires.?)) and !state.progress.story.has(event.flag) and state.x >= event.x and state.x < event.x + event.w and state.y >= event.y and state.y < event.y + event.h) {
             state.progress.story.complete(event.flag);

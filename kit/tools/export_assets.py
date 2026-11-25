@@ -59,8 +59,8 @@ def _env(name, default):
     return v if v else default
 
 
-OUT = os.path.join(KIT, "work", "build", "package")
-DEFAULT_OUT = OUT
+DEFAULT_OUT = os.path.join(KIT, "work", "build", "package")
+OUT = DEFAULT_OUT
 BINOV = _env("SUIKODEN_BINOV", os.path.join(KIT, "extracted", "bin_overlays"))
 DIALOGUE_SRC = _env("SUIKODEN_DIALOGUE_SRC",
                     os.path.join(KIT, "work", "decoded_text", "dialogue_found.txt"))
@@ -1301,9 +1301,18 @@ def validate_manifest():
     return problems
 
 # ---------------------------------------------------------------------- main
-# --skip class names (also the manifest top-level "subset" vocabulary)
-CLASSES = ["dialogue", "music", "palettes", "geometry", "recipes",
-           "tables", "scripts", "textures", "extras"]
+# Export order and the vocabulary for --skip and the manifest subset.
+EXPORTERS = {
+    "dialogue": export_dialogue,
+    "music": export_music,
+    "palettes": export_palettes,
+    "geometry": export_geometry,
+    "recipes": export_recipes,
+    "tables": export_tables,
+    "scripts": export_scripts,
+    "textures": export_textures,
+    "extras": export_extras,
+}
 
 # per-asset `class` values recorded inside manifest["assets"] (a different
 # namespace from the --skip list above)
@@ -1335,17 +1344,17 @@ never silently fall back to the default location.
 Zero recorded errors -> exit 0 and <out>/manifest.json.
 Any recorded error   -> exit 1 and <out>/manifest.failed.json (the accepted
 manifest.json is left untouched).
-""" % ", ".join(CLASSES)
+""" % ", ".join(EXPORTERS)
 
 
 def parse_args(argv):
-    """Parse argv. Returns (out_dir_or_None, skip_set) or raises SystemExit."""
-    global WANT_SWATCHES
+    """Return the requested output, skipped classes, and swatch setting."""
     if "-h" in argv or "--help" in argv:
         print(USAGE)
         raise SystemExit(0)
     skip = set()
     out = None
+    swatches = True
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -1364,58 +1373,54 @@ def parse_args(argv):
                 raise SystemExit("ERROR: --out needs a value")
             out = argv[i]
         elif a == "--no-swatches":
-            WANT_SWATCHES = False
+            swatches = False
         else:
             raise SystemExit("ERROR: unrecognised argument %r\n\n%s" % (a, USAGE))
         i += 1
-    unknown = skip - set(CLASSES)
+    unknown = skip - EXPORTERS.keys()
     if unknown:
         raise SystemExit("ERROR: unknown --skip class(es): %s\nknown: %s"
-                         % (", ".join(sorted(unknown)), ", ".join(CLASSES)))
-    return out, skip
+                         % (", ".join(sorted(unknown)), ", ".join(EXPORTERS)))
+    return out, skip, swatches
 
 
-def preflight(skip):
+def preflight(built):
     """Dependencies and required inputs, checked before any output is written."""
-    for cls in CLASSES:
-        if cls in skip:
-            continue
+    for cls in built:
         for mod in CLASS_DEPS.get(cls, []):
             try:
                 importlib.import_module(mod)
             except Exception as ex:
                 err("preflight", "%s requires module %r: %s" % (cls, mod, ex))
-    if WANT_SWATCHES and "palettes" not in skip:
+    if WANT_SWATCHES and "palettes" in built:
         try:
             importlib.import_module("PIL")
         except Exception as ex:
             err("preflight", "palettes swatches require module 'PIL': %s "
                              "(use --no-swatches for values-only export)" % ex)
-    if "dialogue" not in skip and not os.path.exists(DIALOGUE_SRC):
+    if "dialogue" in built and not os.path.exists(DIALOGUE_SRC):
         err("preflight", "dialogue input missing: %s" % _rel_out(DIALOGUE_SRC))
-    if "scripts" not in skip and not os.path.isdir(SCRIPT_SRC):
+    if "scripts" in built and not os.path.isdir(SCRIPT_SRC):
         err("preflight", "script corpus missing: %s" % _rel_out(SCRIPT_SRC))
-    if "tables" not in skip:
+    if "tables" in built:
         for root, rel, _note in table_sources():
             if not os.path.exists(os.path.join(root, rel)):
                 err("preflight", "tables input missing: %s"
                     % _rel_out(os.path.join(root, rel)))
-    if "palettes" not in skip:
+    if "palettes" in built:
         for p in palette_inputs():
             if not os.path.exists(p):
                 err("preflight", "palettes input missing: %s" % _rel_out(p))
-    if "recipes" not in skip and not os.path.isdir(PLAY04_DIR):
+    if "recipes" in built and not os.path.isdir(PLAY04_DIR):
         err("preflight", "recipes input missing: %s" % _rel_out(PLAY04_DIR))
-    if "textures" not in skip and not os.path.exists(STONE_BIN):
+    if "textures" in built and not os.path.exists(STONE_BIN):
         err("preflight", "textures input missing: %s" % _rel_out(STONE_BIN))
 
 
 def main(argv=None):
     global OUT, WANT_SWATCHES
-    WANT_SWATCHES = True
-    out, skip = parse_args(sys.argv[1:] if argv is None else argv)
-    if out:
-        OUT = os.path.abspath(out)
+    out, skip, WANT_SWATCHES = parse_args(sys.argv[1:] if argv is None else argv)
+    OUT = os.path.abspath(out) if out else DEFAULT_OUT
     os.makedirs(OUT, exist_ok=True)
     # Reset per run: MANIFEST/PRODUCED are module-global and add_asset()
     # appends to them, so a second main() would otherwise double-count and
@@ -1426,21 +1431,15 @@ def main(argv=None):
     MANIFEST["omissions"] = []
     MANIFEST["validation"] = None
     MANIFEST["out_root"] = _rel_out(OUT)
-    MANIFEST["subset"] = {"built": [c for c in CLASSES if c not in skip],
+    built = [cls for cls in EXPORTERS if cls not in skip]
+    MANIFEST["subset"] = {"built": built,
                           "skipped": sorted(skip),
                           "swatches": WANT_SWATCHES}
 
-    preflight(skip)
+    preflight(built)
     if not MANIFEST["errors"]:
-        if "dialogue" not in skip: export_dialogue()
-        if "music" not in skip: export_music()
-        if "palettes" not in skip: export_palettes()
-        if "geometry" not in skip: export_geometry()
-        if "recipes" not in skip: export_recipes()
-        if "tables" not in skip: export_tables()
-        if "scripts" not in skip: export_scripts()
-        if "textures" not in skip: export_textures()
-        if "extras" not in skip: export_extras()
+        for cls in built:
+            EXPORTERS[cls]()
 
     MANIFEST["generated_utc"] = datetime.datetime.now(
         datetime.timezone.utc).isoformat()

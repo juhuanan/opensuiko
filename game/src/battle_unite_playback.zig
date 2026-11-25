@@ -6,6 +6,7 @@ const camera = @import("battle_camera");
 const physical = @import("battle_physical.zig");
 const counter = @import("battle_counter.zig");
 const Point = @import("battle_presentation.zig").ScreenPoint;
+const CombatState = @import("battle.zig").State;
 
 pub const Fan = struct { visible: bool = false, finished: bool = false, local_x_q12: i32 = 0, anchor: [3]i32 = .{ 0, 0, 0 } };
 pub const Member = struct {
@@ -31,79 +32,69 @@ pub const Member = struct {
 const actor_capacity = 19;
 const AuxiliaryBinding = struct { resource: u8, program: u16 };
 pub const Sound = struct { actor: u8 = 0, id: u16 = 0 };
-fn RuntimeContext(comptime StatePointer: type) type {
-    return struct {
-        state: StatePointer,
-        playback: *State,
-        initial_camera: camera.Block,
-        runtime: *host.Runtime = undefined,
-        fn command(raw: *anyopaque, actor: u16, request: vm.Command, _: bool) !bool {
-            const ctx: *@This() = @ptrCast(@alignCast(raw));
-            switch (request) {
-                .sound => |id| try ctx.playback.emitSound(ctx.state.camera_ticks, @intCast(actor), id),
-                .recovery => |boundaries| {
-                    if (!ctx.playback.ownsActor(actor) or actor >= ctx.state.partyCount()) return error.InvalidActorRecovery;
-                    try ctx.state.requestUniteRecovery(actor, boundaries);
-                    if (ctx.playback.members[actor]) |*member| member.recovery_applied = true;
-                },
-                .status => |attempt| {
-                    if (!ctx.playback.ownsActor(actor)) return error.InvalidActorStatus;
-                    if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "requestActorStatus")) {
-                        try ctx.state.requestActorStatus(actor, attempt);
-                    } else return error.UnsupportedUniteActorCommand;
-                },
-                .camera => |event| {
-                    if (ctx.state.actor_camera == null) ctx.state.actor_camera = try camera.ActorController.init(ctx.initial_camera);
-                    ctx.runtime.camera_controller = &ctx.state.actor_camera.?;
-                    try ctx.runtime.requestCamera(actor, event);
-                },
-                .effect => |effect| {
-                    if (effect.binding == .self and std.mem.eql(u8, effect.id, "ally_throw")) {
-                        if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "beginStrongArmCooperation")) {
-                            try ctx.state.beginStrongArmCooperation(actor);
-                            return true;
-                        } else return error.UnsupportedUniteActorCommand;
-                    }
-                    if (effect.binding != .self or (!std.mem.eql(u8, effect.id, "kobold_magic") and !std.mem.eql(u8, effect.id, "enemy_group_magic"))) return error.UnsupportedUniteActorCommand;
-                    if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "beginEnemyMagicEffect")) {
-                        try ctx.state.beginEnemyMagicEffect(actor);
-                    } else return error.UnsupportedUniteActorCommand;
-                },
-                else => return error.UnsupportedUniteActorCommand,
-            }
-            return true;
+const RuntimeContext = struct {
+    state: *CombatState,
+    playback: *State,
+    initial_camera: camera.Block,
+    runtime: *host.Runtime = undefined,
+    fn command(raw: *anyopaque, actor: u16, request: vm.Command, _: bool) !bool {
+        const ctx: *@This() = @ptrCast(@alignCast(raw));
+        switch (request) {
+            .sound => |id| try ctx.playback.emitSound(ctx.state.camera_ticks, @intCast(actor), id),
+            .recovery => |boundaries| {
+                if (!ctx.playback.ownsActor(actor) or actor >= ctx.state.partyCount()) return error.InvalidActorRecovery;
+                try ctx.state.requestUniteRecovery(actor, boundaries);
+                if (ctx.playback.members[actor]) |*member| member.recovery_applied = true;
+            },
+            .status => |attempt| {
+                if (!ctx.playback.ownsActor(actor)) return error.InvalidActorStatus;
+                try ctx.state.requestActorStatus(actor, attempt);
+            },
+            .camera => |event| {
+                if (ctx.state.actor_camera == null) ctx.state.actor_camera = try camera.ActorController.init(ctx.initial_camera);
+                ctx.runtime.camera_controller = &ctx.state.actor_camera.?;
+                try ctx.runtime.requestCamera(actor, event);
+            },
+            .effect => |effect| {
+                if (effect.binding == .self and std.mem.eql(u8, effect.id, "ally_throw")) {
+                    try ctx.state.beginStrongArmCooperation(actor);
+                    return true;
+                }
+                if (effect.binding != .self or (!std.mem.eql(u8, effect.id, "kobold_magic") and !std.mem.eql(u8, effect.id, "enemy_group_magic"))) return error.UnsupportedUniteActorCommand;
+                try ctx.state.beginEnemyMagicEffect(actor);
+            },
+            else => return error.UnsupportedUniteActorCommand,
         }
-        fn after(raw: *anyopaque, actor: u16) !void {
-            const ctx: *@This() = @ptrCast(@alignCast(raw));
-            if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "advanceEnemyMagicActor")) try ctx.state.advanceEnemyMagicActor(actor, ctx.runtime);
-            if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "advanceCoverActor")) ctx.state.advanceCoverActor(actor);
-            if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "advanceStrongArmActor")) try ctx.state.advanceStrongArmActor(actor, ctx.runtime);
-            if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "releaseProjectileTurn")) ctx.state.releaseProjectileTurn(actor, ctx.runtime);
-            if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "syncRegionalActorVisuals")) ctx.state.syncRegionalActorVisuals(actor, ctx.runtime);
-        }
-        fn previous(raw: *anyopaque, actor: u16) !Point {
-            const ctx: *@This() = @ptrCast(@alignCast(raw));
-            if (actor >= ctx.playback.previous_points.len) return error.InvalidActorBinding;
-            return ctx.playback.previous_points[actor];
-        }
-        fn decoy(raw: *anyopaque, attacker: u16, child: u16) !void {
-            const ctx: *@This() = @ptrCast(@alignCast(raw));
-            if (attacker >= ctx.playback.actors.len or child < ctx.playback.actors.len or child - ctx.playback.actors.len >= ctx.playback.auxiliary_capacity) return error.InvalidActorBinding;
-            if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "roll")) {
-                _ = ctx.state.roll();
-                if (ctx.state.replay_exhausted) return error.RandomInputExhausted;
-            } else return error.MissingDecoyContact;
-        }
-        fn holdCoordinatorDispatch(raw: *anyopaque, actor: u16) !void {
-            const ctx: *@This() = @ptrCast(@alignCast(raw));
-            if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "holdRegionalDispatch")) try ctx.state.holdRegionalDispatch(actor);
-        }
-        fn tailReturn(raw: *anyopaque, actor: u16) !void {
-            const ctx: *@This() = @ptrCast(@alignCast(raw));
-            if (comptime @hasDecl(@typeInfo(StatePointer).pointer.child, "dispatchPartyTailReturn")) try ctx.state.dispatchPartyTailReturn(actor, ctx.runtime);
-        }
-    };
-}
+        return true;
+    }
+    fn after(raw: *anyopaque, actor: u16) !void {
+        const ctx: *@This() = @ptrCast(@alignCast(raw));
+        try ctx.state.advanceEnemyMagicActor(actor, ctx.runtime);
+        ctx.state.advanceCoverActor(actor);
+        try ctx.state.advanceStrongArmActor(actor, ctx.runtime);
+        ctx.state.releaseProjectileTurn(actor, ctx.runtime);
+        ctx.state.syncRegionalActorVisuals(actor, ctx.runtime);
+    }
+    fn previous(raw: *anyopaque, actor: u16) !Point {
+        const ctx: *@This() = @ptrCast(@alignCast(raw));
+        if (actor >= ctx.playback.previous_points.len) return error.InvalidActorBinding;
+        return ctx.playback.previous_points[actor];
+    }
+    fn decoy(raw: *anyopaque, attacker: u16, child: u16) !void {
+        const ctx: *@This() = @ptrCast(@alignCast(raw));
+        if (attacker >= ctx.playback.actors.len or child < ctx.playback.actors.len or child - ctx.playback.actors.len >= ctx.playback.auxiliary_capacity) return error.InvalidActorBinding;
+        _ = ctx.state.roll();
+        if (ctx.state.replay_exhausted) return error.RandomInputExhausted;
+    }
+    fn holdCoordinatorDispatch(raw: *anyopaque, actor: u16) !void {
+        const ctx: *@This() = @ptrCast(@alignCast(raw));
+        try ctx.state.holdRegionalDispatch(actor);
+    }
+    fn tailReturn(raw: *anyopaque, actor: u16) !void {
+        const ctx: *@This() = @ptrCast(@alignCast(raw));
+        try ctx.state.dispatchPartyTailReturn(actor, ctx.runtime);
+    }
+};
 pub const State = struct {
     actors: [12]host.Actor = @splat(host.Actor.anchor(.{ 0, 0, 0 }, .{ 0, 0, 0 }, null)),
     auxiliary: [actor_capacity]?host.Actor = @splat(null),
@@ -429,7 +420,7 @@ pub const State = struct {
         flags[trigger] &= ~transition.signal;
         self.* = next;
     }
-    pub fn advanceCallbackChild(self: *State, state: anytype, leader: u8, target_position: [3]i32, attachment: [2]i16, initial_camera: camera.Block) !void {
+    pub fn advanceCallbackChild(self: *State, state: *CombatState, leader: u8, target_position: [3]i32, attachment: [2]i16, initial_camera: camera.Block) !void {
         const bundle = state.unite_actors orelse return error.MissingActorLibrary;
         const parent = for (self.members, 0..) |maybe, actor| {
             if (maybe) |member| if (member.leader == leader and member.initialized) {
@@ -440,9 +431,8 @@ pub const State = struct {
         if (self.actors[parent].shared_value != 1) return;
         const member = self.members[parent].?;
         if (!self.ownsActor(member.target)) self.actors[member.target] = host.Actor.anchor(target_position, target_position, attachment);
-        const Context = RuntimeContext(@TypeOf(state));
-        var context = Context{ .state = state, .playback = self, .initial_camera = initial_camera };
-        var runtime = host.Runtime{ .actors = &self.actors, .auxiliary = self.auxiliary[0..self.auxiliary_capacity], .library = bundle.library(), .external = .{ .context = &context, .command = Context.command } };
+        var context = RuntimeContext{ .state = state, .playback = self, .initial_camera = initial_camera };
+        var runtime = host.Runtime{ .actors = &self.actors, .auxiliary = self.auxiliary[0..self.auxiliary_capacity], .library = bundle.library(), .external = .{ .context = &context, .command = RuntimeContext.command } };
         context.runtime = &runtime;
         const child = bundle.find(member.record).?.beat_child.?;
         _ = try @import("battle_unite_beat.zig").spawnChild(&runtime, @intCast(parent), member.target, child);
@@ -469,14 +459,13 @@ pub const State = struct {
         self.actors[actor].machine = null;
         self.actors[actor].signals &= ~@as(u16, 16);
     }
-    pub fn advancePhysical(self: *State, state: anytype, initial_camera: camera.Block) !void {
+    pub fn advancePhysical(self: *State, state: *CombatState, initial_camera: camera.Block) !void {
         const bundle = state.unite_actors orelse return;
         if (!self.hasPhysical() and !self.hasCounter() and !self.hasEnemyMagic() and !self.hasCommander() and !self.hasEnemyWave()) return;
         try self.rebind(bundle);
         self.beginSoundFrame(state.camera_ticks);
-        const Context = RuntimeContext(@TypeOf(state));
-        var context = Context{ .state = state, .playback = self, .initial_camera = initial_camera };
-        var runtime = host.Runtime{ .actors = &self.actors, .auxiliary = self.auxiliary[0..self.auxiliary_capacity], .library = bundle.library(), .camera_controller = if (state.actor_camera) |*value| value else null, .external = .{ .context = &context, .command = Context.command, .after_actor = Context.after, .previous_screen_position = Context.previous, .hold_coordinator_dispatch = Context.holdCoordinatorDispatch, .tail_return = Context.tailReturn, .decoy_contact = Context.decoy } };
+        var context = RuntimeContext{ .state = state, .playback = self, .initial_camera = initial_camera };
+        var runtime = host.Runtime{ .actors = &self.actors, .auxiliary = self.auxiliary[0..self.auxiliary_capacity], .library = bundle.library(), .camera_controller = if (state.actor_camera) |*value| value else null, .external = .{ .context = &context, .command = RuntimeContext.command, .after_actor = RuntimeContext.after, .previous_screen_position = RuntimeContext.previous, .hold_coordinator_dispatch = RuntimeContext.holdCoordinatorDispatch, .tail_return = RuntimeContext.tailReturn, .decoy_contact = RuntimeContext.decoy } };
         context.runtime = &runtime;
         if (self.physical_logic_at == state.camera_ticks) {
             for (&self.counter_actions, 0..) |*maybe, leader| if (maybe.*) |*playback| {
@@ -495,13 +484,13 @@ pub const State = struct {
             if (before == .auxiliary and playback.action.?.stage == .recipient) state.physical_numerator = packet.find(playback.technique).?.numerator;
             if (playback.action.?.stage == .released) state.finishPhysicalRuneController(leader);
         };
-        if (comptime @hasDecl(@typeInfo(@TypeOf(state)).pointer.child, "advanceCommander")) for (self.commander_actions, 0..) |maybe, owner| if (maybe != null) try state.advanceCommander(owner, &runtime);
-        if (comptime @hasDecl(@typeInfo(@TypeOf(state)).pointer.child, "advanceEnemyWave")) for (self.wave_actions, 0..) |maybe, owner| if (maybe != null) try state.advanceEnemyWave(owner, &runtime);
+        for (self.commander_actions, 0..) |maybe, owner| if (maybe != null) try state.advanceCommander(owner, &runtime);
+        for (self.wave_actions, 0..) |maybe, owner| if (maybe != null) try state.advanceEnemyWave(owner, &runtime);
         for (&self.counter_actions, 0..) |*maybe, leader| if (maybe.*) |*playback| {
             if (state.camera_ticks < playback.start_at) continue;
             if (playback.action == null) try state.prepareCounter(leader, &runtime);
         };
-        if (comptime @hasDecl(@typeInfo(@TypeOf(state)).pointer.child, "prepareEnemyMagic")) for (&self.enemy_magic_actions, 0..) |*maybe, owner| if (maybe.*) |*playback| {
+        for (&self.enemy_magic_actions, 0..) |*maybe, owner| if (maybe.*) |*playback| {
             if (state.camera_ticks >= playback.start_at and !playback.prepared) try state.prepareEnemyMagic(owner, &runtime);
         };
         // All callback families share the original ascending actor sweep after the primary controller.
@@ -536,12 +525,11 @@ pub const State = struct {
         for (0..state.partyCount() + state.enemyCount()) |actor| state.unite_flags[actor] = self.actors[actor].signals;
         self.physical_logic_at = state.camera_ticks;
     }
-    pub fn update(self: *State, state: anytype, initial_camera: camera.Block) !void {
+    pub fn update(self: *State, state: *CombatState, initial_camera: camera.Block) !void {
         const bundle = state.unite_actors orelse return error.MissingActorLibrary;
         try self.rebind(bundle);
         try self.advanceFans(bundle, state.unite_flags);
         self.beginSoundFrame(state.camera_ticks);
-        const Context = RuntimeContext(@TypeOf(state));
         var initializing = false;
         for (&self.prepare_at, 0..) |*pending, leader| if (pending.*) |at| {
             if (state.camera_ticks < at) continue;
@@ -552,9 +540,7 @@ pub const State = struct {
             const impact_owned = for (self.members) |maybe| {
                 if (maybe) |member| if (member.leader == leader) break bundle.find(member.record).?.impact_effect != null;
             } else false;
-            if (impact_owned) {
-                if (comptime @hasDecl(@TypeOf(state.*), "prepareUniteImpactEffect")) try state.prepareUniteImpactEffect(leader) else return error.InvalidActorBinding;
-            }
+            if (impact_owned) try state.prepareUniteImpactEffect(leader);
             initializing = true;
             for (self.members, 0..) |maybe, actor| if (maybe) |member| {
                 if (member.leader != leader) continue;
@@ -567,8 +553,8 @@ pub const State = struct {
             self.actors[actor].signals = 0;
             state.unite_flags[actor] = 0;
         };
-        var context = Context{ .state = state, .playback = self, .initial_camera = initial_camera };
-        var runtime = host.Runtime{ .actors = &self.actors, .auxiliary = self.auxiliary[0..self.auxiliary_capacity], .library = bundle.library(), .camera_angles = .{ @truncate(initial_camera.angles[0]), @truncate(initial_camera.angles[1]), @truncate(initial_camera.angles[2]) }, .camera_controller = if (state.actor_camera) |*value| value else null, .external = .{ .context = &context, .command = Context.command, .after_actor = Context.after, .previous_screen_position = Context.previous, .hold_coordinator_dispatch = Context.holdCoordinatorDispatch, .tail_return = Context.tailReturn, .decoy_contact = Context.decoy } };
+        var context = RuntimeContext{ .state = state, .playback = self, .initial_camera = initial_camera };
+        var runtime = host.Runtime{ .actors = &self.actors, .auxiliary = self.auxiliary[0..self.auxiliary_capacity], .library = bundle.library(), .camera_angles = .{ @truncate(initial_camera.angles[0]), @truncate(initial_camera.angles[1]), @truncate(initial_camera.angles[2]) }, .camera_controller = if (state.actor_camera) |*value| value else null, .external = .{ .context = &context, .command = RuntimeContext.command, .after_actor = RuntimeContext.after, .previous_screen_position = RuntimeContext.previous, .hold_coordinator_dispatch = RuntimeContext.holdCoordinatorDispatch, .tail_return = RuntimeContext.tailReturn, .decoy_contact = RuntimeContext.decoy } };
         context.runtime = &runtime;
         for (&self.members, 0..) |*maybe, actor| if (maybe.*) |*member| {
             if (member.deferred_entry or state.camera_ticks < member.start_at) continue;
@@ -579,11 +565,9 @@ pub const State = struct {
             } else {
                 self.actors[actor].signals = state.unite_flags[actor];
                 if (!member.returning and self.actors[actor].signals & 4 != 0) {
-                    if (comptime @hasField(@typeInfo(@TypeOf(state)).pointer.child, "unite_scene")) {
-                        if (state.unite_scene) |scene| {
-                            const controller = bundle.find(scene.record).?.controller.?;
-                            if (scene.owner == member.leader and controller.mode == .owner_clock and (state.active.?.scene == null or state.active.?.scene.?.elapsed < controller.return_at.?)) continue;
-                        }
+                    if (state.unite_scene) |scene| {
+                        const controller = bundle.find(scene.record).?.controller.?;
+                        if (scene.owner == member.leader and controller.mode == .owner_clock and (state.active.?.scene == null or state.active.?.scene.?.elapsed < controller.return_at.?)) continue;
                     }
                     self.actors[actor].signals &= ~@as(u16, 4);
                     state.unite_flags[actor] &= ~@as(u16, 4);
@@ -597,11 +581,9 @@ pub const State = struct {
         };
         for (0..state.partyCount() + state.enemyCount()) |actor| {
             const member = if (actor < self.members.len) self.members[actor] else null;
-            const idle = if (comptime @hasDecl(@TypeOf(state.*), "hasSourceEnemyIdle")) state.hasSourceEnemyIdle(actor) else false;
+            const idle = state.hasSourceEnemyIdle(actor);
             if (!idle and self.scripted_actors[actor] == null and (member == null or !member.?.initialized)) continue;
-            if (comptime @hasDecl(@TypeOf(state.*), "stepEnemyIdleActor")) {
-                try state.stepEnemyIdleActor(&runtime, @intCast(actor));
-            } else try runtime.stepActor(@intCast(actor));
+            try state.stepEnemyIdleActor(&runtime, @intCast(actor));
             if (member != null) self.members[actor].?.age += 1;
         }
         // Newborn children in later slots participate in this same ascending sweep.

@@ -1,4 +1,5 @@
 //! Pending-item overload menu; inventory publishes with the event receipt on close.
+const State = @import("journey.zig").State;
 const std = @import("std");
 const field = @import("field");
 const battle = @import("battle");
@@ -19,7 +20,7 @@ pub const Active = struct {
     replacement: ?struct { member: usize, slot: usize } = null,
 };
 
-fn wornSlot(state: anytype, member: usize, slot: usize) !?battle.systems.EquipmentSlot {
+fn wornSlot(state: *const State, member: usize, slot: usize) !?battle.systems.EquipmentSlot {
     if (member >= state.combat.partyCount() or slot >= state.combat.progress.party[member].inventory.count()) return error.InvalidItem;
     if (!state.combat.itemEquipped(member, slot)) return null;
     const id = state.combat.progress.party[member].inventory.slots[slot].?.id;
@@ -35,7 +36,7 @@ fn wornSlot(state: anytype, member: usize, slot: usize) !?battle.systems.Equipme
     return error.InvalidEquipment;
 }
 
-pub fn canDrop(state: anytype, member: usize, slot: usize) !bool {
+pub fn canDrop(state: *const State, member: usize, slot: usize) !bool {
     if (member >= state.combat.partyCount() or slot >= state.combat.progress.party[member].inventory.count()) return error.InvalidItem;
     const packet = state.shared_item_catalogue orelse return error.MissingSharedItemCatalogue;
     const id = state.combat.progress.party[member].inventory.slots[slot].?.id;
@@ -45,7 +46,7 @@ pub fn canDrop(state: anytype, member: usize, slot: usize) !bool {
     return true;
 }
 
-pub fn prepareReplacement(state: anytype, member: usize, slot: usize, incoming: field.items.Id) !battle.OwnedMember {
+pub fn prepareReplacement(state: *const State, member: usize, slot: usize, incoming: field.items.Id) !battle.OwnedMember {
     if (!try canDrop(state, member, slot)) return error.ItemCannotBeDiscarded;
     var members: [6]battle.Member = undefined;
     const count = state.combat.partyCount();
@@ -61,7 +62,7 @@ pub fn prepareReplacement(state: anytype, member: usize, slot: usize, incoming: 
     return owned;
 }
 
-pub fn begin(state: anytype) !void {
+pub fn begin(state: *State) !void {
     if (state.item_overload != null or state.mode != .field or state.combat.partyCount() == 0) return error.InvalidItemOverload;
     const owner = state.field_event orelse return error.MissingFieldEvent;
     const request = owner.session.queuedItemOverload() orelse return error.MissingItemOverload;
@@ -79,7 +80,7 @@ fn move(cursor: *usize, count: usize, input: pause.Input) bool {
     return true;
 }
 
-pub fn tick(state: anytype, input: pause.Input) !void {
+pub fn tick(state: *State, input: pause.Input) !void {
     var next = state.item_overload orelse return error.MissingItemOverload;
     const owner = state.field_event orelse return error.MissingFieldEvent;
     const request = owner.session.queuedItemOverload() orelse return error.MissingItemOverload;

@@ -31,47 +31,7 @@ const Room2Descriptor = events.Room2Descriptor;
 const begin_mod = @import("field_events_begin.zig");
 const validate_mod = @import("field_events_validate.zig");
 const playback_mod = @import("field_events_playback.zig");
-const host_mod = @import("field_events_host.zig");
-const pump = playback_mod.pump;
 
-pub const beginInteraction = begin_mod.beginInteraction;
-pub const beginOrdinary = begin_mod.beginOrdinary;
-pub const beginRoomEvent = begin_mod.beginRoomEvent;
-pub const beginRoute = begin_mod.beginRoute;
-pub const beginRetainedInteraction = begin_mod.beginRetainedInteraction;
-pub const beginHomeRoute = begin_mod.beginHomeRoute;
-pub const beginRoom2Event = begin_mod.beginRoom2Event;
-pub const beginHomeStairs = begin_mod.beginHomeStairs;
-pub const beginConstructedRoute = begin_mod.beginConstructedRoute;
-pub const beginWorldExit = begin_mod.beginWorldExit;
-pub const validate = validate_mod.validate;
-pub const takeBattle = playback_mod.takeBattle;
-pub const queuedBattle = playback_mod.queuedBattle;
-pub const resumeBattleStory = playback_mod.resumeBattleStory;
-pub const queuedItemOverload = playback_mod.queuedItemOverload;
-pub const resumeItemOverload = playback_mod.resumeItemOverload;
-pub const queuedPartySelect = playback_mod.queuedPartySelect;
-pub const partySelectReservesSlot = playback_mod.partySelectReservesSlot;
-pub const resumePartySelect = playback_mod.resumePartySelect;
-pub const updateSelectorParty = playback_mod.updateSelectorParty;
-pub const queuedFixedDice = playback_mod.queuedFixedDice;
-pub const resumeFixedDice = playback_mod.resumeFixedDice;
-pub const pendingFieldMusic = playback_mod.pendingFieldMusic;
-pub const resumeFieldMusic = playback_mod.resumeFieldMusic;
-pub const acknowledgeAudio = playback_mod.acknowledgeAudio;
-pub const sourceTedAddRequest = host_mod.sourceTedAddRequest;
-pub const acknowledgeTedAdd = host_mod.acknowledgeTedAdd;
-pub const pendingPartyChange = host_mod.pendingPartyChange;
-pub const acknowledgePartyChange = host_mod.acknowledgePartyChange;
-pub const acknowledgePartyLoad = host_mod.acknowledgePartyLoad;
-pub const sourceCueRequest = host_mod.sourceCueRequest;
-pub const acknowledgeSourceCue = host_mod.acknowledgeSourceCue;
-pub const proposeRoomTransition = host_mod.proposeRoomTransition;
-pub const acknowledgeRoomTransition = host_mod.acknowledgeRoomTransition;
-pub const acknowledgeWorldExit = host_mod.acknowledgeWorldExit;
-pub const reconstruct = host_mod.reconstruct;
-
-pub const select = begin_mod.select;
 pub fn finishInitialization(self: *Session, binding: Binding, story: *const runtime.StoryState) !void {
     const owner = self.instance orelse return error.InvalidFieldInitialization;
     const program = binding.content.program(owner.program_id) orelse return error.UnknownEventProgram;
@@ -91,11 +51,11 @@ pub fn finishInitialization(self: *Session, binding: Binding, story: *const runt
     self.serial = std.math.add(u64, self.serial, 1) catch return error.FieldEventSequenceOverflow;
     self.instance = null;
     self.receipt = null;
-    try select(self, binding, story, .initialization, null);
+    try begin_mod.select(self, binding, story, .initialization, null);
     if (self.blocker != null or self.instance != null) return;
     self.initialization_done = true;
     self.next_initialization = @intCast(binding.population.entities.len);
-    try select(self, binding, story, .area_entry, null);
+    try begin_mod.select(self, binding, story, .area_entry, null);
 }
 
 // The original entry driver pumps each eligible initializer once, not until FD.
@@ -103,14 +63,14 @@ fn initialize(self: *Session, binding: Binding, state: *field.State, story: *run
     while (self.instance != null) {
         const program = binding.content.program(self.instance.?.program_id).?;
         if (program.entry != .initialization) return error.InvalidFieldInitialization;
-        if (!try pump(self, binding, state, story, .{})) return;
+        if (!try playback_mod.pump(self, binding, state, story, .{})) return;
         try finishInitialization(self, binding, story);
         if (self.blocker != null or self.initialization_done) return;
     }
     if (self.initialization_done) return;
     self.initialization_done = true;
     self.next_initialization = @intCast(binding.population.entities.len);
-    try select(self, binding, story, .area_entry, null);
+    try begin_mod.select(self, binding, story, .area_entry, null);
 }
 
 // Host mutation, receipt, PC and the Progress-owned flag bank publish together.
@@ -124,7 +84,7 @@ pub noinline fn tick(self: *Session, binding: Binding, state: *field.State, conf
 pub noinline fn tickPad(self: *Session, binding: Binding, state: *field.State, pressed: u32, held: u32) !Result {
     _ = held;
     const confirm = pressed & 0x65 != 0;
-    try validate(self, binding);
+    try validate_mod.validate(self, binding);
     if (self.completed_event != null) {
         const initial_story = state.progress.story.scenario orelse return error.MissingSourceStoryState;
         try self.validateStory(&initial_story);
@@ -219,7 +179,7 @@ pub noinline fn tickPad(self: *Session, binding: Binding, state: *field.State, p
             // the accepted stack budget, so this path is an exact blocker
             // rather than a second, unsaved text owner.
             return error.UnsupportedRoom2NativeText;
-        } else if (!movement_active and (next_state.wheel_state == null or next_state.wheel_state.?.clock.phase == null)) _ = try pump(&next, binding, &next_state, &story, .{
+        } else if (!movement_active and (next_state.wheel_state == null or next_state.wheel_state.?.clock.phase == null)) _ = try playback_mod.pump(&next, binding, &next_state, &story, .{
             .confirm = confirm,
             .wheel_outcome = if (next_state.wheel_state) |wheel| if (wheel.clock.phase == null and wheel.clock.result != null) @backingInt(wheel.clock.result.?) else null else null,
             .choice = choice,

@@ -4,15 +4,13 @@ const pause = @import("../pause_menu.zig");
 const runes = @import("runes.zig");
 
 pub fn cycleUpDown(value: *usize, count: usize, dir: ?field.Direction) void {
-    if (count == 0) return;
-    if (dir == .up) value.* = (value.* + count - 1) % count;
-    if (dir == .down) value.* = (value.* + 1) % count;
+    cycle(value, count, dir == .up, dir == .down);
 }
 
-pub fn cycleLeftRight(value: *usize, count: usize, left: bool, right: bool) void {
+pub fn cycle(value: *usize, count: usize, previous: bool, next: bool) void {
     if (count == 0) return;
-    if (left) value.* = (value.* + count - 1) % count;
-    if (right) value.* = (value.* + 1) % count;
+    if (previous) value.* = (value.* + count - 1) % count;
+    if (next) value.* = (value.* + 1) % count;
 }
 
 pub fn toggleConfirm(yes: *bool, input: pause.Input) void {

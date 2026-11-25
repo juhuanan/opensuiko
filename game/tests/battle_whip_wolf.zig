@@ -198,7 +198,7 @@ test "Whip Wolf actor group orders preserve launch delay eligibility mapping pro
         try state.attachUniteActors(&actors);
         try state.attachSpellScenes(&effects);
         prepare(&state, &members);
-        if (mode == 1) state.protection[0] = 2;
+        if (mode == 1) state.actor_conditions[0].protection_rounds = 2;
         for (state.partyCount()..state.partyCount() + 3) |ally| state.acted[ally] = mode == 5;
         if (mode == 2) state.acted[state.partyCount()] = true;
         if (mode == 3) state.enemy_hp[0] = 0;
@@ -267,7 +267,7 @@ test "Whip Wolf actor front ordinary attacks complete defended and protected rou
         try state.attachUniteActors(&actors);
         try state.attachSpellScenes(&effects);
         prepare(&state, &members);
-        if (protected) state.protection[target] = 2;
+        if (protected) state.actor_conditions[target].protection_rounds = 2;
         const owner = state.partyCount() + 3;
         const amount = if (protected) 0 else state.resolvePhysicalDamage(owner, target, 0, true);
         state.phase = .resolving;

@@ -183,8 +183,8 @@ pub fn equippedStats(content: battle.Content, owned: battle.OwnedMember, augment
 }
 pub fn withTemporaryStats(self: *const State, index: usize, value: Stats) Stats {
     var result = value;
-    result.skill = bonus(result.skill, self.temporary_stats[index].skill_bonus);
-    result.defense = bonus(result.defense, self.temporary_stats[index].defense_bonus);
+    result.skill = bonus(result.skill, self.actor_conditions[index].stat_modifiers.skill_bonus);
+    result.defense = bonus(result.defense, self.actor_conditions[index].stat_modifiers.defense_bonus);
     return result;
 }
 pub fn clearTemporaryStats(self: *State) void {
@@ -193,10 +193,12 @@ pub fn clearTemporaryStats(self: *State) void {
     self.spark_pending = false;
     self.departed = @splat(false);
     self.departures = @splat(null);
-    self.temporary_stats = @splat(.{});
-    self.accuracy_reduced = @splat(false);
-    self.rune_blocked = @splat(false);
-    self.protection = @splat(0);
+    for (&self.actor_conditions) |*conditions| {
+        conditions.stat_modifiers = .{};
+        conditions.accuracy_reduced = false;
+        conditions.rune_blocked = false;
+        conditions.protection_rounds = 0;
+    }
 }
 fn bonus(value: u16, amount: i16) u16 {
     return @intCast(std.math.clamp(@as(i32, value) + amount, 0, 9999));
@@ -214,7 +216,7 @@ pub fn effectTicks(self: *const State) u16 {
 pub fn partyInactive(self: *const State, index: usize) bool {
     std.debug.assert(index < self.partyCount());
     if (self.hp(index) > 0) return false;
-    if (self.revivals[index] != null) return false;
+    if (self.party_knockouts[index].revival != null) return false;
     for (self.front_projectiles) |maybe| if (maybe) |shot| if (shot.target == index and !shot.target_released) return false;
     if (self.active) |effect| if (effect.damage_at_impact and self.enemy(effect.actor - self.partyCount()).action_policy == .roc) {
         if (effect.protector == index) return effect.protector_down;
@@ -248,7 +250,7 @@ pub fn weaponRange(self: *const State, member: usize) WeaponRange {
     return self.partyProfile(member).weapon_range orelse .short;
 }
 pub fn canStartAttack(self: *const State, member: usize) bool {
-    return member < self.partyCount() and self.participates(member) and self.unbalanced[member] == 0 and self.asleep[member] == 0;
+    return member < self.partyCount() and self.participates(member) and self.unbalanced[member] == 0 and self.actor_conditions[member].sleep_turns == 0;
 }
 pub fn canAttackTarget(self: *const State, member: usize, target: usize) bool {
     if (!self.canStartAttack(member) or target >= self.enemyCount() or self.enemy_hp[target] == 0) return false;
@@ -288,7 +290,7 @@ pub fn chooseFreeWill(self: *State) void {
         self.actions[member] = .defend;
         var reachable = false;
         for (targets[0..count]) |target| reachable = reachable or self.weaponRange(member).reaches(self.partyRow(member), self.enemyRow(target));
-        if (!reachable or self.asleep[member] > 0 or self.unbalanced[member] > 0) continue;
+        if (!reachable or self.actor_conditions[member].sleep_turns > 0 or self.unbalanced[member] > 0) continue;
         // The source cursor advances even for KO owners; range filtering precedes its wrap test.
         var candidate = cursor + 1;
         while (true) {
@@ -306,7 +308,7 @@ pub fn chooseFreeWill(self: *State) void {
 }
 pub fn promoteRearMembers(self: *State) void {
     for (0..self.partyCount()) |fallen| {
-        if (self.participates(fallen) or self.knockout_pending[fallen] or self.revivals[fallen] != null or self.partyRow(fallen) != .front) continue;
+        if (self.participates(fallen) or self.party_knockouts[fallen].pending or self.party_knockouts[fallen].revival != null or self.partyRow(fallen) != .front) continue;
         for (0..self.partyCount()) |replacement| {
             if (!self.participates(replacement) or self.partyRow(replacement) != .back or self.coordinatorLocked(replacement)) continue;
             if (self.content.world_art != null and self.content.world_art.?.c_tracks != null) {

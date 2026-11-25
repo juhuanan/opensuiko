@@ -220,7 +220,7 @@ pub fn drawActorFeedback(state: battle.State, index: usize, x: f32, baseline_y: 
         const spell = state.content.systems.?.spells[effect.spell];
         const damage = spell.kind == .damage or effect.spell_hp_loss & (@as(u16, 1) << @intCast(index)) != 0;
         const color: rl.Color = if (damage) .orange else if (spell.kind == .sleep) .violet else .green;
-        if (effect.amounts[index] > 0) feedback.drawNumber("{s}{d}", .{ if (damage) "-" else "+", effect.amounts[index] }, x - 20, baseline_y - 85, 20, color) else if (spell.kind == .damage or (spell.kind == .sleep and state.asleep[index] == 0)) feedback.drawText("RESIST", x - 24, baseline_y - 85, 15, .light_gray);
+        if (effect.amounts[index] > 0) feedback.drawNumber("{s}{d}", .{ if (damage) "-" else "+", effect.amounts[index] }, x - 20, baseline_y - 85, 20, color) else if (spell.kind == .damage or (spell.kind == .sleep and state.actor_conditions[index].sleep_turns == 0)) feedback.drawText("RESIST", x - 24, baseline_y - 85, 15, .light_gray);
     };
 }
 
@@ -281,12 +281,12 @@ fn actor(state: battle.State, atlas: rl.Texture2D, effect_atlas: ?rl.Texture2D, 
     }
     const source_status = state.hasStatusIconsFor(index);
     if (!source_status and index < state.partyCount() and state.unbalanced[index] > 0 and state.hp(index) > 0) text("RECOVERING", @intFromFloat(point.x - 26), @intFromFloat(point.y - 65), 12, .gold);
-    if (!source_status and state.asleep[index] > 0 and state.hp(index) > 0) text("Zzz", @intFromFloat(point.x), @intFromFloat(point.y - 65), 16, .sky_blue);
+    if (!source_status and state.actor_conditions[index].sleep_turns > 0 and state.hp(index) > 0) text("Zzz", @intFromFloat(point.x), @intFromFloat(point.y - 65), 16, .sky_blue);
     if (!source_status and index < state.partyCount() and state.progress.party[index].balloons > 0) number("BALLOON {d}", .{state.progress.party[index].balloons}, @intFromFloat(point.x - 30), @intFromFloat(point.y - 80), 12, .gold);
     if (!source_status and index < state.partyCount() and state.progress.party[index].status == .poisoned) text("POISON", @intFromFloat(point.x - 20), @intFromFloat(point.y - 65), 12, .violet);
-    if (state.protection[index] > 0) text("PROTECT", @intFromFloat(point.x - 24), @intFromFloat(point.y - 104), 12, .sky_blue);
-    if (!source_status and state.accuracy_reduced[index]) text("ACCURACY DOWN", @intFromFloat(point.x - 38), @intFromFloat(point.y - 92), 10, .gold);
-    if (!source_status and state.rune_blocked[index]) text("RUNE BLOCKED", @intFromFloat(point.x - 36), @intFromFloat(point.y - 80), 10, .violet);
+    if (state.actor_conditions[index].protection_rounds > 0) text("PROTECT", @intFromFloat(point.x - 24), @intFromFloat(point.y - 104), 12, .sky_blue);
+    if (!source_status and state.actor_conditions[index].accuracy_reduced) text("ACCURACY DOWN", @intFromFloat(point.x - 38), @intFromFloat(point.y - 92), 10, .gold);
+    if (!source_status and state.actor_conditions[index].rune_blocked) text("RUNE BLOCKED", @intFromFloat(point.x - 36), @intFromFloat(point.y - 80), 10, .violet);
     if (index < state.partyCount() and state.hp(index) == 0) text("KO", @intFromFloat(point.x - 10), @intFromFloat(point.y - 55), 20, .gold);
     if (state.phase == .resolving and index < state.partyCount() and state.actions[index] != null and state.actions[index].? == .defend and state.hp(index) > 0) {
         rl.drawCircleLines(@intFromFloat(point.x), @intFromFloat(point.y - 40), 33, .sky_blue);

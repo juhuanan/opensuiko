@@ -154,7 +154,7 @@ test "Double-Beat source coordinator keeps a lethal first target's KO while stri
         const replacement = combat.partyCount() + 1;
         for (1..timing.return_tick + timing.release_tick + 1) |tick| {
             if (case == .unbalanced and tick == timing.return_tick) combat.unbalanced[0] = 2;
-            if (case == .protected and tick == timing.return_tick + timing.impact_tick) combat.protection[replacement] = 2;
+            if (case == .protected and tick == timing.return_tick + timing.impact_tick) combat.actor_conditions[replacement].protection_rounds = 2;
             if (case == .sleeping_target and tick == timing.return_tick) try std.testing.expect(combat.inflictStatus(replacement, .sleep));
             try combat.tickReplay(.{}, &draws);
             try std.testing.expectEqual(tick >= timing.impact_tick, combat.enemy_hp[0] == 0);
@@ -165,7 +165,7 @@ test "Double-Beat source coordinator keeps a lethal first target's KO while stri
         }
         for (combat.party_strikes) |strike| try std.testing.expect(strike == null);
         try std.testing.expectEqual(@as(usize, if (case == .unbalanced) 3 else 6), draws.cursor);
-        if (case == .sleeping_target) try std.testing.expectEqual(@as(u8, 1), combat.asleep[replacement]);
+        if (case == .sleeping_target) try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[replacement].sleep_turns);
         if (case == .unbalanced) {
             try std.testing.expectEqual(.battle_menu, combat.phase);
             try std.testing.expectEqual(@as(u8, 1), combat.unbalanced[0]);
@@ -771,10 +771,10 @@ test "simultaneous Buddha revival consumes first slots preserves ailments and re
         member.inventory.slots[1] = .{ .id = .sacrificial_buddha, .uses = 0 };
         member.inventory.slots[2] = .{ .id = .needle, .uses = 4 };
         member.inventory.slots[3] = .{ .id = .sacrificial_buddha, .uses = 0 };
-        combat.asleep[actor] = 2;
+        combat.actor_conditions[actor].sleep_turns = 2;
         combat.unbalanced[actor] = 2;
-        combat.accuracy_reduced[actor] = true;
-        combat.rune_blocked[actor] = true;
+        combat.actor_conditions[actor].accuracy_reduced = true;
+        combat.actor_conditions[actor].rune_blocked = true;
         combat.actions[actor] = if (actor == 0) null else .defend;
         combat.markPartyKnockout(actor);
     }
@@ -782,7 +782,7 @@ test "simultaneous Buddha revival consumes first slots preserves ailments and re
     try combat.tickReplay(.{}, &draws);
     const birth = combat.camera_ticks;
     for (0..6) |actor| {
-        try std.testing.expect(combat.revivals[actor] != null);
+        try std.testing.expect(combat.party_knockouts[actor].revival != null);
         try std.testing.expectEqual(field.items.Id.needle, combat.progress.party[actor].inventory.slots[1].?.id);
         try std.testing.expectEqual(field.items.Id.sacrificial_buddha, combat.progress.party[actor].inventory.slots[2].?.id);
     }
@@ -799,11 +799,11 @@ test "simultaneous Buddha revival consumes first slots preserves ailments and re
                 try std.testing.expect(impact.revived);
                 try std.testing.expectEqual(@as(u16, 50), impact.recovered_hp);
             }
-            try std.testing.expectEqual(field.game_state.Status.poisoned, if (age < 113) combat.knockout_status[actor].? else combat.progress.party[actor].status);
+            try std.testing.expectEqual(field.game_state.Status.poisoned, if (age < 113) combat.party_knockouts[actor].prior_status.? else combat.progress.party[actor].status);
             try std.testing.expectEqual(@as(u8, 2), combat.progress.party[actor].balloons);
-            try std.testing.expectEqual(@as(u8, 2), combat.asleep[actor]);
+            try std.testing.expectEqual(@as(u8, 2), combat.actor_conditions[actor].sleep_turns);
             try std.testing.expectEqual(@as(u8, 2), combat.unbalanced[actor]);
-            try std.testing.expect(combat.accuracy_reduced[actor] and combat.rune_blocked[actor]);
+            try std.testing.expect(combat.actor_conditions[actor].accuracy_reduced and combat.actor_conditions[actor].rune_blocked);
             try std.testing.expectEqual(actor == 0 and age >= 113, combat.acted[actor]);
             try std.testing.expectEqual(if (actor == 0) null else @as(?battle.Action, .defend), combat.actions[actor]);
             try std.testing.expectEqual(age < 123, combat.coordinatorLocked(actor));
@@ -831,16 +831,16 @@ test "Buddha protected failure retries the next whole slot and zero half HP comm
         combat.progress.party[0].inventory = .{};
         combat.progress.party[0].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
         combat.progress.party[0].inventory.slots[1] = .{ .id = .sacrificial_buddha, .uses = 0 };
-        combat.protection[0] = 2;
+        combat.actor_conditions[0].protection_rounds = 2;
         combat.advanceRevivals();
-        try std.testing.expect(combat.revivals[0] == null);
+        try std.testing.expect(combat.party_knockouts[0].revival == null);
         try std.testing.expectEqual(@as(usize, 2), combat.progress.party[0].inventory.count());
         combat.markPartyKnockout(0);
         var draws = rules.Draws{ .values = &.{} };
         try combat.tickReplay(.{}, &draws);
         for (1..124) |age| {
             try combat.tickReplay(.{}, &draws);
-            if (age == 112) combat.protection[0] = 0;
+            if (age == 112) combat.actor_conditions[0].protection_rounds = 0;
             try std.testing.expectEqual(@as(u16, 0), combat.hp(0));
         }
         try std.testing.expectEqual(@as(usize, 0), combat.progress.party[0].inventory.count());
@@ -849,8 +849,8 @@ test "Buddha protected failure retries the next whole slot and zero half HP comm
             try combat.tickReplay(.{}, &draws);
             try std.testing.expectEqual(@as(u16, if (age >= 113) maximum / 2 else 0), combat.hp(0));
         }
-        try std.testing.expect(combat.revivals[0] == null);
-        try std.testing.expect(!combat.knockout_pending[0]);
+        try std.testing.expect(combat.party_knockouts[0].revival == null);
+        try std.testing.expect(!combat.party_knockouts[0].pending);
         try std.testing.expectEqual(@as(u8, if (maximum == 1) 0 else 2), combat.progress.party[0].balloons);
         try std.testing.expectEqual(if (maximum == 1) field.game_state.Status.unconscious else .poisoned, combat.progress.party[0].status);
         try std.testing.expect(combat.acted[0]);
@@ -873,7 +873,7 @@ test "Legacy archer waits for pending front knockouts without target draws" {
             member.hp = 0;
             member.status = .unconscious;
         }
-        combat.knockout_pending[0] = true;
+        combat.party_knockouts[0].pending = true;
         if (active_effect) combat.active = .{ .actor = 0, .target = 0, .kind = .defend };
         var draws = rules.Draws{ .values = &.{} };
         combat.replay_draws = &draws;
@@ -881,7 +881,7 @@ test "Legacy archer waits for pending front knockouts without target draws" {
         try std.testing.expectEqual(if (active_effect) @as(?usize, null) else owner, combat.pending_enemy_actor);
         try std.testing.expect(!combat.acted[owner] and draws.cursor == 0);
         combat.active = null;
-        combat.knockout_pending[0] = false;
+        combat.party_knockouts[0].pending = false;
         try std.testing.expect(combat.frontProjectileDecision(owner));
         try std.testing.expect(combat.acted[owner] and combat.pending_enemy_actor == null);
         try std.testing.expectEqual(.select, combat.coordinator.?.stage);
@@ -986,7 +986,7 @@ test "Rabbit retries locked and pending-knockout fronts without target draws" {
         };
         if (case != .locked) {
             combat.progress.party[0].hp = 0;
-            combat.knockout_pending[0] = case == .pending_knockout;
+            combat.party_knockouts[0].pending = case == .pending_knockout;
             if (case == .inactive) combat.progress.party[0].status = .unconscious;
         } else {
             combat.front_projectiles[0] = .{ .actor = owner + 1, .target = 0 };
@@ -1002,7 +1002,7 @@ test "Rabbit retries locked and pending-knockout fronts without target draws" {
         }
         try std.testing.expect(!combat.acted[owner] and combat.pending_enemy_actor == owner);
         combat.front_projectiles[0] = null;
-        combat.knockout_pending[0] = false;
+        combat.party_knockouts[0].pending = false;
         combat.progress.party[0].hp = 1;
         combat.replay_draws = null;
         try combat.tickReplay(.{}, &draws);
@@ -1171,14 +1171,14 @@ test "Roc waits for a front knockout to settle or revive before deciding its tar
         try std.testing.expect(!combat.acted[owner] and combat.pending_enemy_actor == owner);
         try std.testing.expectEqual(@as(usize, 0), draws.cursor);
         if (revives) {
-            try std.testing.expect(combat.revivals[0] != null);
+            try std.testing.expect(combat.party_knockouts[0].revival != null);
             var waited: usize = 0;
-            while (combat.revivals[0] != null and waited < 150) : (waited += 1) {
+            while (combat.party_knockouts[0].revival != null and waited < 150) : (waited += 1) {
                 try combat.tickReplay(.{}, &draws);
                 try std.testing.expect(!combat.acted[owner] and combat.active == null);
                 try std.testing.expectEqual(@as(usize, 0), draws.cursor);
             }
-            try std.testing.expect(combat.revivals[0] == null and combat.hp(0) > 0);
+            try std.testing.expect(combat.party_knockouts[0].revival == null and combat.hp(0) > 0);
             try combat.tickReplay(.{}, &draws);
             try std.testing.expect(combat.active.?.kind == .attack and combat.active.?.target == 0);
             try std.testing.expectEqual(@as(usize, 2), draws.cursor);
@@ -1225,12 +1225,12 @@ test "Buddha waits for lethal Roc hurt and holds the ward through protector revi
     var draws = rules.Draws{ .values = &.{100} };
     try combat.tickReplay(.{}, &draws);
     try std.testing.expectEqual(@as(u16, 0), combat.hp(1));
-    try std.testing.expect(combat.revivals[1] == null);
+    try std.testing.expect(combat.party_knockouts[1].revival == null);
     while (combat.effectTicks() < release) {
         try std.testing.expectEqual(@as(usize, 1), combat.progress.party[1].inventory.count());
         try combat.tickReplay(.{}, &draws);
     }
-    try std.testing.expect(combat.revivals[1] != null);
+    try std.testing.expect(combat.party_knockouts[1].revival != null);
     try std.testing.expectEqual(@as(usize, 0), combat.progress.party[1].inventory.count());
     try std.testing.expect(!combat.active.?.protector_down);
     const ward_start = release + 123 + 1;
@@ -1265,7 +1265,7 @@ test "Buddha composes twenty-four down-pose clones on the source plane and resto
         combat.progress.party[actor].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
         combat.markPartyKnockout(actor);
         try std.testing.expect(!combat.commitPartyKnockout(actor));
-        origins[actor] = combat.revivals[actor].?.origin;
+        origins[actor] = combat.party_knockouts[actor].revival.?.origin;
     }
     const spec = fixture.items.value.automatic_revival.?;
     var moved = art.value;
@@ -1387,9 +1387,9 @@ test "Buddha generic atlas clips and clones share source clocks independent of b
     var draws = rules.Draws{ .values = &.{} };
     try combat.tickReplay(.{}, &draws);
     const spec = combat.rules.automatic_revival.?;
-    const origin = combat.revivals[0].?.origin;
+    const origin = combat.party_knockouts[0].revival.?.origin;
     combat.content.formation_slots[0].x += 100;
-    combat.actor_sizes[0] = 8192;
+    combat.actor_transforms[0].scale_q12 = 8192;
     for (1..124) |age| {
         try combat.tickReplay(.{}, &draws);
         var clones: usize = 0;
@@ -1405,7 +1405,7 @@ test "Buddha generic atlas clips and clones share source clocks independent of b
             if (quads) |values| {
                 const row = spec.particles[@min(age - 18, spec.particles.len - 1)];
                 for (values, row) |quad, offset| {
-                    const captured = combat.revivals[actor].?.origin;
+                    const captured = combat.party_knockouts[actor].revival.?.origin;
                     try std.testing.expectEqualDeep(combat.partyProfile(actor).revival_art.?.down.frames[0].pose, quad.sprite);
                     try std.testing.expectApproxEqAbs(captured.x + offset[0], quad.position.x, 0.001);
                     try std.testing.expectApproxEqAbs(captured.y + offset[1], quad.position.y, 0.001);
@@ -1573,11 +1573,11 @@ test "integrated Drops cures live ailments even at full HP and preserves protect
         const target: usize = 1;
         combat.progress.party[target].status = .poisoned;
         combat.progress.party[target].balloons = 2;
-        combat.accuracy_reduced[target] = true;
-        combat.rune_blocked[target] = true;
-        combat.asleep[target] = 1;
+        combat.actor_conditions[target].accuracy_reduced = true;
+        combat.actor_conditions[target].rune_blocked = true;
+        combat.actor_conditions[target].sleep_turns = 1;
         combat.unbalanced[target] = 1;
-        combat.protection[target] = if (protected) 2 else 0;
+        combat.actor_conditions[target].protection_rounds = if (protected) 2 else 0;
         const hp = combat.hp(target);
         var effect = battle.Effect{ .actor = 0, .target = target, .kind = .cast, .spell = spell_index };
         combat.applySpell(&effect);
@@ -1585,11 +1585,11 @@ test "integrated Drops cures live ailments even at full HP and preserves protect
         try std.testing.expectEqual(hp, combat.hp(target));
         try std.testing.expectEqual(.healthy, combat.progress.party[target].status);
         try std.testing.expectEqual(@as(u8, 0), combat.progress.party[target].balloons);
-        try std.testing.expect(!combat.accuracy_reduced[target]);
-        try std.testing.expect(!combat.rune_blocked[target]);
-        try std.testing.expectEqual(@as(u8, 0), combat.asleep[target]);
+        try std.testing.expect(!combat.actor_conditions[target].accuracy_reduced);
+        try std.testing.expect(!combat.actor_conditions[target].rune_blocked);
+        try std.testing.expectEqual(@as(u8, 0), combat.actor_conditions[target].sleep_turns);
         try std.testing.expectEqual(@as(u8, 1), combat.unbalanced[target]);
-        try std.testing.expectEqual(@as(u8, if (protected) 2 else 0), combat.protection[target]);
+        try std.testing.expectEqual(@as(u8, if (protected) 2 else 0), combat.actor_conditions[target].protection_rounds);
         try std.testing.expectEqual(@as(u16, 8), combat.progress.party[0].rune_charges[0]);
     }
 }
@@ -2500,12 +2500,12 @@ test "Sleep source round continuation applies poison protection and balloons wit
     const departed_hp = combat.progress.party[1].hp;
     combat.progress.party[2].status = .poisoned;
     combat.progress.party[2].hp = 100;
-    combat.protection[2] = 2;
+    combat.actor_conditions[2].protection_rounds = 2;
     combat.unbalanced[2] = 1;
-    combat.asleep[2] = 1;
+    combat.actor_conditions[2].sleep_turns = 1;
     combat.progress.party[3].hp = 6;
     combat.progress.party[3].status = .poisoned;
-    combat.protection[3] = 1;
+    combat.actor_conditions[3].protection_rounds = 1;
     combat.runes[4] = combat.content.systems.?.runeIndex("sunbeam").?;
     combat.progress.party[4].hp = 50;
     combat.progress.party[4].status = .poisoned;
@@ -2522,8 +2522,8 @@ test "Sleep source round continuation applies poison protection and balloons wit
     try std.testing.expect(combat.departed[1]);
     try std.testing.expectEqual(departed_hp, combat.progress.party[1].hp);
     try std.testing.expectEqual(@as(u16, 100), combat.progress.party[2].hp);
-    try std.testing.expectEqual(@as(u8, 1), combat.protection[2]);
-    try std.testing.expectEqual(@as(u8, 1), combat.asleep[2]);
+    try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[2].protection_rounds);
+    try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[2].sleep_turns);
     try std.testing.expectEqual(@as(usize, 1), combat.formationSlot(3));
     try std.testing.expectEqual(@as(u16, 0), combat.hp(3));
     try std.testing.expectEqual(@as(u16, 50), combat.progress.party[4].hp);
@@ -2549,24 +2549,24 @@ test "Sleep source wake rolls belong only to living enemies and preserve percent
         try std.testing.expect(combat.acted[actor]);
         try std.testing.expect(!combat.inflictStatus(actor, .sleep));
         for (0..4) |_| combat.recoverSleep(actor);
-        try std.testing.expectEqual(@as(u8, 1), combat.asleep[actor]);
+        try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[actor].sleep_turns);
     }
     try std.testing.expectEqual(@as(usize, 0), empty.cursor);
     try std.testing.expect(!combat.replay_exhausted);
     const enemy = combat.partyCount();
     for ([_]u15{ 0, 16383, 16384, 32767 }) |roll| {
-        combat.asleep[enemy] = 1;
+        combat.actor_conditions[enemy].sleep_turns = 1;
         var draws = rules.Draws{ .values = &.{roll} };
         combat.replay_draws = &draws;
         combat.recoverSleep(enemy);
-        try std.testing.expectEqual(@as(u8, if (roll < 16384) 0 else 1), combat.asleep[enemy]);
+        try std.testing.expectEqual(@as(u8, if (roll < 16384) 0 else 1), combat.actor_conditions[enemy].sleep_turns);
         try std.testing.expectEqual(@as(usize, 1), draws.cursor);
     }
     combat.enemy_hp[0] = 0;
-    combat.asleep[enemy] = 1;
+    combat.actor_conditions[enemy].sleep_turns = 1;
     combat.replay_draws = &empty;
     combat.recoverSleep(enemy);
-    try std.testing.expectEqual(@as(u8, 1), combat.asleep[enemy]);
+    try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[enemy].sleep_turns);
     try std.testing.expectEqual(@as(usize, 0), empty.cursor);
     try std.testing.expect(!combat.replay_exhausted);
     combat.replay_draws = null;
@@ -2668,7 +2668,7 @@ test "Queued rune actions wait for target release and retire on rune block or re
         }
         try std.testing.expectEqual(@as(usize, 1), acquisition.cursor);
         combat.replay_draws = null;
-        try std.testing.expect(if (recovering) combat.unbalanced[case.actor] == 2 else combat.rune_blocked[case.actor]);
+        try std.testing.expect(if (recovering) combat.unbalanced[case.actor] == 2 else combat.actor_conditions[case.actor].rune_blocked);
         try std.testing.expect(!combat.acted[case.actor]);
 
         const before = members;
@@ -2759,7 +2759,7 @@ test "queued item keeps its selected stack when automatic revival compacts inven
     try std.testing.expectEqual(@as(usize, 1), combat.actions[owner].?.item.slot);
 
     var draws = rules.Draws{ .values = &.{} };
-    while (combat.revivals[owner] != null) {
+    while (combat.party_knockouts[owner].revival != null) {
         try combat.tickReplay(.{}, &draws);
         try std.testing.expect(combat.medicine_action == null);
         if (combat.camera_ticks > combat.rules.automatic_revival.?.release_delay + 1) return error.RevivalDidNotRelease;
@@ -2786,7 +2786,7 @@ test "Sleep source rounds skip sleeping actors before priority and roll back a l
     combat.integration = .{ .host = host };
     try sourceRoundBoundary(&combat, source.value);
     const count = combat.partyCount() + combat.enemyCount();
-    for (0..count) |actor| combat.asleep[actor] = 1;
+    for (0..count) |actor| combat.actor_conditions[actor].sleep_turns = 1;
     combat.progress.party[0].status = .poisoned;
     const hp = combat.hp(0);
     const poison = rules.battlePoison(combat.progress.party[0].max_hp);
@@ -2824,7 +2824,7 @@ test "Sleep source rounds skip sleeping actors before priority and roll back a l
         try combat.tickReplay(.{}, &draws);
     }
     try std.testing.expect(combat.phase == .battle_menu and combat.round == 3);
-    for (0..count) |actor| try std.testing.expectEqual(@as(u8, 1), combat.asleep[actor]);
+    for (0..count) |actor| try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[actor].sleep_turns);
     try std.testing.expectEqual(hp - poison * 2, combat.hp(0));
     try std.testing.expectEqual(combat.enemyCount() * 2 + 1, draws.cursor);
     try std.testing.expectEqualDeep(charges, combat.progress.party[0].rune_charges);
@@ -3285,8 +3285,8 @@ test "Incense normal owners heal the active party once with protection and reusa
             combat.progress.party[index].status = if (index == ko) .unconscious else .healthy;
         }
         combat.departed[departed] = true;
-        combat.protection[protected] = 2;
-        combat.asleep[sleeping] = 2;
+        combat.actor_conditions[protected].protection_rounds = 2;
+        combat.actor_conditions[sleeping].sleep_turns = 2;
         combat.unbalanced[owner] = 1;
         combat.progress.party[owner].inventory.slots[0] = .{ .id = .dragon_seal_incense, .uses = 0 };
         combat.progress.party[owner].inventory.slots[1] = .{ .id = .medicine, .uses = 6 };
@@ -3356,7 +3356,7 @@ test "Incense feedback reports actual recovery when recipients change before imp
         member.hp = 1;
     }
     members[0].inventory.slots[0] = .{ .id = .dragon_seal_incense, .uses = 0 };
-    combat.protection[4] = 2;
+    combat.actor_conditions[4].protection_rounds = 2;
     combat.actions[0] = .{ .item = .{ .id = .dragon_seal_incense, .slot = 0, .target = 0 } };
     combat.phase = .resolving;
     combat.acted = @splat(true);
@@ -3486,8 +3486,8 @@ test "Roc source contact accepts sleep and protection without curing a surviving
         combat.progress.party[0].max_hp = 1000;
         combat.progress.party[0].hp = if (mode == 3) 1 else 1000;
         combat.progress.party[0].status = if (mode == 2) .poisoned else .healthy;
-        combat.asleep[0] = @intFromBool(sleeping);
-        combat.protection[0] = if (protected) 2 else 0;
+        combat.actor_conditions[0].sleep_turns = @intFromBool(sleeping);
+        combat.actor_conditions[0].protection_rounds = if (protected) 2 else 0;
         const hp = combat.hp(0);
         var draws = rules.Draws{ .values = &.{ 51, 0, 51 } };
         var contact = false;
@@ -3502,8 +3502,7 @@ test "Roc source contact accepts sleep and protection without curing a surviving
                 try std.testing.expectError(error.RandomInputExhausted, refused.tickReplay(.{}, &short));
                 try std.testing.expectEqual(before_hp, refused.hp(0));
                 try std.testing.expectEqual(before_status, refused.progress.party[0].status);
-                try std.testing.expectEqualDeep(combat.asleep, refused.asleep);
-                try std.testing.expectEqualDeep(combat.protection, refused.protection);
+                try std.testing.expectEqualDeep(combat.actor_conditions, refused.actor_conditions);
                 try std.testing.expectEqualDeep(combat.active, refused.active);
                 try std.testing.expectEqual(@as(usize, 0), short.cursor);
                 rollback = true;
@@ -3513,10 +3512,10 @@ test "Roc source contact accepts sleep and protection without curing a surviving
                 contact = true;
                 try std.testing.expectEqual(combat.enemy(0).ordinary_timing.?.impact_tick, combat.effectTicks());
                 if (protected) try std.testing.expectEqual(hp, combat.hp(0)) else try std.testing.expect(combat.hp(0) < hp);
-                try std.testing.expectEqual(@as(u8, @intFromBool(sleeping)), combat.asleep[0]);
+                try std.testing.expectEqual(@as(u8, @intFromBool(sleeping)), combat.actor_conditions[0].sleep_turns);
             }
             if (contact and mode != 3) {
-                try std.testing.expectEqual(@as(u8, @intFromBool(sleeping)), combat.asleep[0]);
+                try std.testing.expectEqual(@as(u8, @intFromBool(sleeping)), combat.actor_conditions[0].sleep_turns);
                 if (mode == 2) try std.testing.expectEqual(field.game_state.Status.poisoned, combat.progress.party[0].status);
             }
             if (contact and combat.active == null) {
@@ -3528,7 +3527,7 @@ test "Roc source contact accepts sleep and protection without curing a surviving
         try std.testing.expectEqual(@as(usize, 3), draws.cursor);
         if (mode == 3) {
             try std.testing.expectEqual(@as(u16, 0), combat.hp(0));
-            try std.testing.expectEqual(@as(u8, 0), combat.asleep[0]);
+            try std.testing.expectEqual(@as(u8, 0), combat.actor_conditions[0].sleep_turns);
             try std.testing.expectEqual(field.game_state.Status.unconscious, combat.progress.party[0].status);
         }
     }

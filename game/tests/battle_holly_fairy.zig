@@ -63,7 +63,7 @@ test "Holly Fairy actor source admission completes healthy protected and Turtle 
             for (state.partyCount()..state.partyCount() + state.enemyCount()) |actor| state.acted[actor] = false;
             state.coordinator.?.current_actor = state.partyCount();
             if (mode == 1) for (0..state.partyCount()) |actor| {
-                state.protection[actor] = 2;
+                state.actor_conditions[actor].protection_rounds = 2;
             };
             if (mode == 2) for (0..state.partyCount()) |actor| {
                 state.runes[actor] = data.systems.?.runeIndex("turtle").?;

@@ -115,7 +115,7 @@ test "shared party melee and ranged normal critical protection knockout and dodg
             combat.base_stats[0].attack = 300;
             combat.coordinator = .{ .stage = .dispatch, .current_actor = 0 };
             const actor = combat.partyCount() + target;
-            if (variant == 2) combat.protection[actor] = 1;
+            if (variant == 2) combat.actor_conditions[actor].protection_rounds = 1;
             if (variant == 4) combat.enemy_hp[target] = 1;
             const before = combat.enemy_hp[target];
             var values: [4096]u15 = @splat(51);
@@ -397,7 +397,7 @@ test "shared party melee catalogue completes defended defeats and rear promotion
         for (members, 0..) |member, owner| {
             try std.testing.expectEqual(@as(u16, 0), member.hp);
             try std.testing.expectEqual(h.field.game_state.Status.unconscious, member.status);
-            try std.testing.expect(!combat.knockout_pending[owner]);
+            try std.testing.expect(!combat.party_knockouts[owner].pending);
         }
         const settled = members;
         const cursor = draws.cursor;
@@ -560,9 +560,9 @@ test "shared party melee round boundary owns native statuses without an optional
     }
     members[0].status = .poisoned;
     members[1].status = .poisoned;
-    combat.protection[0] = 2;
-    combat.asleep[2] = 1;
-    combat.asleep[combat.partyCount()] = 1;
+    combat.actor_conditions[0].protection_rounds = 2;
+    combat.actor_conditions[2].sleep_turns = 1;
+    combat.actor_conditions[combat.partyCount()].sleep_turns = 1;
     combat.unbalanced[3] = 2;
     combat.unbalanced[4] = 1;
     combat.phase = .resolving;
@@ -577,9 +577,9 @@ test "shared party melee round boundary owns native statuses without an optional
     try std.testing.expect(combat.phase == .battle_menu and combat.round == 2);
     try std.testing.expectEqual(@as(u16, 100), members[0].hp);
     try std.testing.expectEqual(@as(u16, 90), members[1].hp);
-    try std.testing.expectEqual(@as(u8, 1), combat.protection[0]);
-    try std.testing.expectEqual(@as(u8, 1), combat.asleep[2]);
-    try std.testing.expectEqual(@as(u8, 0), combat.asleep[combat.partyCount()]);
+    try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[0].protection_rounds);
+    try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[2].sleep_turns);
+    try std.testing.expectEqual(@as(u8, 0), combat.actor_conditions[combat.partyCount()].sleep_turns);
     try std.testing.expectEqual(@as(u8, 1), combat.unbalanced[3]);
     try std.testing.expectEqual(@as(u8, 0), combat.unbalanced[4]);
     try std.testing.expectEqual(@as(usize, 1), draws.cursor);

@@ -31,7 +31,7 @@ pub const Background = struct {
         if (location < 0) return error.PartyBackgroundShaderUnavailable;
         rl.beginTextureMode(image);
         rl.clearBackground(.black);
-        rl.drawTextureRec(frame, .{ .x = 0, .y = 0, .width = @floatFromInt(frame.width), .height = @floatFromInt(-frame.height) }, .{ .x = 0, .y = 0 }, .white);
+        rl.drawTextureRec(frame, platform.canvasSource(frame), .{ .x = 0, .y = 0 }, .white);
         rl.endTextureMode();
         return .{ .image = image, .shader = shader, .brightness_location = location };
     }
@@ -42,7 +42,7 @@ pub const Background = struct {
         rl.setShaderValue(self.shader, self.brightness_location, &brightness, .float);
         rl.beginShaderMode(self.shader);
         defer rl.endShaderMode();
-        rl.drawTextureRec(self.image.texture, .{ .x = 0, .y = 0, .width = @floatFromInt(self.image.texture.width), .height = @floatFromInt(-self.image.texture.height) }, .{ .x = 0, .y = 0 }, .white);
+        rl.drawTextureRec(self.image.texture, platform.canvasSource(self.image.texture), .{ .x = 0, .y = 0 }, .white);
     }
 
     pub fn deinit(self: Background) void {

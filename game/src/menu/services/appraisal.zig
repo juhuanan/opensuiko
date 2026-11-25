@@ -6,7 +6,7 @@ const nav = @import("../navigation.zig");
 pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void {
     switch (state.phase) {
         .appraisal => {
-            nav.cycleLeftRight(&state.member, game.progress.party.len, input.left, input.right);
+            nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
             const inventory = game.progress.party[state.member].inventory;
             const count = inventory.count();
             if (count == 0) {

@@ -1949,8 +1949,8 @@ test "exported actor recovery programs use party Turtle gates draws and retained
             state.unbalanced[0] = existing;
             state.progress.party[0].status = .poisoned;
             state.progress.party[0].balloons = 2;
-            state.accuracy_reduced[0] = true;
-            state.protection[0] = 3;
+            state.actor_conditions[0].accuracy_reduced = true;
+            state.actor_conditions[0].protection_rounds = 3;
             const values = [_]u15{roll};
             var draws = Rules.Draws{ .values = &values };
             state.replay_draws = &draws;
@@ -1970,8 +1970,8 @@ test "exported actor recovery programs use party Turtle gates draws and retained
             try std.testing.expectEqual(@as(u8, if (existing != 0) existing else 2), state.unbalanced[0]);
             try std.testing.expectEqual(Field.game_state.Status.poisoned, state.progress.party[0].status);
             try std.testing.expectEqual(@as(u8, 2), state.progress.party[0].balloons);
-            try std.testing.expect(state.accuracy_reduced[0]);
-            try std.testing.expectEqual(@as(u8, 3), state.protection[0]);
+            try std.testing.expect(state.actor_conditions[0].accuracy_reduced);
+            try std.testing.expectEqual(@as(u8, 3), state.actor_conditions[0].protection_rounds);
             state.replay_draws = null;
             if (existing == 0) {
                 state.applyRoundBoundaryStatuses();
@@ -2599,7 +2599,6 @@ test "controller fan bindings require dedicated schema signal and single initial
 }
 
 test "Bumpy actor controls preserve delayed entry phase motion and secondary damage signal" {
-    const battle = @import("battle");
     const parsed = try host.loadBundle(a, @embedFile("fixtures/unite_actor_library.json"));
     defer parsed.deinit();
     var bundle = parsed.value;
@@ -2610,26 +2609,15 @@ test "Bumpy actor controls preserve delayed entry phase motion and secondary dam
     // Isolate actor ordering from the normal-gameplay scene qualification.
     unites[6].dispatch_after = 1;
     try bundle.validate();
-    const Scene = struct {
-        unite_actors: ?*const host.Bundle,
-        camera_ticks: u32 = 0,
-        unite_flags: [12]u16 = @splat(0),
-        actor_camera: ?camera.ActorController = null,
-        recovery: [6]u8 = @splat(0),
-        pub fn partyCount(_: @This()) usize {
-            return 6;
-        }
-        pub fn enemyCount(_: @This()) usize {
-            return 1;
-        }
-        pub fn prepareUniteScene(_: *@This(), _: usize) !void {}
-        pub fn requestUniteRecovery(self: *@This(), actor: usize, value: u8) !void {
-            self.recovery[actor] = value;
-        }
-    };
+    const content = try Battle.load(a, @embedFile("fixtures/journey_unites_battle.json"));
+    defer content.deinit();
+    const items = try Field.items.load(a, Field.items.json);
+    defer items.deinit();
     for (0..2) |owner| {
-        var scene = Scene{ .unite_actors = &bundle };
-        var playback = battle.unite_playback.State{};
+        var members: [6]Battle.Member = undefined;
+        var scene = try Battle.State.init(content.value, items.value, &members, 17);
+        scene.unite_actors = &bundle;
+        const playback = &scene.unite_vm;
         var homes: [7][3]i32 = @splat(.{ 0, 0, 0 });
         homes[0] = .{ -100 * 4096, -20 * 4096, 0 };
         homes[1] = .{ -150 * 4096, 20 * 4096, 0 };
@@ -2709,7 +2697,6 @@ test "secondary Unite damage controls reject conflicting masks and preserve defa
 }
 
 test "Fatal actor controls wait for partner signal and retain independent returns for both owners" {
-    const battle = @import("battle");
     const parsed = try host.loadBundle(a, @embedFile("fixtures/unite_actor_library.json"));
     defer parsed.deinit();
     var bundle = parsed.value;
@@ -2720,23 +2707,15 @@ test "Fatal actor controls wait for partner signal and retain independent return
     // Actor-only qualification; normal battle admission requires complete scene art/reaction checks.
     unites[13].dispatch_after = 1;
     try bundle.validate();
-    const Scene = struct {
-        unite_actors: ?*const host.Bundle,
-        camera_ticks: u32 = 0,
-        unite_flags: [12]u16 = @splat(0),
-        actor_camera: ?camera.ActorController = null,
-        pub fn partyCount(_: @This()) usize {
-            return 6;
-        }
-        pub fn enemyCount(_: @This()) usize {
-            return 1;
-        }
-        pub fn prepareUniteScene(_: *@This(), _: usize) !void {}
-        pub fn requestUniteRecovery(_: *@This(), _: usize, _: u8) !void {}
-    };
+    const content = try Battle.load(a, @embedFile("fixtures/journey_unites_battle.json"));
+    defer content.deinit();
+    const items = try Field.items.load(a, Field.items.json);
+    defer items.deinit();
     for (0..2) |owner| {
-        var scene = Scene{ .unite_actors = &bundle };
-        var playback = battle.unite_playback.State{};
+        var members: [6]Battle.Member = undefined;
+        var scene = try Battle.State.init(content.value, items.value, &members, 17);
+        scene.unite_actors = &bundle;
+        const playback = &scene.unite_vm;
         var homes: [7][3]i32 = @splat(.{ 0, 0, 0 });
         homes[0] = .{ -100 * 4096, -20 * 4096, 0 };
         homes[1] = .{ -150 * 4096, 20 * 4096, 0 };
@@ -2895,35 +2874,24 @@ test "Martial arts queue bundle validates source members and rejects ambiguous d
 }
 
 test "Beat callback child survives normal playback rebind and preserves its dispatch sound" {
-    const battle = @import("battle");
     const parsed = try host.loadBundle(a, @embedFile("fixtures/beat_actor_library.json"));
     defer parsed.deinit();
     const bundle = parsed.value;
-    const Scene = struct {
-        unite_actors: ?*const host.Bundle,
-        camera_ticks: u32 = 0,
-        unite_flags: [12]u16 = @splat(0),
-        actor_camera: ?camera.ActorController = null,
-        recovery: [6]u8 = @splat(0),
-        pub fn partyCount(_: @This()) usize {
-            return 2;
-        }
-        pub fn enemyCount(_: @This()) usize {
-            return 1;
-        }
-        pub fn prepareUniteScene(_: *@This(), _: usize) !void {}
-        pub fn requestUniteRecovery(self: *@This(), actor: usize, value: u8) !void {
-            self.recovery[actor] = value;
-        }
-    };
+    const content = try Battle.load(a, @embedFile("fixtures/journey_unites_battle.json"));
+    defer content.deinit();
+    const items = try Field.items.load(a, Field.items.json);
+    defer items.deinit();
     const block = camera.Block{ .focus = .{ 0, 0, 0 }, .angles = .{ 0, 0, 0 }, .translation = .{ 0, 0, 1024 }, .scale = .{ 1024, 1024, 1024 } };
     const homes = [_][3]i32{ .{ 0, 0, 0 }, .{ 0, 40 * 4096, 0 }, .{ 120 * 4096 + 17, 25 * 4096 + 23, 0 } };
     for (0..2) |order| {
         const party: [2][]const u8 = if (order == 0) .{ "pahn", "ronnie" } else .{ "ronnie", "pahn" };
         const pahn: usize = order;
         const bell: usize = 1 - order;
-        var scene = Scene{ .unite_actors = &bundle };
-        var playback = battle.unite_playback.State{};
+        var members: [6]Battle.Member = undefined;
+        var scene = try Battle.State.init(content.value, items.value, &members, 17);
+        scene.unite_actors = &bundle;
+        scene.progress.party = scene.progress.party[0..party.len];
+        const playback = &scene.unite_vm;
         try playback.begin(&bundle, 27, @intCast(order), 2, &party, &homes, 0);
         var spawned = false;
         var completed = false;
@@ -2962,7 +2930,7 @@ test "Beat callback child survives normal playback rebind and preserves its disp
             const sounds = playback.takeSounds();
             if (tick == 299) {
                 try std.testing.expect(sounds.len >= 2);
-                try std.testing.expectEqual(battle.unite_playback.Sound{ .actor = @intCast(pahn), .id = 0x7fff }, sounds[0]);
+                try std.testing.expectEqual(Battle.unite_playback.Sound{ .actor = @intCast(pahn), .id = 0x7fff }, sounds[0]);
                 try std.testing.expectEqual(@as(u16, 1316), sounds[1].id);
             }
             for (sounds) |sound| if (sound.id == 1316) {
@@ -2976,8 +2944,8 @@ test "Beat callback child survives normal playback rebind and preserves its disp
         }
         try std.testing.expect(spawned and completed);
         try std.testing.expectEqual(@as(usize, 1), sound_count);
-        try std.testing.expectEqual(@as(u8, 2), scene.recovery[pahn]);
-        try std.testing.expectEqual(@as(u8, 0), scene.recovery[bell]);
+        try std.testing.expectEqual(@as(u8, 2), scene.unbalanced[pahn]);
+        try std.testing.expectEqual(@as(u8, 0), scene.unbalanced[bell]);
     }
 }
 
@@ -3034,9 +3002,9 @@ test "actor status thresholds preserve side Turtle duplicate and zero HP orderin
         const actual = switch (kind) {
             .poison => state.progress.party[0].status == .poisoned,
             .balloon => state.progress.party[0].balloons > 0,
-            .sleep => state.asleep[target] > 0,
-            .accuracy_reduced => state.accuracy_reduced[target],
-            .rune_blocked => state.rune_blocked[target],
+            .sleep => state.actor_conditions[target].sleep_turns > 0,
+            .accuracy_reduced => state.actor_conditions[target].accuracy_reduced,
+            .rune_blocked => state.actor_conditions[target].rune_blocked,
         };
         try std.testing.expectEqual(expected, actual);
         try std.testing.expectEqual(@as(usize, if (turtle) 0 else 1), draws.cursor);
@@ -3052,13 +3020,13 @@ test "actor status thresholds preserve side Turtle duplicate and zero HP orderin
     var draws = Rules.Draws{ .values = &values };
     state.replay_draws = &draws;
     try state.requestActorStatus(0, .{ .kind = .poison, .threshold_percent = 20 });
-    try std.testing.expectEqual(Field.game_state.Status.poisoned, state.knockout_status[0].?);
+    try std.testing.expectEqual(Field.game_state.Status.poisoned, state.party_knockouts[0].prior_status.?);
     try std.testing.expectEqual(Field.game_state.Status.unconscious, state.progress.party[0].status);
     try std.testing.expectEqual(@as(u8, 1), state.status_icons[0].active & 1);
     state.progress.party[0].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
     try std.testing.expect(!state.commitPartyKnockout(0));
-    try std.testing.expectEqual(Field.game_state.Status.poisoned, state.revivals[0].?.original_status);
-    const revival_start = state.revivals[0].?.started_at;
+    try std.testing.expectEqual(Field.game_state.Status.poisoned, state.party_knockouts[0].revival.?.original_status);
+    const revival_start = state.party_knockouts[0].revival.?.started_at;
     state.camera_ticks = revival_start + state.rules.automatic_revival.?.pending_delay;
     state.advanceRevivals();
     state.camera_ticks = revival_start + state.rules.automatic_revival.?.impact_delay;
@@ -3067,7 +3035,7 @@ test "actor status thresholds preserve side Turtle duplicate and zero HP orderin
     try std.testing.expectEqual(Field.game_state.Status.poisoned, state.progress.party[0].status);
     const poisoned = state;
     try std.testing.expectError(error.RandomInputExhausted, state.requestActorStatus(0, .{ .kind = .accuracy_reduced, .threshold_percent = 100 }));
-    try std.testing.expect(!state.accuracy_reduced[0]);
+    try std.testing.expect(!state.actor_conditions[0].accuracy_reduced);
     try std.testing.expectEqualDeep(poisoned.progress, state.progress);
     try std.testing.expectError(error.InvalidActorStatus, state.requestActorStatus(state.partyCount(), .{ .kind = .poison, .threshold_percent = 20 }));
     try std.testing.expectError(error.InvalidActorStatus, state.requestActorStatus(12, .{ .kind = .poison, .threshold_percent = 20 }));
@@ -3111,10 +3079,10 @@ test "actor status reaches the live playback bridge at its own script clock" {
         try state.unite_vm.update(&state, @import("battle_camera").settled_pan);
         try std.testing.expectEqual(if (!turtle and kind == .poison) Field.game_state.Status.poisoned else Field.game_state.Status.healthy, members[1].status);
         try std.testing.expectEqual(@as(u8, @intFromBool(!turtle and kind == .balloon)), members[1].balloons);
-        try std.testing.expectEqual(@as(u8, @intFromBool(!turtle and kind == .sleep)), state.asleep[1]);
+        try std.testing.expectEqual(@as(u8, @intFromBool(!turtle and kind == .sleep)), state.actor_conditions[1].sleep_turns);
         try std.testing.expectEqual(!turtle and kind == .sleep, state.acted[1]);
         try std.testing.expectEqual(@as(usize, if (turtle) 0 else 1), draws.cursor);
-        try std.testing.expect(!state.accuracy_reduced[6] and !state.rune_blocked[6]);
+        try std.testing.expect(!state.actor_conditions[6].accuracy_reduced and !state.actor_conditions[6].rune_blocked);
         state.camera_ticks = 3;
         try state.unite_vm.update(&state, @import("battle_camera").settled_pan);
         try std.testing.expectEqual(@as(usize, if (turtle) 0 else 1), draws.cursor);

@@ -25,7 +25,7 @@ fn q12(point: battle.Position) [3]i32 {
 pub fn prepareActor(self: *State, actor: usize, resource: host.Resource, position: [3]i32) !host.Actor {
     var result = try host.Actor.init(resource, q12(self.uniteVmHome(actor)));
     result.position_q12 = position;
-    result.screen_offset = self.actor_screen_offsets[actor];
+    result.screen_offset = self.actor_transforms[actor].screen_offset;
     const profile = if (actor < self.partyCount()) self.partyProfile(actor) else self.enemy(actor - self.partyCount());
     result.baseline_offset = profile.effect_offset orelse .{ 0, 0 };
     if (self.unite_vm.idle[actor] != null) {
@@ -85,7 +85,7 @@ pub fn stepEnemyIdleActor(self: *State, runtime: *host.Runtime, actor: u16) !voi
             const position = q12(layout.worldPosition(self, actor));
             runtime.actors[actor] = try host.Actor.init(resource, q12(self.uniteVmHome(actor)));
             runtime.actors[actor].position_q12 = position;
-            runtime.actors[actor].screen_offset = self.actor_screen_offsets[actor];
+            runtime.actors[actor].screen_offset = self.actor_transforms[actor].screen_offset;
             runtime.actors[actor].baseline_offset = self.enemy(actor - self.partyCount()).effect_offset orelse .{ 0, 0 };
         }
         self.unite_vm.idle[actor] = .{};

@@ -144,7 +144,8 @@ class OverlayIdentityTest(unittest.TestCase):
             "      speaker=78 [99,99]: *** DATA CONTEXT — text bytes",
         ])
         self._write_script("VA2", ["      speaker=9 [0,0] @0x200: Second"])
-        r = run_export(self.out, skip=FAST_SKIP, env=self._env())
+        skip = tuple(cls for cls in reversed(FAST_SKIP) if cls != "geometry")
+        r = run_export(self.out, skip=skip, env=self._env())
         self.assertEqual(r.returncode, 0, r.stderr)
         d = _load(os.path.join(self.out, "text", "dialogue.json"))
         self.assertEqual(d["schema"], "suikoden-dialogue/2")
@@ -159,6 +160,12 @@ class OverlayIdentityTest(unittest.TestCase):
         for s in d["strings"]:
             self.assertEqual(s["overlays"], [s["overlay"]])
         m = _load(os.path.join(self.out, "manifest.json"))
+        self.assertEqual(m["subset"], {
+            "built": ["dialogue", "geometry"], "skipped": sorted(skip),
+            "swatches": True,
+        })
+        self.assertTrue(any(row["class"] == "area_geometry"
+                            for row in m["omissions"]))
         self.assertEqual(m["errors"], [])
         self.assertEqual(m["validation"]["ok"], True)
 
@@ -413,8 +420,20 @@ class ValidationTest(unittest.TestCase):
         base.update(kw)
         return base
 
+    def test_main_resets_output_and_swatches_between_runs(self):
+        default_out = os.path.join(self.tmp, "default")
+        first_out = os.path.join(self.tmp, "first")
+        self.ex.DEFAULT_OUT = default_out
+        skip = "--skip=" + ",".join(self.ex.EXPORTERS)
+        self.assertEqual(self.ex.main([skip, "--out", first_out, "--no-swatches"]), 0)
+        self.assertEqual(self.ex.main([skip]), 0)
+        first = _load(os.path.join(first_out, "manifest.json"))
+        second = _load(os.path.join(default_out, "manifest.json"))
+        self.assertFalse(first["subset"]["swatches"])
+        self.assertTrue(second["subset"]["swatches"])
+
     def test_spu_streams_cannot_be_exported_as_geometry(self):
-        self.ex.preflight(set(self.ex.CLASSES) - {"geometry"})
+        self.ex.preflight(["geometry"])
         self.assertEqual(self.ex.MANIFEST["errors"], [])
         self.ex.export_geometry()
         self.assertEqual(self.ex.MANIFEST["assets"], [])

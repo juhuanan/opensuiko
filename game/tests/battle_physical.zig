@@ -562,9 +562,9 @@ test "Physical rune live battle uses source owner and recipient clocks without o
             try combat.attachUniteActors(&actors.value);
             try combat.attachSpellScenes(&scenes.value);
             if (mode == 0) combat.weapon_augments[case.member] = .{ .rune = .fire, .fragments = 3 };
-            if (mode == 1) combat.protection[combat.partyCount()] = 3;
+            if (mode == 1) combat.actor_conditions[combat.partyCount()].protection_rounds = 3;
             if (mode == 2) combat.enemy_hp[0] = 1;
-            combat.asleep[combat.partyCount()] = 1;
+            combat.actor_conditions[combat.partyCount()].sleep_turns = 1;
             combat.runes[case.member] = for (content.systems.?.runes, 0..) |rune, index| {
                 if (std.mem.eql(u8, rune.id, case.technique)) break index;
             } else return error.MissingRune;
@@ -593,7 +593,7 @@ test "Physical rune live battle uses source owner and recipient clocks without o
                 if (tick < finish) try std.testing.expect(combat.unite_vm.hasPhysical());
                 const consumed: usize = @intFromBool(tick >= case.impact) + @as(usize, if (case.decoy_at) |at| @intFromBool(tick >= at) else 0) + @as(usize, @intFromBool(case.recovery != 0 and tick >= case.release));
                 try std.testing.expectEqual(consumed, draws.cursor);
-                if (mode != 2) try std.testing.expectEqual(@as(u8, 1), combat.asleep[target]);
+                if (mode != 2) try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[target].sleep_turns);
                 if (mode == 2 and tick >= case.recipient_release and tick < case.recipient_release + ko_duration) {
                     try std.testing.expect(combat.coordinatorLocked(target));
                     try std.testing.expect(combat.physicalRuneReaction(target) != null);

@@ -1,12 +1,9 @@
 const std = @import("std");
-const status = @import("battle_status");
 const damage_rules = @import("battle_damage");
-const presentation_flow = @import("battle_presentation_flow");
-const turn = @import("battle_turn");
+const presentation_flow = @import("battle_presentation_flow.zig");
 const battle_systems = @import("battle_systems");
 const technique_systems = battle_systems.techniques;
 const unite_systems = battle_systems.unite;
-const combat_effects = @import("combat_systems").effects;
 const layout = @import("battle_layout.zig");
 const drops = @import("battle_drops.zig");
 const spell_scene = @import("battle_spell_scene.zig");
@@ -16,7 +13,6 @@ const camera = @import("battle_camera");
 const types_mod = @import("battle_types.zig");
 const State = battle.State;
 const priority = damage_rules.priority;
-const Action = types_mod.Action;
 const Coordinator = types_mod.Coordinator;
 const antSpecial = types_mod.antSpecial;
 
@@ -39,53 +35,27 @@ fn sourceEnemyActor(self: *const State, actor: usize) bool {
         else => false,
     };
 }
-/// The round boundary handles departures and front vacancies before HP and status clocks.
-pub fn applyRoundBoundaryStatuses(self: *State) void {
-    status.applyRoundBoundaryStatuses(self);
-}
-
 pub fn beginDeparture(self: *State, actor: usize) void {
-    if (!self.participates(actor) or self.knockout_pending[actor] or self.revivals[actor] != null) return;
+    if (!self.participates(actor) or self.party_knockouts[actor].pending or self.party_knockouts[actor].revival != null) return;
     const origin = layout.worldPosition(self, actor);
     self.departures[actor] = .{ .started_at = self.camera_ticks, .origin = origin };
     self.departed[actor] = true;
 }
 
-pub fn resolveTick(self: *State) void {
-    turn.resolveTick(self);
-}
-
-pub fn attachEffects(self: *State, packet: *const combat_effects.Packet) void {
-    self.effects = .{ .packet = packet };
-}
-
-pub fn beginCastPresentation(self: *State, spell_id: []const u8) void {
-    presentation_flow.beginCastPresentation(self, spell_id);
-}
-pub fn beginAttackPresentation(self: *State, actor: usize) void {
-    presentation_flow.beginAttackPresentation(self, actor);
-}
-pub fn advancePresentation(self: *State, boundary: u16) void {
-    presentation_flow.advancePresentation(self, boundary);
-}
-pub fn effectFrame(self: *const State, boundary: u16) ?combat_effects.Frame {
-    return presentation_flow.effectFrame(self, boundary);
-}
-
-pub fn queuedSpell(self: *const State, actor: usize, cast: anytype) ?*const systems.Spell {
+pub fn queuedSpell(self: *const State, actor: usize, cast: types_mod.SpellSelection) ?*const systems.Spell {
     if (!self.canCast(actor, cast.index)) return null;
     const spell = &self.content.systems.?.spells[cast.index];
     if (cast.target >= (if (spell.allies) self.partyCount() else self.enemyCount())) return null;
     return spell;
 }
 
-pub fn beginSpellAction(self: *State, actor: usize, cast: anytype) bool {
+pub fn beginSpellAction(self: *State, actor: usize, cast: types_mod.SpellSelection) bool {
     return startSpellAction(self, actor, cast) == .started;
 }
 
 const ActionStart = enum { started, wait, rejected };
 
-pub fn startSpellAction(self: *State, actor: usize, cast: anytype) ActionStart {
+pub fn startSpellAction(self: *State, actor: usize, cast: types_mod.SpellSelection) ActionStart {
     const spell = queuedSpell(self, actor, cast) orelse return .rejected;
     const requested = cast.target + if (spell.allies) @as(usize, 0) else self.partyCount();
     // shortcut: single enemy spells share the trial's first-survivor retarget policy.
@@ -150,8 +120,8 @@ pub fn startSpellAction(self: *State, actor: usize, cast: anytype) ActionStart {
                 };
                 const home = layout.homePosition(self, recipient);
                 const motion = packet.spells[scene_id].program.?.actor_motion;
-                const movable = if (motion) |m| (!m.exclude_protected or self.protection[recipient] == 0) and (!m.exclude_airborne or recipient < self.partyCount() or !(self.enemy(recipient - self.partyCount()).airborne orelse false)) else true;
-                instance.targets[instance.target_count] = .{ .formation_slot = @intCast(if (recipient < self.partyCount()) recipient else recipient - self.partyCount()), .actor = recipient, .home = .{ @intFromFloat(@round(home.x)), @intFromFloat(@round(home.y)), @intFromFloat(@round(home.z)) }, .size_base = self.actor_sizes[recipient], .movable = movable, .position = .{ @intFromFloat(@round(position.x)), @intFromFloat(@round(position.y)), @intFromFloat(@round(position.z)) }, .center = center };
+                const movable = if (motion) |m| (!m.exclude_protected or self.actor_conditions[recipient].protection_rounds == 0) and (!m.exclude_airborne or recipient < self.partyCount() or !(self.enemy(recipient - self.partyCount()).airborne orelse false)) else true;
+                instance.targets[instance.target_count] = .{ .formation_slot = @intCast(if (recipient < self.partyCount()) recipient else recipient - self.partyCount()), .actor = recipient, .home = .{ @intFromFloat(@round(home.x)), @intFromFloat(@round(home.y)), @intFromFloat(@round(home.z)) }, .size_base = self.actor_transforms[recipient].scale_q12, .movable = movable, .position = .{ @intFromFloat(@round(position.x)), @intFromFloat(@round(position.y)), @intFromFloat(@round(position.z)) }, .center = center };
                 instance.target_count += 1;
             }
         }
@@ -173,7 +143,7 @@ pub fn startSpellAction(self: *State, actor: usize, cast: anytype) ActionStart {
         instance.target = .{ @intFromFloat(@round(target_position.x)), @intFromFloat(@round(target_position.y)), @intFromFloat(@round(target_position.z)) };
         self.active.?.drops = instance;
     }
-    self.beginCastPresentation(spell.id);
+    presentation_flow.beginCastPresentation(self, spell.id);
     return .started;
 }
 
@@ -351,7 +321,7 @@ pub fn nextAction(self: *State) void {
                 if (!self.acted[action.assist] or owner == null or owner.? != .unite) continue;
             };
             if (self.coordinatorLocked(index)) continue;
-            if (first_party == null and index < self.partyCount() and self.asleep[index] == 0) first_party = index;
+            if (first_party == null and index < self.partyCount() and self.actor_conditions[index].sleep_turns == 0) first_party = index;
             const value = priority(self.stats(index).speed, self.roll());
             if (selected == null or value > best) {
                 selected = index;
@@ -375,7 +345,7 @@ pub fn nextAction(self: *State) void {
         if (self.hasPendingRevival()) self.round_menu_pending = true else self.openAfterRound();
         return;
     };
-    if (actor >= self.partyCount() and self.asleep[actor] == 0 and self.enemy(actor - self.partyCount()).action_policy == .unsupported) {
+    if (actor >= self.partyCount() and self.actor_conditions[actor].sleep_turns == 0 and self.enemy(actor - self.partyCount()).action_policy == .unsupported) {
         self.replay_unsupported = .enemy_policy;
         return;
     }
@@ -396,7 +366,7 @@ pub fn nextAction(self: *State) void {
     self.pending_party_actor = null;
     self.acted[actor] = true;
     self.action_ticks = 0;
-    if (self.asleep[actor] > 0) {
+    if (self.actor_conditions[actor].sleep_turns > 0) {
         self.active = .{ .actor = actor, .target = actor, .kind = .sleeping };
         return;
     }
@@ -422,28 +392,32 @@ pub fn nextAction(self: *State) void {
         self.rocDecision(actor);
         return;
     }
-    if (self.content.world_art != null and actor < self.partyCount()) {
-        self.replay_unsupported = .coordinator_action;
-        return;
-    }
-    var enemy_special = false;
-    const action: Action = if (actor < self.partyCount()) self.actions[actor].? else blk: {
-        const target = self.chooseEnemyTarget(actor - self.partyCount()) orelse {
+    const party_count = self.partyCount();
+    if (actor >= party_count) {
+        const enemy = actor - party_count;
+        const target = self.chooseEnemyTarget(enemy) orelse {
             self.active = .{ .actor = actor, .target = actor, .kind = .unavailable };
             return;
         };
-        enemy_special = self.enemy(actor - self.partyCount()).action_policy == .ant_double_strike and antSpecial(self.roll());
+        const ant = self.enemy(enemy).action_policy == .ant_double_strike;
+        const enemy_special = ant and antSpecial(self.roll());
         if (self.replay_exhausted) return;
-        if (!enemy_special and self.enemy(actor - self.partyCount()).action_policy == .ant_double_strike) {
+        if (ant and !enemy_special) {
             if (self.unite_actors) |bundle| if (bundle.counterPacket()) |packet| {
-                if (packet.meleeEnemy(self.enemy(actor - self.partyCount()).id) != null) {
+                if (packet.meleeEnemy(self.enemy(enemy).id) != null) {
                     _ = self.sourceEnemyAttack(actor, target);
                     return;
                 }
             };
         }
-        break :blk .{ .attack = target };
-    };
+        self.beginAttack(actor, target, if (enemy_special) .enemy_special else .ordinary);
+        return;
+    }
+    if (self.content.world_art != null) {
+        self.replay_unsupported = .coordinator_action;
+        return;
+    }
+    const action = self.actions[actor].?;
     switch (action) {
         .assist => |owner| {
             if (owner >= self.partyCount() or !self.acted[owner]) self.replay_unsupported = .coordinator_action;
@@ -470,7 +444,7 @@ pub fn nextAction(self: *State) void {
         },
         .defend => self.active = .{ .actor = actor, .target = actor, .kind = .defend },
         .item => |item| self.active = .{ .actor = actor, .target = item.target, .kind = .item, .item_id = item.id },
-        .attack => |requested| self.beginAttack(actor, requested, enemy_special, null),
+        .attack => |enemy| self.beginAttack(actor, party_count + enemy, .ordinary),
     }
 }
 pub fn commanderDecision(self: *State, actor: usize) void {

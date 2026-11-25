@@ -32,7 +32,7 @@ fn handleItems(state: *pause.State, game: *field.State, input: pause.Input) paus
         state.phase = .shared_items;
         return .none;
     }
-    nav.cycleLeftRight(&state.member, count, input.left, input.right);
+    nav.cycle(&state.member, count, input.left, input.right);
     const slots = game.progress.party[state.member].inventory.count();
     if (slots == 0) {
         state.slot = 0;

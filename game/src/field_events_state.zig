@@ -1,9 +1,6 @@
 const std = @import("std");
 const field = @import("field");
 const runtime = @import("event_runtime");
-const records = @import("opening_records");
-const ted_party_add = records.ted_party_add;
-const field_records = records.field_records;
 const room2_descriptor = @import("descriptor_release");
 const room2_movement = @import("movement_batch");
 const room2_text_host = @import("room2_text").host;
@@ -19,7 +16,11 @@ const fe = @import("field_events.zig");
 const Room2Descriptor = fe.Room2Descriptor;
 const TextState = fe.TextState;
 const TextSpeed = fe.TextSpeed;
-const begin = @import("field_events_session.zig");
+const begin = @import("field_events_begin.zig");
+const session = @import("field_events_session.zig");
+const handoffs = @import("field_events_playback/handoffs.zig");
+const host = @import("field_events_host.zig");
+const validation = @import("field_events_validate.zig");
 const sources_mod = @import("field_events_sources.zig");
 const dispatch_mod = @import("field_events_dispatch.zig");
 const storage_mod = @import("field_events_storage.zig");
@@ -27,9 +28,6 @@ const semanticEqual = sources_mod.semanticEqual;
 const MovementAccess = fe.MovementAccess;
 const AudioAccess = fe.AudioAccess;
 const AudioRequest = fe.AudioRequest;
-const SourceCueRequest = fe.SourceCueRequest;
-const RoomTransitionProposal = fe.RoomTransitionProposal;
-const TransitionCommit = fe.TransitionCommit;
 const HeroDescriptorState = fe.HeroDescriptorState;
 const Binding = fe.Binding;
 const Actor = fe.Actor;
@@ -390,119 +388,62 @@ pub const Session = struct {
         return result;
     }
 
-    // An existing caller owns interaction admission; this does not construct the room's actors.
-    pub fn beginInteraction(binding: Binding, state: field.State, serial: u64, entity: u8, construction: ?ordinary.State) !Session {
-        return begin.beginInteraction(binding, state, serial, entity, construction);
-    }
+    pub const beginInteraction = begin.beginInteraction;
     pub const beginOrdinary = begin.beginOrdinary;
     pub const beginRoomEvent = begin.beginRoomEvent;
-    pub fn beginRoute(binding: Binding, state: field.State, serial: u64, program_id: []const u8) !Session {
-        return begin.beginRoute(binding, state, serial, program_id);
-    }
-    pub fn beginRetainedInteraction(self: *const Session, binding: Binding, state: field.State, entity_id: u8) !Session {
-        return begin.beginRetainedInteraction(self, binding, state, entity_id);
-    }
-    pub fn beginHomeRoute(self: *const Session, binding: Binding, state: field.State, up_held: bool) !Session {
-        return begin.beginHomeRoute(self, binding, state, up_held);
-    }
-    pub fn beginRoom2Event(self: *const Session, binding: Binding, state: field.State) !Session {
-        return begin.beginRoom2Event(self, binding, state);
-    }
-    pub fn beginHomeStairs(self: *const Session, binding: Binding, state: field.State) !Session {
-        return begin.beginHomeStairs(self, binding, state);
-    }
-    pub fn beginConstructedRoute(self: *const Session, binding: Binding, state: field.State, program_id: []const u8) !Session {
-        return begin.beginConstructedRoute(self, binding, state, program_id);
-    }
-    pub fn beginWorldExit(binding: Binding, state: field.State, serial: u64) !Session {
-        return begin.beginWorldExit(binding, state, serial);
-    }
+    pub const beginRoute = begin.beginRoute;
+    pub const beginRetainedInteraction = begin.beginRetainedInteraction;
+    pub const beginHomeRoute = begin.beginHomeRoute;
+    pub const beginRoom2Event = begin.beginRoom2Event;
+    pub const beginHomeStairs = begin.beginHomeStairs;
+    pub const beginConstructedRoute = begin.beginConstructedRoute;
+    pub const beginWorldExit = begin.beginWorldExit;
 
-    pub fn validate(self: *const Session, binding: Binding) !void {
-        return begin.validate(self, binding);
-    }
-    pub fn takeBattle(self: *Session) ?fe.BattleRequest {
-        return begin.takeBattle(self);
-    }
-    pub fn queuedBattle(self: *const Session) ?fe.BattleRequest {
-        return begin.queuedBattle(self);
-    }
-    pub fn queuedFixedDice(self: *const Session) ?fe.Receipt {
-        return begin.queuedFixedDice(self);
-    }
-    pub const queuedItemOverload = begin.queuedItemOverload;
-    pub const resumeItemOverload = begin.resumeItemOverload;
+    pub const takeBattle = handoffs.takeBattle;
+    pub const queuedBattle = handoffs.queuedBattle;
+    pub const queuedFixedDice = handoffs.queuedFixedDice;
+    pub const queuedItemOverload = handoffs.queuedItemOverload;
+    pub const resumeItemOverload = handoffs.resumeItemOverload;
+    pub const queuedPartySelect = handoffs.queuedPartySelect;
+    pub const partySelectReservesSlot = handoffs.partySelectReservesSlot;
+    pub const resumePartySelect = handoffs.resumePartySelect;
+    pub const updateSelectorParty = handoffs.updateSelectorParty;
+    pub const pendingFieldMusic = handoffs.pendingFieldMusic;
+    pub const resumeFieldMusic = handoffs.resumeFieldMusic;
+    pub const resumeFixedDice = handoffs.resumeFixedDice;
+    pub const resumeBattleStory = handoffs.resumeBattleStory;
+    pub const acknowledgeAudio = handoffs.acknowledgeAudio;
 
-    pub fn queuedPartySelect(self: *const Session) ?fe.Receipt {
-        return begin.queuedPartySelect(self);
-    }
+    pub const sourceTedAddRequest = host.sourceTedAddRequest;
+    pub const pendingPartyChange = host.pendingPartyChange;
+    pub const acknowledgePartyChange = host.acknowledgePartyChange;
+    pub const acknowledgePartyLoad = host.acknowledgePartyLoad;
+    pub const acknowledgeTedAdd = host.acknowledgeTedAdd;
+    pub const pendingWheelSpin = host.pendingWheelSpin;
+    pub const acknowledgeWheelSpin = host.acknowledgeWheelSpin;
+    pub const pendingPartyEdit = host.pendingPartyEdit;
+    pub const acknowledgePartyEdit = host.acknowledgePartyEdit;
+    pub const sourceCueRequest = host.sourceCueRequest;
+    pub const acknowledgeSourceCue = host.acknowledgeSourceCue;
+    pub const proposeRoomTransition = host.proposeRoomTransition;
+    pub const acknowledgeRoomTransition = host.acknowledgeRoomTransition;
+    pub const acknowledgeWorldExit = host.acknowledgeWorldExit;
+    pub const reconstruct = host.reconstruct;
+
+    pub const validate = validation.validate;
+
+    pub const tick = session.tick;
+    pub const tickPad = session.tickPad;
+
     pub fn pendingPartySelectCommand(self: *const Session) ?runtime.Command {
         const instance = if (self.instance) |*value| value else return null;
         if (!instance.pendingPartySelect()) return null;
         return instance.pending.?.batch.effects[0];
     }
-    pub fn partySelectReservesSlot(self: *const Session) bool {
-        return begin.partySelectReservesSlot(self);
-    }
-    pub fn resumePartySelect(self: *Session, binding: Binding, state: *field.State, completed: fe.Receipt) !void {
-        return begin.resumePartySelect(self, binding, state, completed);
-    }
-    pub fn updateSelectorParty(self: *Session, binding: Binding, completed: fe.Receipt, next_party: []const u8, auxiliary: [6]u8) !void {
-        return begin.updateSelectorParty(self, binding, completed, next_party, auxiliary);
-    }
-    pub fn pendingFieldMusic(self: *const Session) ?runtime.FieldMusic {
-        return begin.pendingFieldMusic(self);
-    }
-    pub fn resumeFieldMusic(self: *Session, binding: Binding, state: *field.State, music: runtime.FieldMusic) !void {
-        return begin.resumeFieldMusic(self, binding, state, music);
-    }
-    pub fn resumeFixedDice(self: *Session, binding: Binding, state: *field.State, completed: fe.Receipt) !void {
-        return begin.resumeFixedDice(self, binding, state, completed);
-    }
     pub fn resumeBattle(self: *Session, binding: Binding, state: *field.State, completed: fe.BattleRequest, outcome: fe.BattleOutcome) !void {
         state.progress.story.scenario = try self.resumeBattleStory(binding, state.progress.story.scenario, completed, outcome);
     }
-    pub const resumeBattleStory = begin.resumeBattleStory;
-    pub fn acknowledgeAudio(self: *Session, binding: Binding, batch: u64, origin: u16) !void {
-        return begin.acknowledgeAudio(self, binding, batch, origin);
-    }
-    pub fn sourceTedAddRequest(self: *const Session, binding: Binding) !?ted_party_add.Request {
-        return begin.sourceTedAddRequest(self, binding);
-    }
-    pub const pendingPartyChange = begin.pendingPartyChange;
-    pub const acknowledgePartyChange = begin.acknowledgePartyChange;
-    pub const acknowledgePartyLoad = begin.acknowledgePartyLoad;
-    pub fn acknowledgeTedAdd(self: *Session, old_binding: Binding, new_binding: Binding, request: ted_party_add.Request, proposal: ted_party_add.Proposal, state: *field.State) !void {
-        return begin.acknowledgeTedAdd(self, old_binding, new_binding, request, proposal, state);
-    }
-    pub const pendingWheelSpin = @import("field_events_host.zig").pendingWheelSpin;
-    pub const acknowledgeWheelSpin = @import("field_events_host.zig").acknowledgeWheelSpin;
-    pub const pendingPartyEdit = @import("field_events_host.zig").pendingPartyEdit;
-    pub const acknowledgePartyEdit = @import("field_events_host.zig").acknowledgePartyEdit;
-    pub fn sourceCueRequest(self: *const Session, binding: Binding) !?SourceCueRequest {
-        return begin.sourceCueRequest(self, binding);
-    }
-    pub fn acknowledgeSourceCue(self: *Session, binding: Binding, request: SourceCueRequest, state: *field.State) !void {
-        return begin.acknowledgeSourceCue(self, binding, request, state);
-    }
-    pub fn proposeRoomTransition(self: *const Session, binding: Binding) !?RoomTransitionProposal {
-        return begin.proposeRoomTransition(self, binding);
-    }
-    pub fn acknowledgeRoomTransition(self: *Session, binding: Binding, proposal: RoomTransitionProposal, destination: Binding, destination_room: field.Room, source_state: field.State) !TransitionCommit {
-        return begin.acknowledgeRoomTransition(self, binding, proposal, destination, destination_room, source_state);
-    }
-    pub fn acknowledgeWorldExit(self: *Session, binding: Binding, story: *runtime.StoryState) !void {
-        return begin.acknowledgeWorldExit(self, binding, story);
-    }
-    pub fn reconstruct(self: *Session, binding: Binding, state: *field.State) !bool {
-        return begin.reconstruct(self, binding, state);
-    }
-    pub noinline fn tick(self: *Session, binding: Binding, state: *field.State, confirm: bool) !Result {
-        return begin.tick(self, binding, state, confirm);
-    }
-    pub noinline fn tickPad(self: *Session, binding: Binding, state: *field.State, pressed: u32, held: u32) !Result {
-        return begin.tickPad(self, binding, state, pressed, held);
-    }
+
     pub fn tickField(self: *Session, binding: Binding, state: *field.State, input: field.Input) !Result {
         self.sound_effect = null;
         const direction: u32 = switch (input.menu_direction orelse return self.tick(binding, state, input.action)) {

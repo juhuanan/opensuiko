@@ -1,22 +1,24 @@
 //! Roster operations for the journey state: reserves, party snapshot and joins.
 const std = @import("std");
+const State = @import("journey.zig").State;
+const StoryState = @import("field").game_state.event_runtime.StoryState;
 const battle = @import("battle");
 const party_session = @import("party_session");
-const save = @import("journey_save");
+const save = @import("journey_save.zig");
 
-pub fn recruitFlags(story: anytype) [108]u8 {
+pub fn recruitFlags(story: StoryState) [108]u8 {
     var flags = story.recruit_flags;
     // The duel result is persisted even in saves that leave Pahn marked recruited.
     if (story.scenario[34] & 2 != 0) flags[6] = (flags[6] & ~@as(u8, 1)) | 0x42;
     return flags;
 }
 
-pub fn recordPahnDuel(story: anytype, outcome: u8) void {
+pub fn recordPahnDuel(story: *StoryState, outcome: u8) void {
     story.scenario[34] |= outcome;
     if (outcome == 2) story.recruit_flags = recruitFlags(story.*);
 }
 
-pub fn retainReserve(state: anytype, owned: battle.OwnedMember) !void {
+pub fn retainReserve(state: *State, owned: battle.OwnedMember) !void {
     if (state.menu.phase != .closed or state.field_state.action_pending) return error.GameBusy;
     const snapshot = try save.Snapshot.capture(state.*);
     try snapshot.validate(state.*);
@@ -37,7 +39,7 @@ pub fn retainReserve(state: anytype, owned: battle.OwnedMember) !void {
     return error.RosterFull;
 }
 
-pub fn swapReserve(state: anytype, member_id: []const u8, reserve_id: []const u8) !void {
+pub fn swapReserve(state: *State, member_id: []const u8, reserve_id: []const u8) !void {
     if (state.menu.phase != .closed or state.field_state.action_pending) return error.GameBusy;
     const snapshot = try save.Snapshot.capture(state.*);
     try snapshot.validate(state.*);
@@ -60,7 +62,7 @@ pub fn swapReserve(state: anytype, member_id: []const u8, reserve_id: []const u8
     return error.InvalidMember;
 }
 
-pub fn buildPartySnapshot(state: anytype) party_session.Snapshot {
+pub fn buildPartySnapshot(state: *const State) party_session.Snapshot {
     var snapshot: party_session.Snapshot = .{ .entry_id = "journey", .content_id = "journey", .receipt = "journey", .baseline_revision = 0 };
     for (0..state.combat.progress.party.len) |i| {
         const owned = state.combat.ownedMember(i);
@@ -80,7 +82,7 @@ pub fn buildPartySnapshot(state: anytype) party_session.Snapshot {
     return snapshot;
 }
 
-pub fn useWeaponPiece(state: anytype, owner: usize, slot: usize, target: usize, replace: bool) !void {
+pub fn useWeaponPiece(state: *State, owner: usize, slot: usize, target: usize, replace: bool) !void {
     if (owner >= state.combat.partyCount() or target >= state.combat.partyCount()) return error.InvalidMember;
     var session = try party_session.Session.init(state.combat.*, buildPartySnapshot(state), .{});
     try session.execute(.{ .weapon_piece = .{
@@ -102,7 +104,7 @@ pub const Growth = struct {
     random: std.Random.DefaultPrng,
 };
 
-pub fn prepareGrowth(state: anytype, id: []const u8, advances: u8) !Growth {
+pub fn prepareGrowth(state: *const State, id: []const u8, advances: u8) !Growth {
     if (advances == 0 or advances > 99 or state.combat.content.systems == null or state.combat.replay_draws != null) return error.InvalidCharacterGrowth;
     var active: ?usize = null;
     var reserve: ?usize = null;
@@ -145,7 +147,7 @@ pub fn prepareGrowth(state: anytype, id: []const u8, advances: u8) !Growth {
     return .{ .owned = result, .active = active, .reserve = reserve, .extra = extra, .random = growth.random };
 }
 
-pub fn commitGrowth(state: anytype, growth: Growth) void {
+pub fn commitGrowth(state: *State, growth: Growth) void {
     if (growth.active) |index| {
         state.combat.setOwnedMember(index, growth.owned);
     } else {
@@ -157,7 +159,7 @@ pub fn commitGrowth(state: anytype, growth: Growth) void {
 
 pub const PartyJoin = struct { member: party_session.catalogue.Materialized, reserve: ?usize = null };
 
-pub fn preparePartyJoin(state: anytype, backing: []battle.Member, catalog: party_session.catalogue.Catalogue, bindings: ?party_session.catalogue.OwnershipBindings, id: []const u8) !PartyJoin {
+pub fn preparePartyJoin(state: *const State, backing: []battle.Member, catalog: party_session.catalogue.Catalogue, bindings: ?party_session.catalogue.OwnershipBindings, id: []const u8) !PartyJoin {
     const count = state.combat.progress.party.len;
     if (count >= 6) return error.PartyFull;
     if (backing.len < count + 1) return error.InvalidParty;
@@ -168,7 +170,7 @@ pub fn preparePartyJoin(state: anytype, backing: []battle.Member, catalog: party
     return .{ .member = try party_session.catalogue.materializeBound(state.combat.*, catalog, id, bindings) };
 }
 
-pub fn commitPartyJoin(state: anytype, backing: []battle.Member, join: PartyJoin) void {
+pub fn commitPartyJoin(state: *State, backing: []battle.Member, join: PartyJoin) void {
     const materialized = join.member;
     const count = state.combat.progress.party.len;
     var active: [6]battle.Member = undefined;
@@ -195,7 +197,7 @@ pub const PartyLeave = struct { member: usize, reserve: usize };
 
 pub const PartyDismiss = struct { keep: usize, count: u3 = 0, leaves: [5]PartyLeave = undefined };
 
-pub fn preparePartyDismiss(state: anytype) !PartyDismiss {
+pub fn preparePartyDismiss(state: *const State) !PartyDismiss {
     const members = state.combat.progress.party;
     if (members.len == 0 or members.len > 6) return error.InvalidParty;
     const keep = for (members, 0..) |member, index| {
@@ -217,14 +219,14 @@ pub fn preparePartyDismiss(state: anytype) !PartyDismiss {
     return plan;
 }
 
-pub fn commitPartyDismiss(state: anytype, plan: PartyDismiss) void {
+pub fn commitPartyDismiss(state: *State, plan: PartyDismiss) void {
     const kept = state.combat.progress.party[plan.keep].id;
     for (plan.leaves[0..plan.count]) |leave| commitPartyLeave(state, leave);
     std.debug.assert(state.combat.partyCount() == 1);
     std.debug.assert(std.mem.eql(u8, state.combat.progress.party[0].id, kept));
 }
 
-pub fn preparePartyLeave(state: anytype, id: []const u8) !PartyLeave {
+pub fn preparePartyLeave(state: *const State, id: []const u8) !PartyLeave {
     const party = state.combat.progress.party;
     if (party.len <= 1) return error.LastPartyMember;
     const member = for (party, 0..) |entry, index| {
@@ -236,7 +238,7 @@ pub fn preparePartyLeave(state: anytype, id: []const u8) !PartyLeave {
     return .{ .member = member, .reserve = reserve };
 }
 
-pub fn commitPartyLeave(state: anytype, leave: PartyLeave) void {
+pub fn commitPartyLeave(state: *State, leave: PartyLeave) void {
     const combat = state.combat;
     const last = combat.partyCount() - 1;
     state.reserves[leave.reserve] = combat.ownedMember(leave.member);
@@ -259,12 +261,12 @@ pub fn commitPartyLeave(state: anytype, leave: PartyLeave) void {
     state.replacePartySlice(combat.progress.party[0..last]);
 }
 
-pub fn joinPartyMember(state: anytype, backing: []battle.Member, catalog: party_session.catalogue.Catalogue, bindings: ?party_session.catalogue.OwnershipBindings, id: []const u8) !void {
+pub fn joinPartyMember(state: *State, backing: []battle.Member, catalog: party_session.catalogue.Catalogue, bindings: ?party_session.catalogue.OwnershipBindings, id: []const u8) !void {
     const member = try preparePartyJoin(state, backing, catalog, bindings, id);
     commitPartyJoin(state, backing, member);
 }
 
-pub fn joinOnRoomEntry(state: anytype, backing: []battle.Member, catalog: party_session.catalogue.Catalogue, bindings: ?party_session.catalogue.OwnershipBindings, room_id: []const u8) !void {
+pub fn joinOnRoomEntry(state: *State, backing: []battle.Member, catalog: party_session.catalogue.Catalogue, bindings: ?party_session.catalogue.OwnershipBindings, room_id: []const u8) !void {
     if (state.route.stage == .world or state.packagedOpeningRoute() != null) return;
     if (std.mem.eql(u8, room_id, "va1_room_1")) {
         if (state.room_battles) |rooms| if (rooms.ownsPartyJoin("cleo")) return;

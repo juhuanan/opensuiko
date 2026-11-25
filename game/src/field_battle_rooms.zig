@@ -335,21 +335,30 @@ pub const BattleRooms = struct {
                     .set_hero_display => view.hero = .{ .x = effect.x.?, .y = effect.y.? },
                     .field_music => music = effect.music.?,
                     .place_actor, .actor_motion, .actor_transition => {
-                        const actor = effect.actor.?;
-                        if (effect.kind == .actor_transition and std.mem.eql(u8, actor, "hero")) {
-                            hero_facing = ([_]field.Direction{ .down, .up, .left, .right })[effect.transition.?];
+                        const facing = effect.actorFacing();
+                        if (facing) |turn| if (std.mem.eql(u8, turn.actor, "hero")) {
+                            hero_facing = events.fieldDirection(turn.variant.direction());
                             continue;
-                        }
+                        };
                         const actors = if (construction) |*value| value else return error.MissingFieldActorConstruction;
                         const packet = binding.ordinary.?;
-                        const result = switch (effect.kind) {
-                            .place_actor => actors.place(packet, actor, effect.x, effect.y),
-                            .actor_motion => actors.restoreMotion(packet, actor, effect.value.?),
-                            .actor_transition => actors.transition(packet, binding.animations, actor, effect.transition.?),
+                        const change: struct { result: anyerror!void, if_constructed: bool } = switch (effect.kind) {
+                            .place_actor => blk: {
+                                const placement = effect.actorPlacement() orelse return error.InvalidEventCommand;
+                                break :blk .{ .result = actors.place(packet, placement.actor, placement.x, placement.y), .if_constructed = placement.if_constructed };
+                            },
+                            .actor_motion => blk: {
+                                const restore = effect.actorMotionRestore() orelse return error.InvalidEventCommand;
+                                break :blk .{ .result = actors.restoreMotion(packet, restore.actor, restore.speed), .if_constructed = restore.if_constructed };
+                            },
+                            .actor_transition => blk: {
+                                const turn = facing orelse return error.InvalidEventCommand;
+                                break :blk .{ .result = actors.transition(packet, binding.animations, turn.actor, @backingInt(turn.variant)), .if_constructed = turn.if_constructed };
+                            },
                             else => unreachable,
                         };
-                        result catch |err| {
-                            if (err != error.FieldActorNotConstructed or effect.if_actor_constructed != true) return err;
+                        change.result catch |err| {
+                            if (err != error.FieldActorNotConstructed or !change.if_constructed) return err;
                         };
                     },
                     .place_hero => {
@@ -372,7 +381,8 @@ pub const BattleRooms = struct {
                     },
                     .scenery_stage, .scenery_append => {
                         const room = field_room orelse return error.MissingFieldEventRoomPackage;
-                        try room.mutateScenery(&scenery_state, effect);
+                        const operation = effect.sceneryOperation() orelse return error.InvalidFieldSceneryState;
+                        try room.mutateScenery(&scenery_state, operation);
                     },
                     else => {},
                 };

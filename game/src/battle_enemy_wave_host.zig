@@ -17,7 +17,7 @@ pub fn beginSourceEnemyWave(self: *State, owner: usize) !void {
     if (self.active != null or !reactions.reactionAvailable(self, owner) or self.unite_vm.wave_actions[owner] != null) return error.ActorAlreadyOwned;
     const bundle = self.unite_actors.?;
     const binding = bundle.enemy_wave.?;
-    if (self.content.presentation_ready) try art.checkProgramArt(self.*, bundle, bundle.animations.find(binding.id).?, binding.owner_program, 0, 0, false);
+    if (self.content.presentation_ready) try art.checkProgramArt(self.*, bundle.library(), bundle.animations.find(binding.id).?, binding.owner_program, 0, 0, false);
     self.unite_vm.auxiliary_capacity = @intCast(19 - self.partyCount() - self.enemyCount());
     self.unite_vm.wave_actions[owner] = .{ .owner = @intCast(owner), .start_at = self.camera_ticks +% 1 };
     self.active = .{ .actor = owner, .target = owner, .kind = .enemy_command };

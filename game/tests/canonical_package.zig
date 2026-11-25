@@ -307,7 +307,7 @@ test "packaged window styles collect sets, skip locked choices, and persist appe
     try std.testing.expectEqual(@as(u8, 0x85), restored.combat.progress.story.scenario.?.scenario[36]);
     var invalid = try journey.Snapshot.capture(restored);
     invalid.story.scenario.?.window_appearance.style = .inset;
-    try std.testing.expectError(error.InvalidSave, invalid.validate(&restored));
+    try std.testing.expectError(error.InvalidSave, invalid.validate(restored));
 
     _ = try restored.tickWithFieldEvents(.{ .field = .{ .action = true, .direction = .up } }, .{});
     for (0..32) |_| _ = try restored.tickWithFieldEvents(.{}, .{});
@@ -369,7 +369,7 @@ test "packaged sound themes admit from both Melodye callers and restore the conf
     try std.testing.expectEqual(.pulse, restored.combat.progress.story.scenario.?.sound_theme);
     var invalid = try journey.Snapshot.capture(restored);
     invalid.story.scenario.?.sound_theme = .pluck;
-    try std.testing.expectError(error.InvalidSave, invalid.validate(&restored));
+    try std.testing.expectError(error.InvalidSave, invalid.validate(restored));
 
     restored.field_state.enterRoom(restored.package.roomIndex("vb5ca_room_3").?, .{ .x = 144, .y = 96 });
     _ = try restored.tickWithFieldEvents(.{}, .{});
@@ -2604,7 +2604,7 @@ fn travelCombatInput(combat: *const battle.State) battle.Input {
     }
     var awake: usize = 0;
     for (0..combat.enemyCount()) |enemy| {
-        if (combat.enemy_hp[enemy] > 0 and combat.asleep[combat.partyCount() + enemy] == 0) awake += 1;
+        if (combat.enemy_hp[enemy] > 0 and combat.actor_conditions[combat.partyCount() + enemy].sleep_turns == 0) awake += 1;
     }
     const fire_spear_route = std.mem.startsWith(u8, encounter, "area_g_") or std.mem.startsWith(u8, encounter, "vg2_dir_");
     const prefer_group_damage = palace_guards or ((fire_spear_route or region_e or moravia) and awake > 1) or
@@ -2660,7 +2660,7 @@ fn travelCombatInput(combat: *const battle.State) battle.Input {
     // Brace against the opening attacks while Odessa puts a large group to sleep.
     const brace = combat.round == 1 and combat.enemyCount() >= 4 and for (combat.progress.party, 0..) |member, index| {
         const rune = combat.rune(index) orelse continue;
-        if (combat.participates(index) and combat.asleep[index] == 0 and !combat.rune_blocked[index] and
+        if (combat.participates(index) and combat.actor_conditions[index].sleep_turns == 0 and !combat.actor_conditions[index].rune_blocked and
             std.mem.eql(u8, rune.id, "wind") and member.rune_charges[0] > 0) break true;
     } else false;
     return switch (combat.phase) {
@@ -2695,8 +2695,8 @@ fn travelCombatInput(combat: *const battle.State) battle.Input {
                         if (combat.enemy(index).stats.attack > combat.enemy(prior).stats.attack) target = index;
                         continue;
                     }
-                    const awake_target = combat.asleep[combat.partyCount() + index] == 0;
-                    const awake_prior = combat.asleep[combat.partyCount() + prior] == 0;
+                    const awake_target = combat.actor_conditions[combat.partyCount() + index].sleep_turns == 0;
+                    const awake_prior = combat.actor_conditions[combat.partyCount() + prior].sleep_turns == 0;
                     if (awake_target != awake_prior) {
                         if (awake_target) target = index;
                         continue;

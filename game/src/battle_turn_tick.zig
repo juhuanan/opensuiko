@@ -3,7 +3,8 @@ const menu = @import("game");
 const layout = @import("battle_layout.zig");
 const presentation = @import("battle_presentation.zig");
 const systems = @import("battle_rules");
-const status = @import("battle_status");
+const status = @import("battle_status.zig");
+const turn = @import("battle_turn.zig");
 const battle = @import("battle.zig");
 const types_mod = @import("battle_types.zig");
 const unite_host_mod = @import("battle_unite_host.zig");
@@ -34,9 +35,7 @@ pub fn advanceDefeatDeparture(self: *State) void {
 pub fn startEncounter(self: *State) void {
     self.presentation_tick = 0;
     self.dodge_idle_at = @splat(null);
-    self.actor_sizes = @splat(4096);
-    self.actor_world_offsets = @splat(.{ .x = 0, .y = 0, .z = 0 });
-    self.actor_screen_offsets = @splat(.{ 0, 0 });
+    self.actor_transforms = @splat(.{});
     self.camera_ticks = 0;
     self.formation_shifts = @splat(null);
     self.roc_cover = false;
@@ -57,7 +56,7 @@ pub fn startEncounter(self: *State) void {
     self.enemy_hp = .{ 0, 0, 0, 0, 0, 0 };
     for (0..self.enemyCount()) |index| self.enemy_hp[index] = self.enemy(index).max_hp;
     self.round = 1;
-    self.asleep = @splat(0);
+    self.clearSleep();
     self.status_icons = @splat(.{});
     self.unbalanced = @splat(0);
     self.active = null;
@@ -65,9 +64,7 @@ pub fn startEncounter(self: *State) void {
     self.party_strikes = @splat(null);
     self.front_projectiles = @splat(null);
     self.medicine_action = null;
-    self.revivals = @splat(null);
-    self.knockout_pending = @splat(false);
-    self.knockout_status = @splat(null);
+    self.party_knockouts = @splat(.{});
     self.round_menu_pending = false;
     self.unite_boundaries = @splat(null);
     self.unite_returns = @splat(null);
@@ -77,7 +74,6 @@ pub fn startEncounter(self: *State) void {
     self.unite_vm = .{};
     self.unite_scene = null;
     self.martial_queue = null;
-    self.actor_node_angles = @splat(@splat(0));
     self.last_targets = @splat(-1);
     self.pending_enemy_actor = null;
     self.pending_party_actor = null;
@@ -449,7 +445,7 @@ pub fn tickCore(self: *State, input: Input) void {
             }
             if (input.confirm) beginCommandRound(self);
         },
-        .resolving => self.resolveTick(),
+        .resolving => turn.resolveTick(self),
         .loot => {
             if (input.up or input.left) self.selection = (self.selection + self.partyCount() - 1) % self.partyCount();
             if (input.down or input.right) self.selection = (self.selection + 1) % self.partyCount();

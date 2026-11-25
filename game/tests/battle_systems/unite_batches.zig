@@ -181,7 +181,7 @@ test "Warriors owners play the orbit reaction and source damage clock" {
         combat.coordinator = .{ .stage = .dispatch, .current_actor = owner, .elapsed = 100 };
         combat.action_ticks = 100;
         const target = combat.partyCount();
-        if (protected) combat.protection[target] = 1;
+        if (protected) combat.actor_conditions[target].protection_rounds = 1;
         const hp = combat.enemy_hp[0];
         var tape = Tape{};
         var draws = tape.init();
@@ -625,7 +625,7 @@ test "Master pupil source programs claim targets and repeat independently" {
             var rotated_members: [6]battle.Member = undefined;
             @memcpy(&rotated_members, combat.progress.party);
             rotated.progress.party = &rotated_members;
-            rotated.actor_node_angles[0][2] = 1;
+            rotated.actor_transforms[0].node_angles[2] = 1;
             var rotated_draws = draws;
             try std.testing.expectError(error.UnsupportedCoordinatorAction, rotated.tickReplay(.{}, &rotated_draws));
             try std.testing.expectEqualDeep(combat.unite_vm, rotated.unite_vm);
@@ -639,7 +639,7 @@ test "Master pupil source programs claim targets and repeat independently" {
             var rotated_members: [6]battle.Member = undefined;
             @memcpy(&rotated_members, combat.progress.party);
             rotated.progress.party = &rotated_members;
-            rotated.actor_node_angles[1][0] = 1;
+            rotated.actor_transforms[1].node_angles[0] = 1;
             var rotated_draws = draws;
             try std.testing.expectError(error.UnsupportedCoordinatorAction, rotated.tickReplay(.{}, &rotated_draws));
             try std.testing.expectEqualDeep(combat.unite_vm, rotated.unite_vm);
@@ -674,7 +674,7 @@ test "Master pupil source programs claim targets and repeat independently" {
             try std.testing.expect(queue.targets[0] != null and queue.targets[1] != null);
             if (scenario == 1) {
                 simultaneous.enemy_hp[1] = 0;
-                simultaneous.protection[simultaneous.partyCount()] = 1;
+                simultaneous.actor_conditions[simultaneous.partyCount()].protection_rounds = 1;
             }
             for (0..2) |member| {
                 simultaneous.unite_flags[member] |= 2;
@@ -802,7 +802,7 @@ test "Flash normal owners run single-target damage and delayed source returns" {
         combat.action_ticks = 100;
         combat.coordinator = .{ .stage = .dispatch, .current_actor = owner, .elapsed = 100 };
         const target = combat.partyCount() + target_index;
-        if (protected) combat.protection[target] = 1;
+        if (protected) combat.actor_conditions[target].protection_rounds = 1;
         var tape = Tape{};
         var draws = tape.init();
         if (case == 0) {
@@ -810,7 +810,7 @@ test "Flash normal owners run single-target damage and delayed source returns" {
             var rotated_members: [6]battle.Member = undefined;
             @memcpy(&rotated_members, combat.progress.party);
             rotated.progress.party = &rotated_members;
-            rotated.actor_node_angles[2][2] = 1;
+            rotated.actor_transforms[2].node_angles[2] = 1;
             var rotated_draws = draws;
             try std.testing.expectError(error.UnsupportedCoordinatorAction, rotated.tickReplay(.{}, &rotated_draws));
             try std.testing.expectEqualDeep(combat.unite_vm, rotated.unite_vm);
@@ -842,7 +842,7 @@ test "Flash normal owners run single-target damage and delayed source returns" {
             var rotated_members: [6]battle.Member = undefined;
             @memcpy(&rotated_members, combat.progress.party);
             rotated.progress.party = &rotated_members;
-            rotated.actor_node_angles[2][0] = 1;
+            rotated.actor_transforms[2].node_angles[0] = 1;
             var rotated_draws = draws;
             try std.testing.expectError(error.UnsupportedCoordinatorAction, rotated.tickReplay(.{}, &rotated_draws));
             try std.testing.expectEqualDeep(combat.unite_vm, rotated.unite_vm);
@@ -1015,7 +1015,7 @@ test "Lepant Family normal owners run three recipient reactions before signalled
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(content.value, items.value, &members, 17);
         combat.integration = .{ .host = host };
-        if (protected) combat.protection[6] = 3;
+        if (protected) combat.actor_conditions[6].protection_rounds = 3;
         try combat.attachUniteActors(&library.value);
         try combat.attachSpellScenes(&effects.value);
         combat.selected_unites[owner] = 30;
@@ -1102,7 +1102,7 @@ test "Bandit normal owners retain the first recipient lock through Sydonia and c
         var combat = try battle.State.init(view, items.value, &members, 17);
         combat.weapon_augments[0] = .{ .rune = .fire, .fragments = 3 };
         combat.integration = .{ .host = host };
-        if (protected) combat.protection[6] = 3;
+        if (protected) combat.actor_conditions[6].protection_rounds = 3;
         try combat.attachUniteActors(&library.value);
         try combat.attachSpellScenes(&effects.value);
         combat.selected_unites[owner] = 17;
@@ -2108,19 +2108,19 @@ test "Beauty recipient sleep commits once after tint restoration and rolls back 
             try std.testing.expectEqual(@as(usize, 0), draws.cursor);
             const sample = combat.spellReaction(first).?;
             try std.testing.expectEqualDeep(@as([3]u8, if (age >= 2 and age < 130) .{ 192, 64, 64 } else .{ 128, 128, 128 }), sample.color);
-            try std.testing.expectEqual(@as(u8, 0), combat.asleep[first]);
+            try std.testing.expectEqual(@as(u8, 0), combat.actor_conditions[first].sleep_turns);
         }
         var failed = combat;
         var short = rules.Draws{ .values = &.{9831} };
         try std.testing.expectError(error.RandomInputExhausted, failed.tickReplay(.{}, &short));
-        try std.testing.expectEqualDeep(combat.asleep, failed.asleep);
+        try std.testing.expectEqualDeep(combat.actor_conditions, failed.actor_conditions);
         try std.testing.expectEqualDeep(combat.unite_reactions, failed.unite_reactions);
         try std.testing.expectEqual(combat.camera_ticks, failed.camera_ticks);
         try std.testing.expectEqual(@as(usize, 0), short.cursor);
         try combat.tickReplay(.{}, &draws);
         try std.testing.expectEqual(@as(usize, 2), draws.cursor);
-        try std.testing.expectEqual(@as(u8, 0), combat.asleep[first]);
-        try std.testing.expectEqual(@as(u8, 1), combat.asleep[second]);
+        try std.testing.expectEqual(@as(u8, 0), combat.actor_conditions[first].sleep_turns);
+        try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[second].sleep_turns);
         for ([_]usize{ first, second }) |target| try std.testing.expectEqual(@as(u8, 1), combat.unite_reactions[target].?.status_applied);
         // A repeated actor pass or checkpoint copy cannot repeat a terminal attempt.
         combat.replay_draws = &draws;
@@ -2129,7 +2129,7 @@ test "Beauty recipient sleep commits once after tint restoration and rolls back 
         try std.testing.expectEqual(@as(usize, 2), draws.cursor);
         try combat.tickReplay(.{}, &draws);
         try std.testing.expectEqual(@as(usize, 2), draws.cursor);
-        try std.testing.expectEqual(@as(u8, 1), combat.asleep[second]);
+        try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[second].sleep_turns);
         var duplicate = combat;
         duplicate.unite_reactions[first] = null;
         duplicate.unite_reactions[second].?.started_at = duplicate.camera_ticks - 132;
@@ -2139,7 +2139,7 @@ test "Beauty recipient sleep commits once after tint restoration and rolls back 
         duplicate.advanceUniteActors();
         duplicate.replay_draws = null;
         try std.testing.expectEqual(@as(usize, 1), duplicate_draws.cursor);
-        try std.testing.expectEqual(@as(u8, 1), duplicate.asleep[second]);
+        try std.testing.expectEqual(@as(u8, 1), duplicate.actor_conditions[second].sleep_turns);
         duplicate.replay_draws = &duplicate_draws;
         duplicate.advanceUniteActors();
         duplicate.replay_draws = null;
@@ -2207,7 +2207,7 @@ test "Beauty normal owners run shared controller particles group sleep damage an
             try std.testing.expectEqualDeep(combat.unite_vm, refused.unite_vm);
             try std.testing.expectEqual(draws.cursor, refused_draws.cursor);
         }
-        combat.actor_node_angles[6][1] = 23;
+        combat.actor_transforms[6].node_angles[1] = 23;
         try combat.tickReplay(.{}, &draws);
         const selected_at = combat.camera_ticks;
         const hp = combat.enemy_hp;
@@ -2228,10 +2228,10 @@ test "Beauty normal owners run shared controller particles group sleep damage an
                 try std.testing.expectEqualDeep(combat.active, failed.active);
                 try std.testing.expectEqualDeep(combat.unite_vm, failed.unite_vm);
                 try std.testing.expectEqualDeep(combat.unite_reactions, failed.unite_reactions);
-                try std.testing.expectEqualDeep(combat.actor_node_angles, failed.actor_node_angles);
+                try std.testing.expectEqualDeep(combat.actor_transforms, failed.actor_transforms);
                 try std.testing.expectEqualDeep(combat.actor_camera, failed.actor_camera);
                 try std.testing.expectEqualDeep(combat.enemy_hp, failed.enemy_hp);
-                try std.testing.expectEqualDeep(combat.asleep, failed.asleep);
+                try std.testing.expectEqualDeep(combat.actor_conditions, failed.actor_conditions);
                 try std.testing.expectEqual(combat.camera_ticks, failed.camera_ticks);
                 try std.testing.expectEqual(draws.cursor, short.cursor);
                 if (respawn) respawn_failure_checked = true;
@@ -2255,9 +2255,9 @@ test "Beauty normal owners run shared controller particles group sleep damage an
                 try std.testing.expectEqual(combat.camera_ticks, combat.unite_reactions[target].?.started_at);
                 try std.testing.expectEqual(@as(u8, 1), combat.unite_reactions[target].?.variant);
             };
-            if (age >= 160 and age < 287) for (6..9) |target| try std.testing.expectEqual(@as(i16, 1), combat.actor_node_angles[target][0]);
-            if (age >= 287) for (6..9) |target| try std.testing.expectEqualDeep([3]i16{ 0, if (target == 6) 23 else 0, 0 }, combat.actor_node_angles[target]);
-            try std.testing.expectEqual(@as(i16, 23), combat.actor_node_angles[6][1]);
+            if (age >= 160 and age < 287) for (6..9) |target| try std.testing.expectEqual(@as(i16, 1), combat.actor_transforms[target].node_angles[0]);
+            if (age >= 287) for (6..9) |target| try std.testing.expectEqualDeep([3]i16{ 0, if (target == 6) 23 else 0, 0 }, combat.actor_transforms[target].node_angles);
+            try std.testing.expectEqual(@as(i16, 23), combat.actor_transforms[6].node_angles[1]);
             if (age == 176) {
                 const visual = battle.layout.actorLayout(combat, 6);
                 const quad = battle.layout.rotatedActorQuad(combat, 6, visual.sprite, visual.point).?;
@@ -2488,7 +2488,7 @@ test "Martial arts battle host retains returned members until delayed group dama
         combat.martial_queue.?.queue.pending = @splat(false);
         combat.unite_flags = @splat(0);
         combat.enemy_hp = .{ 9999, 9999, 9999, 0, 0, 0 };
-        combat.protection[4] = 1;
+        combat.actor_conditions[4].protection_rounds = 1;
         for (0..3) |member| combat.finishUniteMember(owner, member);
         try std.testing.expectEqual(@as(u8, 0), combat.uniteBoundaryFor(owner).?.finished_members);
         try std.testing.expect(combat.uniteHandoffTick() == null);
@@ -2588,7 +2588,7 @@ test "Martial arts source actors recipient handoff and delayed HP run as one bat
         combat.coordinator = .{ .stage = .dispatch, .current_actor = owner, .elapsed = 100 };
         combat.action_ticks = 100;
         const target = combat.partyCount();
-        if (protected) combat.protection[target] = 1;
+        if (protected) combat.actor_conditions[target].protection_rounds = 1;
         const hp = combat.enemy_hp[0];
         var tape = Tape{};
         var draws = tape.init();
@@ -2784,7 +2784,7 @@ test "Beat battle host runs both recipient stages child and source damage throug
         combat.coordinator = .{ .stage = .dispatch, .current_actor = owner, .elapsed = 100 };
         combat.action_ticks = 100;
         const target = combat.partyCount();
-        if (protected) combat.protection[target] = 1;
+        if (protected) combat.actor_conditions[target].protection_rounds = 1;
         combat.enemy_hp[0] = if (scenario >= 4) 1 else 5000;
         const hp = combat.enemy_hp[0];
         var tape = Tape{};
@@ -2917,7 +2917,7 @@ test "Trick battle host crosses each target once then returns both source actors
         combat.action_ticks = 100;
         combat.enemy_hp = @splat(if (case >= 4 and case < 6) @as(u16, 1) else 5000);
         if (protected) for (0..3) |enemy| {
-            combat.protection[combat.partyCount() + enemy] = 1;
+            combat.actor_conditions[combat.partyCount() + enemy].protection_rounds = 1;
         };
         var tape = Tape{};
         var draws = tape.init();
@@ -3108,7 +3108,7 @@ test "all normal journey Unite rosters finish every owner mixed rounds and rejec
             for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |enemy| combat.acted[enemy] = false;
         }
         if (protected) for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |enemy| {
-            combat.protection[enemy] = 2;
+            combat.actor_conditions[enemy].protection_rounds = 2;
         };
         const charges = members;
         var item_completed = false;

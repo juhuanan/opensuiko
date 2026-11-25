@@ -7,7 +7,7 @@ const runes = @import("../runes.zig");
 pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void {
     switch (state.phase) {
         .rune_service => {
-            nav.cycleLeftRight(&state.member, game.progress.party.len, input.left, input.right);
+            nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
             nav.cycleUpDown(&state.service_action, 3, input.field.menu_direction);
             if (input.field.action) {
                 state.target = state.member;
@@ -22,7 +22,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
             }
         },
         .rune_attach => {
-            nav.cycleLeftRight(&state.member, game.progress.party.len, input.left, input.right);
+            nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
             const slots = game.progress.party[state.member].inventory.count();
             state.slot = @min(state.slot, slots -| 1);
             if (slots > 0) {

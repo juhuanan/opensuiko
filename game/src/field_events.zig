@@ -396,6 +396,5 @@ pub const Session = state_mod.Session;
 
 // Internal restart unit only; this does not grant a pause-menu save during an event.
 const checkpoint = @import("field_events_checkpoint.zig");
-const begin = @import("field_events_session.zig");
 pub const Checkpoint = checkpoint.Checkpoint;
 pub const rebind = checkpoint.rebind;

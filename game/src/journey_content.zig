@@ -2,7 +2,6 @@ const std = @import("std");
 const field = @import("field");
 const battle = @import("battle");
 const journey = @import("journey");
-const journey_battle = @import("journey_battle");
 const shared_catalogue = @import("item_ledger").catalogue;
 const policies = @import("campaign_policies_data");
 const ui_font = @import("ui_font");
@@ -178,8 +177,8 @@ pub const Bundle = struct {
                     if (command.kind == .field_music and command.music == .infiltration and !has_infiltration_audio) return diagnostic.record(audio_route.FieldContent.manifest_path, error.MissingFieldMusic);
                     if (command.kind == .field_music and command.music == .wheel and !has_wheel_audio) return diagnostic.record(audio_route.FieldContent.manifest_path, error.MissingFieldMusic);
                     if (command.kind == .field_music and command.music == .mansion and !has_mansion_audio) return diagnostic.record(audio_route.FieldContent.manifest_path, error.MissingFieldMusic);
-                    if (command.kind == .auto_route and command.value != 255) journey.travel.validateContent(package.value, binding, program) catch |err| return diagnostic.record(BattleRooms.path, err);
-                    if (command.kind == .battle and !isSpecialBattleId(command.battle.?) and journey_battle.encounterIndex(combat.value, command.battle.?) == null)
+                    if (command.kind == .auto_route and command.value != 255) journey.travel.validateContent(package.value, binding.population.source, program) catch |err| return diagnostic.record(BattleRooms.path, err);
+                    if (command.kind == .battle and !isSpecialBattleId(command.battle.?) and journey.encounterIndex(combat.value, command.battle.?) == null)
                         return diagnostic.record(BattleRooms.path, error.UnknownEncounter);
                     const implicit_window = binding.content.hasFixedBoxes() and (command.kind == .open_box or command.kind == .open_fixed_box);
                     if (command.kind == .play_sound or implicit_window) {

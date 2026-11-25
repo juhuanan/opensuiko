@@ -477,16 +477,18 @@ fn validateProgram(content: runtime.Content, program: runtime.Program, dialogue:
     var has_battle = false;
     for (program.commands, 0..) |command, index| {
         if (command.kind == .scenery_stage or command.kind == .scenery_restore or command.kind == .scenery_append) {
+            const operation = command.sceneryOperation() orelse return error.UnsupportedBattleFieldCommand;
             if (!content.hasSceneryMutations() or
-                (command.kind == .scenery_restore and program.entry != .ordinary) or
+                (operation == .restore_instance and program.entry != .ordinary) or
                 (program.entry == .initialization and !content.actorInitialization(program))) return error.UnsupportedBattleFieldCommand;
             const room = motion_room orelse return error.UnsupportedBattleFieldCommand;
             const model = room.scenery_model orelse return error.InvalidFieldSceneryState;
-            const object = command.scenery_object.?;
-            if (command.kind == .scenery_append) {
-                if (object < model.initial_count or object >= model.objects.len) return error.UnknownFieldSceneryTemplate;
-            } else if (object >= field.scenery.max_instances or (model.objects.len == model.initial_count and object >= model.initial_count)) {
-                return error.UnknownFieldSceneryInstance;
+            switch (operation) {
+                .append_template => |template| if (template < model.initial_count or template >= model.objects.len)
+                    return error.UnknownFieldSceneryTemplate,
+                .stage_instance, .restore_instance => |instance| if (instance >= field.scenery.max_instances or
+                    (model.objects.len == model.initial_count and instance >= model.initial_count))
+                    return error.UnknownFieldSceneryInstance,
             }
             continue;
         }
@@ -607,35 +609,44 @@ fn validateProgram(content: runtime.Content, program: runtime.Program, dialogue:
             .party_restore, .party_dismiss => if (room_package == null or !with_campaign) return error.UnsupportedBattleFieldCommand,
             .room_transition => {
                 const package = room_package orelse return error.UnsupportedBattleFieldCommand;
-                const room = package.roomIndex(command.destination.?) orelse return error.UnknownEventRoom;
-                if (command.world_entry) |entry_id| {
-                    const entry = package.world_entries[package.worldEntryIndex(entry_id) orelse return error.MissingWorldEntry];
-                    if (!std.mem.eql(u8, entry.area, package.rooms[room].source_area orelse "")) return error.InvalidFieldEventTransition;
-                } else if (command.world_point) |point| {
-                    for (package.world_entries) |entry| {
-                        if (entry.point == point and std.mem.eql(u8, entry.area, package.rooms[room].source_area orelse "")) break;
-                    } else return error.MissingWorldEntry;
+                const transition = command.roomTransition() orelse return error.UnsupportedBattleFieldCommand;
+                const room = package.roomIndex(transition.destination) orelse return error.UnknownEventRoom;
+                const area = package.rooms[room].source_area orelse "";
+                switch (transition.world_entry) {
+                    .named => |id| {
+                        const entry = package.world_entries[package.worldEntryIndex(id) orelse return error.MissingWorldEntry];
+                        if (!std.mem.eql(u8, entry.area, area)) return error.InvalidFieldEventTransition;
+                    },
+                    .point => |point| {
+                        for (package.world_entries) |entry| {
+                            if (entry.point == point and std.mem.eql(u8, entry.area, area)) break;
+                        } else return error.MissingWorldEntry;
+                    },
+                    .reconcile => {},
                 }
-                if (!package.rooms[room].contains(command.x.?, command.y.?) or
-                    (!command.source_arrival and !package.rooms[room].canStand(command.x.?, command.y.?))) return error.InvalidFieldEventTransition;
+                if (!package.rooms[room].contains(transition.x, transition.y) or
+                    (!transition.source_arrival and !package.rooms[room].canStand(transition.x, transition.y))) return error.InvalidFieldEventTransition;
             },
             .world_transition => {
                 if (!with_campaign) return error.UnsupportedBattleFieldCommand;
                 const package = room_package orelse return error.UnsupportedBattleFieldCommand;
-                if (command.return_to_entry) {
-                    if (package.world_entries.len == 0) return error.MissingWorldEntry;
-                } else if (command.retain_world_region) {
-                    var matched = false;
-                    for (package.world_entries) |entry| {
-                        if (!std.mem.eql(u8, entry.area, (motion_room orelse return error.UnsupportedBattleFieldCommand).source_area orelse "")) continue;
-                        const room = package.roomIndex(entry.world_room) orelse return error.UnknownEventRoom;
-                        if (!package.rooms[room].contains(command.x.? * 8, command.y.? * 8)) return error.InvalidFieldEventTransition;
-                        matched = true;
-                    }
-                    if (!matched) return error.MissingWorldEntry;
-                } else {
-                    const room = package.roomIndex(command.destination.?) orelse return error.UnknownEventRoom;
-                    if (!package.rooms[room].contains(command.x.? * 8, command.y.? * 8)) return error.InvalidFieldEventTransition;
+                const transition = command.worldTransition() orelse return error.UnsupportedBattleFieldCommand;
+                switch (transition) {
+                    .return_to_entry => if (package.world_entries.len == 0) return error.MissingWorldEntry,
+                    .retained_region => |cell| {
+                        var matched = false;
+                        for (package.world_entries) |entry| {
+                            if (!std.mem.eql(u8, entry.area, (motion_room orelse return error.UnsupportedBattleFieldCommand).source_area orelse "")) continue;
+                            const room = package.roomIndex(entry.world_room) orelse return error.UnknownEventRoom;
+                            if (!package.rooms[room].contains(@as(i32, cell.x) * 8, @as(i32, cell.y) * 8)) return error.InvalidFieldEventTransition;
+                            matched = true;
+                        }
+                        if (!matched) return error.MissingWorldEntry;
+                    },
+                    .destination => |target| {
+                        const room = package.roomIndex(target.room) orelse return error.UnknownEventRoom;
+                        if (!package.rooms[room].contains(@as(i32, target.cell.x) * 8, @as(i32, target.cell.y) * 8)) return error.InvalidFieldEventTransition;
+                    },
                 }
             },
             .party_select => if (!with_campaign or room_package == null or program.entry != .ordinary) return error.UnsupportedBattleFieldCommand,

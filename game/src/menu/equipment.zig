@@ -6,7 +6,7 @@ const nav = @import("navigation.zig");
 pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) pause.Effect {
     switch (state.phase) {
         .equipment => {
-            nav.cycleLeftRight(&state.member, game.progress.party.len, input.left, input.right);
+            nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
             var slot_index: usize = @backingInt(state.equipment_slot);
             nav.cycleUpDown(&slot_index, 5, input.field.menu_direction);
             state.equipment_slot = @fromBackingInt(@intCast(slot_index));
@@ -41,7 +41,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) pause
         },
         .strength => {
             if (input.field.menu_direction != null) state.strength_details = !state.strength_details;
-            nav.cycleLeftRight(&state.member, game.progress.party.len, input.left, input.right);
+            nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
             if (input.field.action) state.phase = .root;
         },
         .character_notice => if (input.field.action) {

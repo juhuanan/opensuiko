@@ -7,8 +7,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
     switch (state.phase) {
         .blacksmith => {
             const count = game.progress.party.len;
-            if (input.left or input.field.menu_direction == .up) state.member = (state.member + count - 1) % count;
-            if (input.right or input.field.menu_direction == .down) state.member = (state.member + 1) % count;
+            nav.cycle(&state.member, count, input.left or input.field.menu_direction == .up, input.right or input.field.menu_direction == .down);
             if (input.field.action) {
                 _ = state.combat.?.sharpenPrice(state.member, state.service_limit) catch {
                     state.message = "I cannot sharpen this weapon further.";

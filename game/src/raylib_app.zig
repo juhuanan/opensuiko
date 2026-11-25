@@ -95,6 +95,15 @@ pub fn loadImage(allocator: std.mem.Allocator, root: []const u8, name: []const u
     return rl.loadImage(sentinel);
 }
 
+pub fn replaceTexture(slot: *?rl.Texture2D, replacement: ?rl.Texture2D) void {
+    if (slot.*) |texture| rl.unloadTexture(texture);
+    slot.* = replacement;
+}
+
+pub fn canvasSource(texture: rl.Texture2D) rl.Rectangle {
+    return .{ .x = 0, .y = 0, .width = @floatFromInt(texture.width), .height = @floatFromInt(-texture.height) };
+}
+
 pub fn loadPointCanvas(width: i32, height: i32) !rl.RenderTexture2D {
     const canvas = try rl.loadRenderTexture(width, height);
     rl.setTextureFilter(canvas.texture, .point);

@@ -4,8 +4,9 @@ pub const opening = @import("opening");
 pub const field_dialogue_view = @import("field_dialogue_view.zig");
 pub const opening_events = @import("opening_events");
 pub const opening_route = @import("route");
-const roster = @import("journey_roster");
-const battle_flow = @import("journey_battle");
+const save_data = @import("journey_save.zig");
+const roster = @import("journey_roster.zig");
+const battle_flow = @import("journey_battle.zig");
 pub const dice = @import("journey_dice.zig");
 pub const side_games = @import("journey_side_games.zig");
 pub const overload = @import("journey_overload.zig");
@@ -110,8 +111,8 @@ pub const ActiveFieldEvent = struct {
     session: *field_events.Session,
     binding: *const field_events.Binding,
 };
-pub const Reserves = @import("journey_save").Reserves;
-pub const SharedItems = @import("journey_save").SharedItems;
+pub const Reserves = [72]?battle.OwnedMember;
+pub const SharedItems = @FieldType(party_session.Snapshot, "shared");
 pub fn initialRoute(package: field.Package) opening_route.Controller {
     return opening_route.initial(package);
 }
@@ -129,7 +130,7 @@ pub const State = struct {
     menu: pause.State = .{},
     mode: Mode = .field,
     encounter_trigger: ?usize = null,
-    field_encounter_clock: Snapshot.EncounterClock = .{},
+    field_encounter_clock: battle_flow.FieldEncounterClock = .{},
     initialized_room_visit: ?u32 = null,
     checked_arrival_visit: ?u32 = null,
     room_battles: ?*field_events.BattleRooms = null,
@@ -140,7 +141,7 @@ pub const State = struct {
     side_game: ?side_games.Active = null,
     teleport_catalogue: ?*const travel.teleport.catalogue.Loaded = null,
     teleport_session: ?travel.teleport.Session = null,
-    optional_games: Snapshot.OptionalGames = .{},
+    optional_games: side_games.Records = .{},
     party_selection: ?party_selection.Active = null,
     item_overload: ?overload.Active = null,
     item_overload_sound: ?u16 = null,
@@ -638,18 +639,19 @@ pub fn usesOpeningSeed(start_room: []const u8) bool {
     return std.mem.eql(u8, start_room, "vaa_room_1") or std.mem.eql(u8, start_room, "vaa_room_2");
 }
 
-pub const Snapshot = @import("journey_save").Snapshot;
+pub const Snapshot = save_data.Snapshot;
+pub const encounterIndex = battle_flow.encounterIndex;
 
-pub const filename = @import("journey_save").filename;
-pub const backup_filename = @import("journey_save").backup_filename;
-pub const RestoreSource = @import("journey_save").RestoreSource;
-pub const validateSnapshotFields = @import("journey_save").validateSnapshotFields;
-pub const validateNestedSnapshotFields = @import("journey_save").validateNestedSnapshotFields;
-pub const decodeSnapshot = @import("journey_save").decodeSnapshot;
-pub const slotFilename = @import("journey_save").slotFilename;
-pub const save = @import("journey_save").save;
-pub const saveSlot = @import("journey_save").saveSlot;
-pub const restoreWithSource = @import("journey_save").restoreWithSource;
-pub const restoreSlotWithSource = @import("journey_save").restoreSlotWithSource;
-pub const restore = @import("journey_save").restore;
-pub const summaries = @import("journey_save").summaries;
+pub const filename = save_data.filename;
+pub const backup_filename = save_data.backup_filename;
+pub const RestoreSource = save_data.RestoreSource;
+pub const validateSnapshotFields = save_data.validateSnapshotFields;
+pub const validateNestedSnapshotFields = save_data.validateNestedSnapshotFields;
+pub const decodeSnapshot = save_data.decodeSnapshot;
+pub const slotFilename = save_data.slotFilename;
+pub const save = save_data.save;
+pub const saveSlot = save_data.saveSlot;
+pub const restoreWithSource = save_data.restoreWithSource;
+pub const restoreSlotWithSource = save_data.restoreSlotWithSource;
+pub const restore = save_data.restore;
+pub const summaries = save_data.summaries;

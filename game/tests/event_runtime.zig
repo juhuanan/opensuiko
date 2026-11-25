@@ -1227,3 +1227,94 @@ test "event_runtime converts a validated field effect into required execution fi
     invalid.effect = null;
     try std.testing.expect(invalid.fieldEffectOperation() == null);
 }
+
+test "event_runtime converts scenery commands into instance and template operations" {
+    const commands = try std.json.parseFromSlice([]runtime.Command, std.testing.allocator,
+        \\[
+        \\  {"kind":"scenery_stage","scenery_object":0},
+        \\  {"kind":"scenery_restore","scenery_object":42},
+        \\  {"kind":"scenery_append","scenery_object":65535},
+        \\  {"kind":"scenery_stage"},
+        \\  {"kind":"end_stream","scenery_object":1}
+        \\]
+    , .{});
+    defer commands.deinit();
+    try std.testing.expectEqualDeep(runtime.SceneryOperation{ .stage_instance = 0 }, commands.value[0].sceneryOperation().?);
+    try std.testing.expectEqualDeep(runtime.SceneryOperation{ .restore_instance = 42 }, commands.value[1].sceneryOperation().?);
+    try std.testing.expectEqualDeep(runtime.SceneryOperation{ .append_template = 65535 }, commands.value[2].sceneryOperation().?);
+    try std.testing.expect(commands.value[3].sceneryOperation() == null);
+    try std.testing.expect(commands.value[4].sceneryOperation() == null);
+}
+
+test "event_runtime decodes room and world transition destinations from existing JSON" {
+    const parsed = try std.json.parseFromSlice([]runtime.Command, std.testing.allocator,
+        \\[
+        \\  {"kind":"room_transition","destination":"inside","x":2040,"y":0,"arrival_facing":"left","source_arrival":true,"world_entry":"north_gate"},
+        \\  {"kind":"room_transition","destination":"inside","x":0,"y":2040,"world_point":0},
+        \\  {"kind":"world_transition","destination":"world_a","x":0,"y":255},
+        \\  {"kind":"world_transition","retain_world_region":true,"x":255,"y":0},
+        \\  {"kind":"world_transition","return_to_entry":true}
+        \\]
+    , .{});
+    defer parsed.deinit();
+    const commands = parsed.value;
+    try std.testing.expectEqualDeep(runtime.RoomTransition{
+        .origin = 0,
+        .destination = "inside",
+        .x = 2040,
+        .y = 0,
+        .facing = .left,
+        .source_arrival = true,
+        .world_entry = .{ .named = "north_gate" },
+    }, commands[0].roomTransition().?);
+    try std.testing.expectEqual(@as(u8, 0), commands[1].roomTransition().?.world_entry.point);
+    try std.testing.expectEqualDeep(runtime.WorldTransition{ .destination = .{ .room = "world_a", .cell = .{ .x = 0, .y = 255 } } }, commands[2].worldTransition().?);
+    try std.testing.expectEqualDeep(runtime.WorldTransition{ .retained_region = .{ .x = 255, .y = 0 } }, commands[3].worldTransition().?);
+    try std.testing.expect(commands[4].worldTransition().? == .return_to_entry);
+
+    var invalid = commands[0];
+    invalid.x = 7;
+    try std.testing.expect(invalid.roomTransition() == null);
+    invalid = commands[0];
+    invalid.world_point = 0;
+    try std.testing.expect(invalid.roomTransition() == null);
+    invalid = commands[2];
+    invalid.y = 256;
+    try std.testing.expect(invalid.worldTransition() == null);
+    invalid = commands[3];
+    invalid.destination = "world_a";
+    try std.testing.expect(invalid.worldTransition() == null);
+    invalid = commands[4];
+    invalid.y = 0;
+    try std.testing.expect(invalid.worldTransition() == null);
+}
+
+test "event_runtime distinguishes actor placement, cell movement and source hero facing" {
+    const placement = runtime.Command{ .kind = .place_actor, .actor = "guard", .x = 0, .if_actor_constructed = true };
+    try std.testing.expectEqualDeep(runtime.ActorPlacement{
+        .actor = "guard",
+        .x = 0,
+        .y = null,
+        .if_constructed = true,
+    }, placement.actorPlacement().?);
+    var invalid = placement;
+    invalid.y = 7;
+    try std.testing.expect(invalid.actorPlacement() == null);
+    invalid = placement;
+    invalid.x = null;
+    try std.testing.expect(invalid.actorPlacement() == null);
+
+    const move = runtime.Command{ .kind = .actor_y, .actor = "guard", .value = 255, .origin = 2 };
+    try std.testing.expectEqualDeep(runtime.ActorAxisMove{ .actor = "guard", .axis = .y, .cell = 255, .origin = 2 }, move.actorAxisMove().?);
+    const restore = runtime.Command{ .kind = .actor_motion, .actor = "guard", .value = 0, .if_actor_constructed = true };
+    try std.testing.expectEqualDeep(runtime.ActorMotionRestore{ .actor = "guard", .speed = 0, .if_constructed = true }, restore.actorMotionRestore().?);
+
+    for ([_]runtime.ActorFacing.Variant{ .up, .right, .down, .left }, 0..) |expected, code| {
+        const turn = runtime.Command{ .kind = .source_hero_transition, .transition = @intCast(code) };
+        const facing = turn.actorFacing().?;
+        try std.testing.expectEqualStrings("hero", facing.actor);
+        try std.testing.expectEqual(expected, facing.variant);
+    }
+    const turn = runtime.Command{ .kind = .actor_transition, .actor = "guard", .transition = 2 };
+    try std.testing.expectEqual(runtime.Direction.left, turn.actorFacing().?.variant.direction());
+}

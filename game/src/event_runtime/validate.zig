@@ -211,7 +211,7 @@ pub fn validateCommand(self: Content, command: Command, count: usize, index: usi
             command.push.?.validate() catch break :push_valid false;
             break :push_valid semanticEqual(command, Command{ .kind = .camera_push, .push = command.push, .wait = .{ .kind = .camera_push, .id = "camera_push" }, .origin = command.origin });
         },
-        .scenery_stage, .scenery_restore, .scenery_append => self.hasSceneryMutations() and command.scenery_object != null and
+        .scenery_stage, .scenery_restore, .scenery_append => self.hasSceneryMutations() and command.sceneryOperation() != null and
             semanticEqual(command, Command{ .kind = command.kind, .scenery_object = command.scenery_object, .origin = command.origin }),
         .sequence_input => self.hasSceneryMutations() and command.flag != null and command.flag.?.mask == 255 and
             command.parameter != null and command.value != null and command.value.? <= 1 and
@@ -235,19 +235,12 @@ pub fn validateCommand(self: Content, command: Command, count: usize, index: usi
         .warehouse_deposit => self.hasCharacters() and command.character != null and
             semanticEqual(command, Command{ .kind = .warehouse_deposit, .character = command.character, .origin = command.origin }),
         .shared_inventory_edit => command.character == null and command.inventory != null and command.wait == null,
-        .room_transition => command.destination != null and command.x != null and command.y != null and
-            command.x.? >= 0 and command.x.? <= 2040 and @mod(command.x.?, 8) == 0 and
-            command.y.? >= 0 and command.y.? <= 2040 and @mod(command.y.?, 8) == 0,
-        .world_transition => if (command.return_to_entry)
-            self.hasWorldEntries() and command.destination == null and command.x == null and command.y == null
-        else
-            (command.destination != null or (self.hasWorldEntries() and command.retain_world_region)) and command.x != null and command.y != null and
-                command.x.? >= 0 and command.x.? <= 255 and command.y.? >= 0 and command.y.? <= 255,
-        .actor_transition => command.actor != null and command.transition != null,
+        .room_transition => command.roomTransition() != null,
+        .world_transition => command.worldTransition() != null,
+        .actor_transition => command.actorFacing() != null,
         .next_variant, .previous_variant, .wait_variant, .release_actor => command.actor != null,
         .set_variant => command.actor != null and command.variant != null,
-        .place_actor => self.hasActorPositions() and command.actor != null and self.actor(command.actor.?) != null and
-            (command.x != null or command.y != null) and command.wait == null and command.requires == null and
+        .place_actor => self.hasActorPositions() and command.actorPlacement() != null and self.actor(command.actor.?) != null and
             (command.x == null or command.y == null or (self.hasFieldEffects() and semanticEqual(command, Command{
                 .kind = .place_actor,
                 .actor = command.actor,
@@ -255,10 +248,9 @@ pub fn validateCommand(self: Content, command: Command, count: usize, index: usi
                 .y = command.y,
                 .if_actor_constructed = command.if_actor_constructed,
                 .origin = command.origin,
-            }))) and
-            (if (command.x) |x| x >= 0 and x <= 2040 and @mod(x, 8) == 0 else true) and
-            (if (command.y) |y| y >= 0 and y <= 2040 and @mod(y, 8) == 0 else true),
-        .actor_motion, .actor_x, .actor_y => command.actor != null and command.value != null,
+            }))),
+        .actor_motion => command.actorMotionRestore() != null,
+        .actor_x, .actor_y => command.actorAxisMove() != null,
         .spawn_actor => self.hasSceneActors() and command.actor != null and self.actor(command.actor.?) != null and
             semanticEqual(command, Command{ .kind = .spawn_actor, .actor = command.actor, .origin = command.origin }),
         .create_double => command.actor != null and command.character != null and command.x != null and command.y != null,
@@ -329,10 +321,10 @@ pub fn validateCommand(self: Content, command: Command, count: usize, index: usi
     };
     if (!valid) return error.InvalidEventCommand;
     if (command.return_to_entry and (!self.hasWorldEntries() or command.kind != .world_transition)) return error.InvalidEventCommand;
-    if (command.retain_world_region and (!self.hasWorldEntries() or command.kind != .world_transition or command.return_to_entry or command.destination != null)) return error.InvalidEventCommand;
+    if (command.retain_world_region and (!self.hasWorldEntries() or command.kind != .world_transition)) return error.InvalidEventCommand;
     if (command.world_point != null and (!self.hasWorldEntries() or command.kind != .room_transition)) return error.InvalidEventCommand;
     if (command.world_entry) |entry| {
-        if (!self.hasWorldEntries() or command.kind != .room_transition or command.world_point != null) return error.InvalidEventCommand;
+        if (!self.hasWorldEntries() or command.kind != .room_transition) return error.InvalidEventCommand;
         try validId(entry);
     }
     if (command.kind != .service and (command.shop_items != null or command.facility != null)) return error.InvalidEventCommand;

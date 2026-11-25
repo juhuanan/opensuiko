@@ -22,7 +22,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
             }
         },
         .buy_member => {
-            nav.cycleLeftRight(&state.member, game.progress.party.len, input.left, input.right);
+            nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
             const stock = state.shopStock(game.item_rules.?);
             const stock_count = stock.len;
             if (stock_count > 0) {
@@ -53,7 +53,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
             }
         },
         .sell_items => {
-            nav.cycleLeftRight(&state.member, game.progress.party.len, input.left, input.right);
+            nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
             const slots = game.progress.party[state.member].inventory.count();
             state.slot = @min(state.slot, slots -| 1);
             if (slots > 0) {

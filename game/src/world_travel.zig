@@ -422,10 +422,13 @@ pub const State = struct {
         const result = try event.tick(access.exit, &self.link.field_state, false);
         if (result != .blocked) return .none;
         const pending = event.instance.?.pending orelse return error.InvalidFieldEventReceipt;
-        const effect = pending.batch.effects[0];
-        if (pending.batch.effect_count != 1 or effect.kind != .world_transition or effect.destination == null or !std.mem.eql(u8, effect.destination.?, "region_b") or effect.x != 86 or effect.y != 85) return error.InvalidFieldEventReceipt;
+        if (pending.batch.effect_count != 1) return error.InvalidFieldEventReceipt;
+        const transition = pending.batch.effects[0].worldTransition() orelse return error.InvalidFieldEventReceipt;
+        if (transition != .destination) return error.InvalidFieldEventReceipt;
+        const target = transition.destination;
+        if (!std.mem.eql(u8, target.room, "region_b") or target.cell.x != 86 or target.cell.y != 85) return error.InvalidFieldEventReceipt;
         const region = if (self.region_b) |binding| binding.map else self.link.content;
-        if (!std.mem.eql(u8, region.id, "region_b") or region.return_camera.x != effect.x.? or region.return_camera.y != effect.y.?) return error.UnsupportedVillageRoute;
+        if (!std.mem.eql(u8, region.id, "region_b") or region.return_camera.x != target.cell.x or region.return_camera.y != target.cell.y) return error.UnsupportedVillageRoute;
         const story = self.link.field_state.progress.story.scenario orelse return error.MissingSourceStoryState;
         if (story.scenario[39] & 0x10 == 0) return error.InvalidFieldEventStory;
         var committed_story = story;
@@ -436,7 +439,7 @@ pub const State = struct {
         };
         const outcome = (try self.routeTransition(cue, &committed_story)) orelse return error.UnsupportedVillageRoute;
         if (outcome.field_destination or outcome.reconstruction_required or outcome.continuation != .world_ready) return error.UnsupportedVillageRoute;
-        if (!std.mem.eql(u8, outcome.id(), "region_b") or outcome.spawn_x != effect.x.? or outcome.spawn_y != effect.y.?) return error.UnsupportedVillageRoute;
+        if (!std.mem.eql(u8, outcome.id(), "region_b") or outcome.spawn_x != target.cell.x or outcome.spawn_y != target.cell.y) return error.UnsupportedVillageRoute;
         try self.activateRegion("region_b");
         try self.link.travel.leaveField(region);
         if (self.link.travel.camera.x != outcome.spawn_x or self.link.travel.camera.y != outcome.spawn_y) return error.UnsupportedVillageRoute;

@@ -1,14 +1,15 @@
 //! Field callback ownership for headquarters party selection.
+const State = @import("journey.zig").State;
 const field = @import("field");
 const std = @import("std");
 const battle = @import("battle");
 const events = @import("field_events");
 const party = @import("party_session");
-const roster = @import("journey_roster");
+const roster = @import("journey_roster.zig");
 pub const selector = party.selector;
 pub const Active = struct { receipt: events.Receipt, menu: selector.Selector = .{}, windows: selector.Windows = .{} };
 
-pub fn inspect(state: anytype, id: []const u8) !selector.Details {
+pub fn inspect(state: *const State, id: []const u8) !selector.Details {
     for (state.combat.progress.party, 0..) |member, index| if (std.mem.eql(u8, member.id, id)) {
         return selector.Details.derive(state.combat.*, state.combat.ownedMember(index), state.extras[index]);
     };
@@ -27,7 +28,7 @@ pub const View = struct {
     active_count: usize = 0,
     forced_count: usize = 0,
 
-    pub fn read(self: *View, state: anytype) !selector.Roster {
+    pub fn read(self: *View, state: *const State) !selector.Roster {
         const catalog = state.party_catalog orelse return error.MissingPartyCatalogue;
         const story = state.combat.progress.story.scenario orelse return error.MissingSourceStoryState;
         const owner = state.field_event orelse return error.MissingFieldPartySelectRequest;
@@ -64,7 +65,7 @@ pub const View = struct {
     }
 };
 
-fn validateOwner(state: anytype) !Active {
+fn validateOwner(state: *const State) !Active {
     const active = state.party_selection orelse return error.MissingFieldPartySelectRequest;
     const owner = state.field_event orelse return error.MissingFieldPartySelectRequest;
     if (state.mode != .field or state.menu.phase != .closed or state.dice_game != null or state.auto_travel != null or
@@ -78,7 +79,7 @@ fn validateOwner(state: anytype) !Active {
     return active;
 }
 
-pub fn begin(state: anytype) !void {
+pub fn begin(state: *State) !void {
     if (state.mode != .field or state.menu.phase != .closed or state.party_selection != null or
         state.dice_game != null or state.auto_travel != null) return error.GameBusy;
     const owner = state.field_event orelse return error.MissingFieldPartySelectRequest;
@@ -98,7 +99,7 @@ pub fn begin(state: anytype) !void {
     _ = try validateOwner(state);
 }
 
-fn resumeSelection(state: anytype, receipt: events.Receipt) !void {
+fn resumeSelection(state: *State, receipt: events.Receipt) !void {
     const owner = state.field_event.?;
     var members: [6]battle.Member = undefined;
     var draft: field.game_state.Progress = undefined;
@@ -108,7 +109,7 @@ fn resumeSelection(state: anytype, receipt: events.Receipt) !void {
     state.party_selection = null;
 }
 
-fn commit(state: anytype, active: *Active) !void {
+fn commit(state: *State, active: *Active) !void {
     const request = active.menu.pending orelse return error.MissingSelectorRequest;
     const owner = state.field_event.?;
     const rooms = state.room_battles orelse return error.MissingFieldPartySelectOwner;
@@ -170,7 +171,7 @@ fn commit(state: anytype, active: *Active) !void {
     active.menu = next_menu;
 }
 
-pub fn tick(state: anytype, controls: selector.Controls) !void {
+pub fn tick(state: *State, controls: selector.Controls) !void {
     var active = try validateOwner(state);
     var view: View = .{};
     const facts = try view.read(state);

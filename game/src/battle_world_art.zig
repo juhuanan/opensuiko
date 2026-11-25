@@ -486,7 +486,7 @@ fn cActorSample(data: Data, state: *const battle.State, index: usize) Visual {
 pub fn actorSample(data: Data, state: *const battle.State, index: usize) Visual {
     if (state.revivalAge(index)) |age| {
         const spec = state.rules.automatic_revival.?;
-        const instance = state.revivals[index].?;
+        const instance = state.party_knockouts[index].revival.?;
         const pose = if (age < spec.recovery_start) oncePose(data.actors[index], 3, age) else oncePose(data.actors[index], 2, age - spec.recovery_start);
         return .{ .sample = .{ .pose = pose, .position = instance.origin, .offset = instance.screen_offset } };
     }
@@ -629,7 +629,7 @@ pub const quad_capacity = 86;
 pub const List = struct { shadows: [6]p.Shadow = undefined, quads: [quad_capacity]Quad = undefined, length: usize = 0 };
 pub fn actorLayout(data: Data, state: battle.State, index: usize) battle.ActorLayout {
     const visual = actorSample(data, &state, index);
-    const shift = state.actor_world_offsets[index];
+    const shift = state.actor_transforms[index].world_offset;
     const position: p.Vec3 = battle.layout.departurePosition(&state, index) orelse state.uniteActorPosition(index) orelse state.spellActorPosition(index) orelse .{ .x = visual.sample.position.x + shift.x, .y = visual.sample.position.y + shift.y, .z = visual.sample.position.z + shift.z };
     var point = p.project(data.camera, position);
     // Perspective scaling reuses the port's billboard policy; the source camera/anchors remain explicit.

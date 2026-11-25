@@ -1,13 +1,13 @@
 //! Battle reward readiness, money/experience awards and drop placement.
-//! Parameterized over the battle state so it does not import battle.zig.
 const std = @import("std");
 const field = @import("field");
+const State = @import("battle.zig").State;
 
-pub fn rewardReady(state: anytype) bool {
+pub fn rewardReady(state: *const State) bool {
     return state.dropped_item == null or state.drop_received or state.loot_declined;
 }
 
-pub fn commitRewards(state: anytype) void {
+pub fn commitRewards(state: *State) void {
     if (state.rewards_committed) return;
     state.rewards_committed = true;
     state.reward_levels = state.levels;
@@ -49,7 +49,7 @@ pub fn commitRewards(state: anytype) void {
     }
 }
 
-pub fn experienceAward(state: anytype, index: usize) u32 {
+pub fn experienceAward(state: *const State, index: usize) u32 {
     if (state.content.encounters[state.encounter].reward_policy == .none) return 0;
     const rules = state.content.systems orelse return state.content.encounters[state.encounter].experience_per_member;
     if (!state.participates(index)) return 0;

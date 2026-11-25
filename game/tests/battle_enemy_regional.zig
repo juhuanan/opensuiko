@@ -170,7 +170,7 @@ test "D3 Creeper ordinary counter vs Suikomi delay cross_side_pending shrink_spi
         try std.testing.expectEqual(battle.Phase.battle_menu, s.state.phase);
         if (s.members[0].hp == 4000) std.debug.print("D3_ord cursor={d} hp={d},{d},{d} enemy={d}\n", .{ draws.cursor, s.members[0].hp, s.members[1].hp, s.members[2].hp, s.state.enemy_hp[0] });
         try std.testing.expect(s.members[0].hp < 4000);
-        try std.testing.expectEqual(@as(i32, 4096), s.state.actor_sizes[0]);
+        try std.testing.expectEqual(@as(i32, 4096), s.state.actor_transforms[0].scale_q12);
     }
 
     // 2. Suikomi special (>= 51) holds second Creeper in area_d_8 via cross_side_pending, shrinks, deals 3 hits, expands and commits lethal KO.
@@ -199,22 +199,22 @@ test "D3 Creeper ordinary counter vs Suikomi delay cross_side_pending shrink_spi
                 if (clock.remaining == 20 and s.state.enemyCount() > 1 and !s.state.acted[s.state.partyCount() + 1]) saw_delay = true;
                 if (clock.cross_side_pending and !s.state.acted[s.state.partyCount() + 1]) saw_cross_hold = true;
             }
-            const sz = s.state.actor_sizes[0];
+            const sz = s.state.actor_transforms[0].scale_q12;
             if (sz < 4096 and !saw_expand) {
                 saw_shrink = true;
                 min_size = @min(min_size, sz);
-                if (s.state.actor_node_angles[0][1] == 1 and s.state.actor_node_angles[0][0] != 0) saw_spin = true;
+                if (s.state.actor_transforms[0].node_angles[1] == 1 and s.state.actor_transforms[0].node_angles[0] != 0) saw_spin = true;
             }
             if (saw_shrink and sz > min_size) saw_expand = true;
-            if (s.state.hp(0) == 0 and s.state.actor_sizes[0] < 4096 and !s.state.knockout_pending[0]) held_actor_down_early = true;
+            if (s.state.hp(0) == 0 and s.state.actor_transforms[0].scale_q12 < 4096 and !s.state.party_knockouts[0].pending) held_actor_down_early = true;
             if (s.state.phase != .resolving) break;
         }
         try std.testing.expectEqual(battle.Phase.battle_menu, s.state.phase);
         try std.testing.expect(!held_actor_down_early);
         try std.testing.expect(saw_delay and saw_cross_hold and saw_shrink and saw_spin and saw_expand);
         try std.testing.expect(min_size < 256);
-        try std.testing.expectEqual(@as(i32, 4096), s.state.actor_sizes[0]);
-        try std.testing.expectEqualDeep([3]i16{ 0, 0, 0 }, s.state.actor_node_angles[0]);
+        try std.testing.expectEqual(@as(i32, 4096), s.state.actor_transforms[0].scale_q12);
+        try std.testing.expectEqualDeep([3]i16{ 0, 0, 0 }, s.state.actor_transforms[0].node_angles);
         try std.testing.expect(!s.state.participates(0));
         for ([_]u16{ 1288, 1399, 1400, 2079 }) |sid| try std.testing.expect(sounds.contains(sid));
     }
@@ -223,7 +223,7 @@ test "D3 Creeper ordinary counter vs Suikomi delay cross_side_pending shrink_spi
     {
         const s = try f.setupState(alloc, "area_d_7");
         prepareDefendingParty(s.state, s.members, 2000);
-        s.state.protection[0] = 1;
+        s.state.actor_conditions[0].protection_rounds = 1;
         var values: [512]u15 = @splat(20051);
         values[1] = 20051;
         var draws = battle.systems.Draws{ .values = &values };
@@ -289,8 +289,8 @@ test "F2 Shadow Man front scan camera shake 80-tick fade tail_return on Hero and
         const s = try f.setupState(alloc, "area_f_4");
         prepareDefendingParty(s.state, s.members, 2000);
         s.state.actions[0] = .defend;
-        s.state.protection[0] = 1; // shadow_man is unavoidable_attack & direct (no cover/parry), protection negates HP if buffered
-        s.state.protection[0] = 0;
+        s.state.actor_conditions[0].protection_rounds = 1; // shadow_man is unavoidable_attack & direct (no cover/parry), protection negates HP if buffered
+        s.state.actor_conditions[0].protection_rounds = 0;
         s.members[0].hp = 1;
         var values: [512]u15 = @splat(51);
         var draws = battle.systems.Draws{ .values = &values };
@@ -339,7 +339,7 @@ test "F2 Shadow Man front scan camera shake 80-tick fade tail_return on Hero and
             if (s.state.unite_vm.scripted_actors[0] != null) if (s.state.unite_vm.actors[0].machine) |m| {
                 if (m.instructions.ptr == f.actors.programs.find("party_melee/hero/return").?.instructions.ptr) {
                     saw_tail_return = true;
-                    if (!s.state.knockout_pending[0]) early_ko = true;
+                    if (!s.state.party_knockouts[0].pending) early_ko = true;
                 }
             };
             if (s.state.phase != .resolving) break;
@@ -525,7 +525,7 @@ test "F3 Mirage vs H2 Mirage separate qualification any_row front ordinary rear 
     {
         const s = try f.setupState(alloc, "area_h_4");
         prepareDefendingParty(s.state, s.members, 2000);
-        s.state.accuracy_reduced[0] = false;
+        s.state.actor_conditions[0].accuracy_reduced = false;
         const values: [512]u15 = @splat(99); // Pass target selection, then miss the accuracy check.
         var draws = battle.systems.Draws{ .values = &values };
         var saw_miss = false;
@@ -621,7 +621,7 @@ test "regional playback consumes changed target and actor settings from its bund
     }
     try std.testing.expect(saw_shrink and saw_expansion and saw_expansion_target);
     try std.testing.expectEqual(battle.Phase.battle_menu, creeper.state.phase);
-    try std.testing.expectEqual(@as(i32, 4096), creeper.state.actor_sizes[0]);
+    try std.testing.expectEqual(@as(i32, 4096), creeper.state.actor_transforms[0].scale_q12);
 
     const shadow = try f.setupState(alloc, "area_f_4");
     prepareDefendingParty(shadow.state, shadow.members, 2000);

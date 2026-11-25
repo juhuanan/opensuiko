@@ -81,7 +81,7 @@ fn uniteApplyDamage(context: *anyopaque, target: unite_systems.Target, amount: u
     const index = target.toCombatantIndex(ctx.state.partyCount()) orelse return;
     if (index >= ctx.state.partyCount() + ctx.state.enemyCount()) return;
     const before_hp = ctx.state.hp(index);
-    const applied = if (ctx.state.protection[index] > 0) 0 else amount;
+    const applied = if (ctx.state.actor_conditions[index].protection_rounds > 0) 0 else amount;
     const origin = ctx.state.uniteReactionOriginQ12(index);
     if (ctx.state.active) |*effect| {
         effect.affected |= @as(u16, 1) << @intCast(index);
@@ -162,7 +162,7 @@ pub fn uniteView(self: *const State, party: *[6]unite_systems.Slot, enemies: *[6
         const member = self.progress.party[index];
         const slot_status: unite_systems.StatusFlags = .{
             .poisoned = member.status == .poisoned,
-            .asleep = self.asleep[index] > 0,
+            .asleep = self.actor_conditions[index].sleep_turns > 0,
             .recovering = self.unbalanced[index] > 0,
         };
         party[index] = .{
@@ -344,8 +344,8 @@ pub fn releaseUniteFor(self: *State, actor: usize) void {
         if (self.unite_scene) |scene| if (scene.owner == owner) {
             self.unite_scene = null;
             for (self.partyCount()..self.partyCount() + self.enemyCount()) |target| {
-                self.actor_node_angles[target][0] = 0;
-                self.actor_node_angles[target][2] = 0;
+                self.actor_transforms[target].node_angles[0] = 0;
+                self.actor_transforms[target].node_angles[2] = 0;
             }
         };
         if (self.trick_wave) |wave| {
@@ -370,7 +370,7 @@ fn resolveLiveUniteSequence(self: *State, boundary: *unite_systems.Boundary) voi
     const queue = &boundary.sequence.?;
     // shortcut: rotating a live Master–Pupil body needs the rotated packet footprint.
     for (boundary.participantsSlice()) |member| if (self.unite_vm.owns(member) and
-        !std.mem.eql(i16, &self.actor_node_angles[member], &.{ 0, 0, 0 }))
+        !std.mem.eql(i16, &self.actor_transforms[member].node_angles, &.{ 0, 0, 0 }))
     {
         self.replay_unsupported = .coordinator_action;
         return;

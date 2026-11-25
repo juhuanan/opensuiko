@@ -286,7 +286,7 @@ test "Enemy magic live battle callback preserves protected lethal and exhausted-
         combat.progress.party[0].max_hp = 5000;
         combat.progress.party[0].hp = if (scenario >= 2) 1 else 5000;
         if (scenario == 3) combat.progress.party[0].inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
-        if (scenario == 1) combat.protection[0] = 2;
+        if (scenario == 1) combat.actor_conditions[0].protection_rounds = 2;
         combat.coordinator = .{ .stage = .await_order, .current_actor = owner, .completed = false, .cached = .round_end, .elapsed = 0 };
         const hp = combat.hp(0);
         const rune: u8 = combat.runeByteFor(0) orelse 0;
@@ -455,7 +455,7 @@ test "Source Kobold scans wait for a pending front knockout before skipping" {
             member.hp = 0;
             member.status = .unconscious;
         }
-        combat.knockout_pending[0] = true;
+        combat.party_knockouts[0].pending = true;
         if (active_effect) combat.active = .{ .actor = 0, .target = 0, .kind = .defend };
         var draws = battle.systems.Draws{ .values = &.{ 51, 0, 0 } };
         combat.replay_draws = &draws;
@@ -464,7 +464,7 @@ test "Source Kobold scans wait for a pending front knockout before skipping" {
         try std.testing.expect(!combat.acted[owner]);
         try std.testing.expectEqual(@as(usize, 0), draws.cursor);
         combat.active = null;
-        combat.knockout_pending[0] = false;
+        combat.party_knockouts[0].pending = false;
         if (restored) {
             combat.progress.party[0].hp = 100;
             combat.progress.party[0].status = .healthy;
@@ -607,7 +607,7 @@ test "Enemy magic retains a target knocked out during its wait" {
     try std.testing.expect(saw_reaction and !combat.unite_vm.hasEnemyMagic());
     try std.testing.expectEqual(@as(usize, 3), draws.cursor);
     try std.testing.expect(combat.enemy_magic_damage[0] != null and combat.hp(0) == 0);
-    try std.testing.expect(!combat.knockout_pending[0] and combat.revivals[0] == null);
+    try std.testing.expect(!combat.party_knockouts[0].pending and combat.party_knockouts[0].revival == null);
     try std.testing.expect(combat.progress.party[0].inventory.slots[0] != null and combat.progress.party[0].status == .unconscious);
     try std.testing.expectEqual(combat.partyProfile(0).revival_art.?.down.frames[0].source_pose, battle.layout.actorLayout(combat, 0).source_pose);
 }
@@ -694,7 +694,7 @@ test "Enemy magic cancels a retained decision when its owner is knocked out" {
         if (active_effect) {
             try std.testing.expect(combat.active.?.kind == .defend);
         } else {
-            try std.testing.expect(combat.revivals[1] != null);
+            try std.testing.expect(combat.party_knockouts[1].revival != null);
         }
     }
 }
@@ -799,8 +799,8 @@ test "Enemy magic status rounds retain all six recipients through protected cont
         }
         combat.promoteRearMembers();
         try std.testing.expectEqual(battle.Row.front, combat.partyRow(target));
-        combat.asleep[target] = @intFromBool(sleeping);
-        combat.protection[target] = if (protected) 2 else 0;
+        combat.actor_conditions[target].sleep_turns = @intFromBool(sleeping);
+        combat.actor_conditions[target].protection_rounds = if (protected) 2 else 0;
         const computed = actors.value.enemy_magic.?.damage(combat.stats(owner).magic, combat.stats(target).magic, 0, 50);
         var draws = battle.systems.Draws{ .values = &.{ 51, 16712, 50 } };
         var contact = false;
@@ -819,8 +819,7 @@ test "Enemy magic status rounds retain all six recipients through protected cont
                     try std.testing.expectEqualDeep(before.unite_vm, combat.unite_vm);
                     try std.testing.expectEqualDeep(before.coordinator, combat.coordinator);
                     try std.testing.expectEqualDeep(before.enemy_magic_damage, combat.enemy_magic_damage);
-                    try std.testing.expectEqualDeep(before.asleep, combat.asleep);
-                    try std.testing.expectEqualDeep(before.protection, combat.protection);
+                    try std.testing.expectEqualDeep(before.actor_conditions, combat.actor_conditions);
                     try std.testing.expectEqual(before.camera_ticks, combat.camera_ticks);
                     try std.testing.expectEqual(draws.cursor, short.cursor);
                     rollback = true;
@@ -835,14 +834,14 @@ test "Enemy magic status rounds retain all six recipients through protected cont
                 try std.testing.expectEqual(amount, combat.enemy_magic_damage[target].?.amount);
                 for (combat.enemy_magic_damage, 0..) |notice, index| if (index != target) try std.testing.expect(notice == null);
             }
-            try std.testing.expectEqual(@as(u8, @intFromBool(sleeping)), combat.asleep[target]);
+            try std.testing.expectEqual(@as(u8, @intFromBool(sleeping)), combat.actor_conditions[target].sleep_turns);
             if (combat.phase != .resolving) break;
         }
         try std.testing.expect(contact and rollback and frames > 100);
         try std.testing.expectEqual(.battle_menu, combat.phase);
         try std.testing.expectEqual(@as(u32, 2), combat.round);
         try std.testing.expectEqual(@as(usize, 3), draws.cursor);
-        try std.testing.expectEqual(@as(u8, if (protected) 1 else 0), combat.protection[target]);
+        try std.testing.expectEqual(@as(u8, if (protected) 1 else 0), combat.actor_conditions[target].protection_rounds);
         try std.testing.expectEqual(if (mode == 3) h.field.game_state.Status.poisoned else .healthy, members[target].status);
         try std.testing.expect(!combat.unite_vm.hasActors() and combat.active == null);
     }

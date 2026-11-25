@@ -38,8 +38,7 @@ pub const MoviePlayer = struct {
 
     pub fn deinit(self: *MoviePlayer) void {
         self.stop();
-        if (self.texture) |tex| rl.unloadTexture(tex);
-        self.texture = null;
+        raylib_app.replaceTexture(&self.texture, null);
     }
 
     pub fn stop(self: *MoviePlayer) void {
@@ -157,13 +156,8 @@ pub const MoviePlayer = struct {
         const jpeg_buf = try self.allocator.alloc(u8, max_size);
         errdefer if (jpeg_buf_owned) self.allocator.free(jpeg_buf);
 
-        if (self.texture) |tex| {
-            if (tex.width != width or tex.height != height) {
-                rl.unloadTexture(tex);
-                self.texture = null;
-            }
-        }
-        if (self.texture == null) {
+        const reuse_texture = if (self.texture) |tex| tex.width == width and tex.height == height else false;
+        if (!reuse_texture) {
             const pixels = try self.allocator.alloc(u8, @as(usize, width) * @as(usize, height) * 4);
             defer self.allocator.free(pixels);
             @memset(pixels, 0);
@@ -175,7 +169,7 @@ pub const MoviePlayer = struct {
                 .format = .uncompressed_r8g8b8a8,
             });
             rl.setTextureFilter(tex, .point);
-            self.texture = tex;
+            raylib_app.replaceTexture(&self.texture, tex);
         }
 
         if (self.audio_ready) {

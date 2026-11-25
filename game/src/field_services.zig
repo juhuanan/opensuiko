@@ -1,7 +1,8 @@
 //! Field dialogue and service-phase handling.
+const field = @import("field.zig");
 const std = @import("std");
 
-pub fn handleDialogue(state: anytype, room: anytype, input: anytype) bool {
+pub fn handleDialogue(state: *field.State, room: field.Room, input: field.Input) bool {
     if (state.dialogue) |*dialogue| {
         if (input.cancel) {
             state.dialogue = null;

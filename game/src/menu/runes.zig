@@ -20,7 +20,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
     const count = game.progress.party.len;
     switch (state.phase) {
         .rune => {
-            nav.cycleLeftRight(&state.member, count, input.left, input.right);
+            nav.cycle(&state.member, count, input.left, input.right);
             if (input.left or input.right) selectFieldSpell(state);
             const slots: usize = if (state.travel_context) 4 else 5;
             nav.cycleUpDown(&state.slot, slots, input.field.menu_direction);

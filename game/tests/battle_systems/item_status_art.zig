@@ -1,7 +1,6 @@
 const std = @import("std");
 const h = @import("helpers.zig");
 const battle = h.battle;
-const status = @import("battle_status");
 const allocator = h.allocator;
 
 test "Item status art validates the source burst and omits it from legacy packets" {
@@ -75,7 +74,7 @@ test "Item status art retains poison phase and bursts only the highest balloon t
                 combat.camera_ticks += 1;
                 combat.presentation_tick += 1;
                 combat.advanceMedicine();
-                status.advanceIcons(&combat);
+                combat.advanceStatusIcons();
                 const item = combat.medicine_action.?;
                 if (item.ticks == timing.impact_tick) {
                     const impact = combat.recentItemImpact(target).?;
@@ -149,7 +148,7 @@ test "Item status art leaves ineffective cures and interrupted symbols attached"
         for (0..start + 3) |_| {
             combat.camera_ticks += 1;
             combat.advanceMedicine();
-            status.advanceIcons(&combat);
+            combat.advanceStatusIcons();
         }
         if (interrupted) {
             const recipient = members[1];
@@ -158,8 +157,8 @@ test "Item status art leaves ineffective cures and interrupted symbols attached"
             try std.testing.expect(combat.medicine_action.?.interrupted(1));
             try std.testing.expect(!combat.coordinatorLocked(1));
             members[1] = recipient;
-            combat.knockout_pending[1] = false;
-            combat.knockout_status[1] = null;
+            combat.party_knockouts[1].pending = false;
+            combat.party_knockouts[1].prior_status = null;
             while (combat.medicine_action.?.ticks < combat.medicine_action.?.timing.impact_tick) combat.advanceMedicine();
             try std.testing.expectEqualDeep(recipient, members[1]);
         }

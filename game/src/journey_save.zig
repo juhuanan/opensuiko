@@ -1,5 +1,7 @@
 //! Journey checkpoint shape and migration rules.
 const std = @import("std");
+const journey = @import("journey.zig");
+const State = journey.State;
 const field = @import("field");
 const battle = @import("battle");
 const party_session = @import("party_session");
@@ -10,8 +12,8 @@ const hq_state = @import("hq_state");
 const travel = @import("journey_travel");
 const ordinary = @import("field_actors");
 
-pub const Reserves = [72]?battle.OwnedMember;
-pub const SharedItems = @FieldType(party_session.Snapshot, "shared");
+const Reserves = journey.Reserves;
+const SharedItems = journey.SharedItems;
 
 fn emptyExtra(extra: party_session.CharacterExtra) bool {
     if (extra.member_id.len != 0 or extra.weapon_element != .none) return false;
@@ -34,6 +36,7 @@ fn saveVersion(schema: []const u8) !u8 {
 }
 
 pub const Snapshot = struct {
+    // Keep these fields in the on-disk format even as the live counters evolve.
     pub const EncounterClock = struct {
         updates: u16 = 0,
         ready: bool = false,
@@ -101,7 +104,7 @@ pub const Snapshot = struct {
     hq: ?hq_state.HqState = null,
     boat_travel: ?travel.Boat = null,
 
-    pub fn capture(state: anytype) !Snapshot {
+    pub fn capture(state: State) !Snapshot {
         const world = &state.field_state;
         if (state.mode != .field or state.dice_game != null or state.side_game != null or state.teleport_session != null or state.party_selection != null or state.item_overload != null or state.auto_travel != null or world.auto_route_id != null or world.remaining != 0 or world.dialogue != null or world.rest_ticks != 0) return error.GameBusy;
         const combat = state.combat;
@@ -109,7 +112,11 @@ pub const Snapshot = struct {
         const count: u8 = @intCast(combat.partyCount());
         var snapshot: Snapshot = .{ .schema = std.fmt.comptimePrint("{s}{d}", .{ save_prefix, current_save_version }), .spell_scene_hash = if (combat.spell_scenes) |packet| try packet.digest() else null, .unite_actor_hash = if (combat.unite_actors) |packet| try packet.digest() else null, .party_count = count, .party = @splat(combat.progress.party[0]), .extras = state.extras, .reserves = state.reserves, .reserve_extras = state.reserve_extras, .storage = combat.progress.storage, .save_name = state.save_name, .elapsed_ticks = state.elapsed_ticks, .room = state.package.rooms[world.room].id, .x = world.x, .y = world.y, .facing = world.facing, .field_music = world.music, .money = combat.progress.money, .story = combat.progress.story, .levels = combat.levels, .experience = combat.experience, .stats = combat.base_stats, .formation = combat.formation, .weapon_levels = combat.weapon_levels, .equipment = combat.headEquipment(), .loadouts = combat.loadouts, .runes = combat.runes, .random = combat.random, .opening_event = state.opening_event, .route = state.route.checkpoint(), .campaign = state.campaign, .hq = state.hq, .world_battle_enabled = state.world_battle_enabled, .world_battle_ticks = state.world_battle_ticks, .world_battle_started = state.world_battle_started };
         snapshot.auxiliary_party = world.auxiliary_party;
-        if (!std.meta.eql(state.optional_games, OptionalGames{})) snapshot.optional_games = state.optional_games;
+        const records = state.optional_games;
+        if (records.cup_profit != 0 or !std.mem.allEqual(u32, &records.card_records, 0)) snapshot.optional_games = .{
+            .cup_profit = records.cup_profit,
+            .card_records = records.card_records,
+        };
         snapshot.wheel_state = world.wheel_state;
         if (world.world_context) |context| snapshot.world_context = .{
             .room = state.package.rooms[context.room].id,
@@ -117,7 +124,10 @@ pub const Snapshot = struct {
         };
 
         if (state.data.field_encounters) |encounters| {
-            if (encounters.forRoom(snapshot.room) != null) snapshot.field_encounter_clock = state.field_encounter_clock;
+            if (encounters.forRoom(snapshot.room) != null) {
+                const clock = state.field_encounter_clock;
+                snapshot.field_encounter_clock = .{ .updates = clock.updates, .ready = clock.ready, .enabled = clock.enabled };
+            }
         }
         snapshot.boat_travel = state.boat_travel;
         if (state.room_battles) |rooms| {
@@ -140,7 +150,7 @@ pub const Snapshot = struct {
         for (0..count) |i| snapshot.party[i] = combat.progress.party[i];
         return snapshot;
     }
-    pub fn validate(self: *const Snapshot, state: anytype) !void {
+    pub fn validate(self: *const Snapshot, state: State) !void {
         const version = try saveVersion(self.schema);
         if (self.optional_games != null and version < 43) return error.InvalidSave;
         if (self.room_actors) |actors| {
@@ -307,8 +317,8 @@ pub const Snapshot = struct {
         return .{ .member = self.party[i], .level = self.levels[i], .experience = self.experience[i], .stats = self.stats[i], .weapon_level = if (self.weapon_levels) |levels| levels[i] else if (profile.weapon) |weapon| weapon.initial_level else 1, .loadout = loadouts[i], .rune = self.runes[i] };
     }
     // The caller keeps the opening, campaign and headquarters payloads alive while applied.
-    pub fn apply(self: *const Snapshot, state: anytype) !void {
-        try self.validate(state);
+    pub fn apply(self: *const Snapshot, state: *State) !void {
+        try self.validate(state.*);
         const restored_actors = if (self.room_actors) |actors| blk: {
             const binding = state.room_battles.?.bindingFor(self.room).?;
             if (binding.needsFreshRoomActors(actors.construction_story, self.story.scenario)) break :blk null;
@@ -341,7 +351,10 @@ pub const Snapshot = struct {
             if (state.reserve_extras[i].?.member_id.len != 0) state.reserve_extras[i].?.member_id = profile.id;
         };
         state.combat.progress.storage = self.storage orelse .{};
-        state.optional_games = self.optional_games orelse .{};
+        state.optional_games = if (self.optional_games) |records| .{
+            .cup_profit = records.cup_profit,
+            .card_records = records.card_records,
+        } else .{};
         state.teleport_session = null;
         if (state.side_game != null) {
             state.dice_host.?.owner = .field;
@@ -358,7 +371,7 @@ pub const Snapshot = struct {
         state.combat.random = self.random;
         state.route = if (self.route) |checkpoint| try opening_route.Controller.restore(checkpoint) else opening_route.initial(state.package);
         if (state.packagedOpeningRoute() != null) state.updateOpeningPartyMilestone();
-        state.combat.asleep = @splat(0);
+        state.combat.clearSleep();
         state.combat.clearTemporaryStats();
         state.combat.unbalanced = @splat(0);
         state.combat.active = null;
@@ -405,7 +418,11 @@ pub const Snapshot = struct {
         state.checked_arrival_visit = if (self.pending_room_arrival) null else state.field_state.room_entries;
         if (self.field_encounter_clock) |clock| {
             if (state.data.field_encounters) |encounters| {
-                if (encounters.forRoom(self.room) != null) state.field_encounter_clock = clock;
+                if (encounters.forRoom(self.room) != null) state.field_encounter_clock = .{
+                    .updates = clock.updates,
+                    .ready = clock.ready,
+                    .enabled = clock.enabled,
+                };
             }
         }
         state.field_event = null;
@@ -475,7 +492,7 @@ const HeapSnapshot = struct {
     }
 };
 
-fn decodeSnapshotHeap(allocator: std.mem.Allocator, bytes: []const u8, state: anytype) !HeapSnapshot {
+fn decodeSnapshotHeap(allocator: std.mem.Allocator, bytes: []const u8, state: State) !HeapSnapshot {
     try validateSnapshotFields(allocator, bytes);
     const arena = try allocator.create(std.heap.ArenaAllocator);
     errdefer allocator.destroy(arena);
@@ -500,7 +517,7 @@ fn decodeSnapshotHeap(allocator: std.mem.Allocator, bytes: []const u8, state: an
     return .{ .allocator = allocator, .arena = arena, .value = snap };
 }
 
-pub fn decodeSnapshot(allocator: std.mem.Allocator, bytes: []const u8, state: anytype) !std.json.Parsed(Snapshot) {
+pub fn decodeSnapshot(allocator: std.mem.Allocator, bytes: []const u8, state: State) !std.json.Parsed(Snapshot) {
     try validateSnapshotFields(allocator, bytes);
     const parsed = try std.json.parseFromSlice(Snapshot, allocator, bytes, .{ .allocate = .alloc_always });
     errdefer parsed.deinit();
@@ -515,11 +532,11 @@ pub fn slotFilename(index: usize, backup: bool) ![]const u8 {
         else => error.InvalidSaveSlot,
     };
 }
-pub fn save(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: anytype) !void {
+pub fn save(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: State) !void {
     try saveSlot(io, allocator, directory, state, 0, state.save_name);
 }
 
-fn canRotateSnapshot(allocator: std.mem.Allocator, bytes: []const u8, state: anytype) !bool {
+fn canRotateSnapshot(allocator: std.mem.Allocator, bytes: []const u8, state: State) !bool {
     const parsed = decodeSnapshotHeap(allocator, bytes, state) catch |err| switch (err) {
         error.OutOfMemory,
         error.UnsupportedSaveVersion,
@@ -536,7 +553,7 @@ fn canRotateSnapshot(allocator: std.mem.Allocator, bytes: []const u8, state: any
     return true;
 }
 
-pub fn saveSlot(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: anytype, index: usize, name: pause.save_slots.Label) !void {
+pub fn saveSlot(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: State, index: usize, name: pause.save_slots.Label) !void {
     if (state.field_event != null) return error.GameBusy;
     const primary = try slotFilename(index, false);
     const backup = try slotFilename(index, true);
@@ -562,7 +579,7 @@ pub fn saveSlot(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir,
     if (keep_previous) try atomicWrite(io, directory, backup, previous.?);
     try atomicWrite(io, directory, primary, bytes);
 }
-fn readSnapshot(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, name: []const u8, state: anytype) !HeapSnapshot {
+fn readSnapshot(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, name: []const u8, state: State) !HeapSnapshot {
     const bytes = try directory.readFileAlloc(io, name, allocator, .limited(256 * 1024));
     defer allocator.free(bytes);
     const parsed = try decodeSnapshotHeap(allocator, bytes, state);
@@ -574,7 +591,7 @@ fn readSnapshot(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir,
 
 const SlotSnapshot = struct { parsed: HeapSnapshot, source: RestoreSource };
 
-fn readSlotSnapshot(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: anytype, index: usize) !SlotSnapshot {
+fn readSlotSnapshot(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: State, index: usize) !SlotSnapshot {
     const primary = try slotFilename(index, false);
     const parsed = readSnapshot(io, allocator, directory, primary, state) catch |primary_error| {
         if (primary_error == error.UnsupportedSaveVersion) return primary_error;
@@ -588,10 +605,10 @@ fn readSlotSnapshot(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.
     return .{ .parsed = parsed, .source = .primary };
 }
 
-pub fn restoreWithSource(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: anytype) !RestoreSource {
+pub fn restoreWithSource(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: *State) !RestoreSource {
     return restoreSlotWithSource(io, allocator, directory, state, 0);
 }
-fn applyReadSnapshot(parsed: HeapSnapshot, state: anytype, index: usize) !void {
+fn applyReadSnapshot(parsed: HeapSnapshot, state: *State, index: usize) !void {
     errdefer parsed.deinit();
     try parsed.value.apply(state);
     state.checkpoint = null;
@@ -601,16 +618,16 @@ fn applyReadSnapshot(parsed: HeapSnapshot, state: anytype, index: usize) !void {
     } else parsed.deinit();
     state.menu.save_slot = index;
 }
-pub fn restoreSlotWithSource(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: anytype, index: usize) !RestoreSource {
-    const loaded = try readSlotSnapshot(io, allocator, directory, state, index);
+pub fn restoreSlotWithSource(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: *State, index: usize) !RestoreSource {
+    const loaded = try readSlotSnapshot(io, allocator, directory, state.*, index);
     try applyReadSnapshot(loaded.parsed, state, index);
     return loaded.source;
 }
-pub fn restore(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: anytype) !void {
+pub fn restore(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: *State) !void {
     _ = try restoreWithSource(io, allocator, directory, state);
 }
 
-pub fn summaries(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: anytype) [pause.save_slots.count]pause.save_slots.Summary {
+pub fn summaries(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir, state: State) [pause.save_slots.count]pause.save_slots.Summary {
     var result = pause.save_slots.emptySummaries();
     for (&result, 0..) |*entry, index| {
         const loaded = readSlotSnapshot(io, allocator, directory, state, index) catch |err| {
@@ -627,7 +644,7 @@ pub fn summaries(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir
     }
     return result;
 }
-fn summarize(snapshot: *const Snapshot, state: anytype) pause.save_slots.Summary {
+fn summarize(snapshot: *const Snapshot, state: State) pause.save_slots.Summary {
     const leader = snapshot.formation[0];
     return .{ .status = .ready, .name = snapshot.save_name orelse pause.save_slots.defaultLabel(0), .scene = state.package.rooms[state.package.roomIndex(snapshot.room).?].title, .leader = state.combat.content.partyProfile(snapshot.party[leader].id).?.name, .level = snapshot.levels[leader], .seconds = (snapshot.elapsed_ticks orelse 0) / 60 };
 }

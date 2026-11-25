@@ -2,8 +2,9 @@
 const std = @import("std");
 const field = @import("field");
 const systems = @import("battle_rules");
+const State = @import("battle.zig").State;
 
-pub fn resolveTick(state: anytype) void {
+pub fn resolveTick(state: *State) void {
     defer state.advanceRevivals();
     var camera_with_actors = false;
     var camera_advanced = false;
@@ -35,7 +36,7 @@ pub fn resolveTick(state: anytype) void {
         };
         state.round_start_pending = false;
         state.acted = @splat(false);
-        for (0..state.partyCount() + state.enemyCount()) |actor| state.acted[actor] = !state.participates(actor) or state.asleep[actor] > 0;
+        for (0..state.partyCount() + state.enemyCount()) |actor| state.acted[actor] = !state.participates(actor) or state.actor_conditions[actor].sleep_turns > 0;
         state.action_ticks = 0;
         state.coordinator = .{ .stage = .select, .current_actor = state.last_round_actor, .cached = .round_end, .completed = true, .remaining = @intCast(timing.selection_delay), .elapsed = 0 };
         return;
@@ -102,7 +103,7 @@ pub fn resolveTick(state: anytype) void {
                 for (state.progress.party, 0..) |member, index| {
                     const expected_status: field.game_state.Status = if (member.hp == 0) .unconscious else .healthy;
                     const supported_status = member.status == expected_status or (statuses_ready and member.hp > 0 and member.status == .poisoned);
-                    if ((member.hp == 0 and !c_knockouts) or !supported_status or (!statuses_ready and (member.balloons != 0 or state.asleep[index] != 0 or state.protection[index] != 0 or state.unbalanced[index] != 0 or state.accuracy_reduced[index] or state.rune_blocked[index] or state.hasRune(index, "sunbeam")))) {
+                    if ((member.hp == 0 and !c_knockouts) or !supported_status or (!statuses_ready and (member.balloons != 0 or state.actor_conditions[index].sleep_turns != 0 or state.actor_conditions[index].protection_rounds != 0 or state.unbalanced[index] != 0 or state.actor_conditions[index].accuracy_reduced or state.actor_conditions[index].rune_blocked or state.hasRune(index, "sunbeam")))) {
                         state.replay_unsupported = .coordinator_action;
                         return;
                     }
@@ -207,16 +208,16 @@ pub fn resolveTick(state: anytype) void {
                         const defending = state.actions[damage_target] != null and state.actions[damage_target].? == .defend;
                         effect.amount = state.resolvePhysicalDamage(effect.actor, damage_target, state.roll(), defending);
                     }
-                    if (effect.rune_attack and (!state.participates(effect.actor) or state.asleep[effect.actor] > 0 or !state.canPhysicalRune(effect.actor))) {
+                    if (effect.rune_attack and (!state.participates(effect.actor) or state.actor_conditions[effect.actor].sleep_turns > 0 or !state.canPhysicalRune(effect.actor))) {
                         effect.kind = .unavailable;
                         return;
                     }
-                    if (effect.kind == .unite and (effect.partner == null or !state.participates(effect.partner.?) or state.asleep[effect.partner.?] > 0 or !state.participates(effect.actor) or state.asleep[effect.actor] > 0)) {
+                    if (effect.kind == .unite and (effect.partner == null or !state.participates(effect.partner.?) or state.actor_conditions[effect.partner.?].sleep_turns > 0 or !state.participates(effect.actor) or state.actor_conditions[effect.actor].sleep_turns > 0)) {
                         effect.kind = .unavailable;
                         return;
                     }
                     if (effect.damage_at_impact and effect.protector == null and effect.target == 0 and state.enemy(effect.actor - state.partyCount()).action_policy == .roc) state.hero_reaction_offset = true;
-                    if (state.protection[damage_target] > 0) effect.amount = 0;
+                    if (state.actor_conditions[damage_target].protection_rounds > 0) effect.amount = 0;
                     if (damage_target < state.partyCount()) {
                         const target = &state.progress.party[damage_target];
                         target.hp = @intCast(@as(u32, target.hp) -| effect.amount);
@@ -244,13 +245,13 @@ pub fn resolveTick(state: anytype) void {
                             effect.affected |= @as(u16, 1) << @intCast(index);
                             const member = &state.progress.party[index];
                             const before = member.*;
-                            effect.amounts[index] = definition.?.applyTo(member, state.protection[index] > 0);
+                            effect.amounts[index] = definition.?.applyTo(member, state.actor_conditions[index].protection_rounds > 0);
                             state.noteItemImpact(index, before);
                         };
                         effect.amount = effect.amounts[effect.target];
                     } else {
                         const before = target.*;
-                        effect.amount = definition.?.applyTo(target, state.protection[effect.target] > 0);
+                        effect.amount = definition.?.applyTo(target, state.actor_conditions[effect.target].protection_rounds > 0);
                         state.noteItemImpact(effect.target, before);
                     }
                 }
@@ -296,7 +297,7 @@ pub fn resolveTick(state: anytype) void {
         }
         const previous = state.active.?;
         if (state.followupTarget(previous)) |target| {
-            state.beginAttack(previous.actor, target, false, previous.target);
+            state.beginAttack(previous.actor, target, .{ .followup = previous.target });
             if (state.coordinator) |clock| {
                 if (state.active) |*effect| effect.started_at = clock.elapsed;
                 state.action_ticks = clock.elapsed;

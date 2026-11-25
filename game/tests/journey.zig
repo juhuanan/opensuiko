@@ -35,11 +35,17 @@ test "scripted crossing owns Journey input and arrives before its final movement
     const events = field.game_state.event_runtime;
     const commands = [_]events.Command{ .{ .kind = .world_mode, .code = 12 }, .{ .kind = .world_mode, .code = 20 }, .{ .kind = .auto_route, .value = 4 }, .{ .kind = .world_transition, .destination = "world_j", .x = 119, .y = 75 } };
     const program: events.Program = .{ .id = "crossing", .entity = 21, .entry = .ordinary, .trigger = .interaction, .commands = &commands };
-    const binding = .{ .population = .{ .source = .{ .file = "DATA/02_AREA.B/VB2.BIN", .sha256 = journey.travel.source.caller_sha256, .room = @as(u8, 0) } } };
+    const origin: journey.travel.SceneSource = .{
+        .file = "DATA/02_AREA.B/VB2.BIN",
+        .sha256 = journey.travel.source.caller_sha256,
+        .room = 0,
+        .lba = 0,
+        .size = 0,
+    };
     var wrong_caller = program;
     wrong_caller.entity = 20;
-    try std.testing.expectError(error.UnsupportedCrossingCaller, journey.travel.Active.begin(state.package, state.field_state, binding, wrong_caller));
-    state.auto_travel = try journey.travel.Active.begin(state.package, state.field_state, binding, program);
+    try std.testing.expectError(error.UnsupportedCrossingCaller, journey.travel.Active.begin(state.package, state.field_state, origin, wrong_caller));
+    state.auto_travel = try journey.travel.Active.begin(state.package, state.field_state, origin, program);
     try std.testing.expectError(error.GameBusy, journey.Snapshot.capture(state));
     _ = try state.tickWithFieldEvents(.{ .menu = true, .field = .{ .direction = .right } }, .{});
     try equal(@as(f32, 951.5), state.field_state.position(state.package).x);
@@ -467,6 +473,31 @@ test "Maas source-gated conversation supports decline service cancel and one per
     try std.testing.expectEqualStrings("forest_blacksmith", state.package.rooms[room].npcs[state.field_state.dialogue.?.source.npc].id);
     try std.testing.expectEqualDeep(saved.reserves, state.reserves);
     try std.testing.expectEqualDeep(saved.random, state.combat.random);
+}
+
+test "journey optional-game records round trip and migrate absent legacy fields" {
+    const fixtures = try Fixtures.init();
+    defer fixtures.deinit();
+    var members: [6]battle.Member = undefined;
+    var state = try fixtures.session(&members);
+    try expect((try journey.Snapshot.capture(state)).optional_games == null);
+    const records: @TypeOf(state.optional_games) = .{ .cup_profit = -420, .card_records = .{ 160, 0, 800, 20 } };
+    state.optional_games = records;
+
+    var directory = std.testing.tmpDir(.{});
+    defer directory.cleanup();
+    try journey.save(std.testing.io, allocator, directory.dir, state);
+    state.optional_games = .{};
+    try journey.restore(std.testing.io, allocator, directory.dir, &state);
+    try std.testing.expectEqualDeep(records, state.optional_games);
+
+    var legacy = try journey.Snapshot.capture(state);
+    legacy.schema = "suikoden-journey-save/42";
+    try std.testing.expectError(error.InvalidSave, legacy.apply(&state));
+    try std.testing.expectEqualDeep(records, state.optional_games);
+    legacy.optional_games = null;
+    try legacy.apply(&state);
+    try std.testing.expectEqualDeep(@as(@TypeOf(state.optional_games), .{}), state.optional_games);
 }
 
 test "version5 saves without recruitment fields migrate locked and reject invalid tier or castle names" {
@@ -907,7 +938,7 @@ test "Spark ordinary attack drains remaining allies in party order after priorit
     combat.acted[0] = true;
     members[1].hp = 0;
     combat.departed[2] = true;
-    combat.asleep[3] = 1;
+    combat.actor_conditions[3].sleep_turns = 1;
     combat.actions[4] = .{ .assist = 0 };
     combat.tick(.{});
     try equal(@as(usize, 5), combat.active.?.actor);
@@ -922,7 +953,7 @@ test "Spark ordinary attack drains remaining allies in party order after priorit
     try expect(!combat.spark_pending);
     combat.active = null;
     combat.acted[3] = false;
-    combat.asleep[3] = 0;
+    combat.actor_conditions[3].sleep_turns = 0;
     combat.runes[3] = combat.runes[0];
     combat.actions[3] = .{ .attack = 0 };
     combat.tick(.{});
@@ -1447,7 +1478,7 @@ test "Turtle blocks new status changes and individual Unite recovery without cle
     const existing = members[0];
     for (std.enums.values(battle.Ailment)) |ailment| try expect(!combat.inflictStatus(0, ailment));
     try std.testing.expectEqualDeep(existing, members[0]);
-    try equal(@as(u8, 1), combat.asleep[0]);
+    try equal(@as(u8, 1), combat.actor_conditions[0].sleep_turns);
     combat.runes[5] = turtle;
     combat.active = .{ .actor = 4, .partner = 5, .target = 6, .kind = .unite, .amount = 0 };
     combat.phase = .resolving;
@@ -1457,7 +1488,7 @@ test "Turtle blocks new status changes and individual Unite recovery without cle
     try equal(@as(u8, 0), combat.unbalanced[5]);
     combat.runes[3] = turtle;
     combat.runes[0] = combat.content.systems.?.runeIndex("earth").?;
-    combat.asleep[0] = 0;
+    combat.actor_conditions[0].sleep_turns = 0;
     combat.base_stats[0].magic = 200;
     combat.refillMagic(0);
     const protection = spellIndex(combat.*, "spell_23");
@@ -1467,7 +1498,7 @@ test "Turtle blocks new status changes and individual Unite recovery without cle
     combat.action_ticks = combat.impactTick() - 1;
     combat.tick(.{});
     // Copper Flesh calls the direct setter, bypassing Turtle's acquisition gate.
-    try equal(@as(u8, 3), combat.protection[3]);
+    try equal(@as(u8, 3), combat.actor_conditions[3].protection_rounds);
     try equal(charges - 1, members[0].rune_charges[tier]);
     try expect(!combat.inflictStatus(99, .sleep));
     members[1].hp = 0;
@@ -1495,7 +1526,7 @@ test "accuracy and Rune blocking are distinct, cure at full HP and leave recover
     try expect(combat.inflictStatus(2, .rune_blocked));
     try expect(!combat.canPhysicalRune(2));
     combat.unbalanced[0] = 2;
-    combat.protection[0] = 3;
+    combat.actor_conditions[0].protection_rounds = 3;
     combat.runes[1] = combat.content.systems.?.runeIndex("water").?;
     combat.refillMagic(1);
     const heal = spellIndex(combat.*, "spell_9");
@@ -1503,20 +1534,20 @@ test "accuracy and Rune blocking are distinct, cure at full HP and leave recover
     const before = members[1].rune_charges[tier];
     try equal(members[0].max_hp, members[0].hp);
     try combat.castFieldSpell(1, heal, 0);
-    try expect(!combat.rune_blocked[0]);
-    try expect(!combat.accuracy_reduced[0]);
-    try equal(@as(u8, 0), combat.asleep[0]);
+    try expect(!combat.actor_conditions[0].rune_blocked);
+    try expect(!combat.actor_conditions[0].accuracy_reduced);
+    try equal(@as(u8, 0), combat.actor_conditions[0].sleep_turns);
     try equal(@as(u8, 2), combat.unbalanced[0]);
-    try equal(@as(u8, 3), combat.protection[0]);
+    try equal(@as(u8, 3), combat.actor_conditions[0].protection_rounds);
     try equal(before - 1, members[1].rune_charges[tier]);
-    try expect(combat.rune_blocked[2]);
+    try expect(combat.actor_conditions[2].rune_blocked);
     combat.unbalanced[0] = 0;
     try expect(combat.canCast(0, fire));
-    combat.accuracy_reduced[0] = true;
+    combat.actor_conditions[0].accuracy_reduced = true;
     combat.phase = .escaped;
     confirm(&state);
     try equal(.field, state.mode);
-    try expect(!combat.rune_blocked[2] and !combat.accuracy_reduced[0]);
+    try expect(!combat.actor_conditions[2].rune_blocked and !combat.actor_conditions[0].accuracy_reduced);
 }
 const Fixtures = struct {
     combat_storage: *std.heap.ArenaAllocator,
@@ -1961,7 +1992,7 @@ test "battle selects exact item and rechecks target and item identity at a singl
             members[1].hp = 1;
             members[1].status = .poisoned;
             members[1].balloons = 2;
-            combat.asleep[1] = 1;
+            combat.actor_conditions[1].sleep_turns = 1;
             combat.unbalanced[1] = 1;
             combat.choose(0);
             combat.picker.selected = .item;
@@ -1984,7 +2015,7 @@ test "battle selects exact item and rechecks target and item identity at a singl
             combat.active = .{ .actor = 0, .target = 1, .kind = .item, .item_id = id };
             combat.action_ticks = combat.impactTick() - 1;
             combat.tick(.{});
-            try equal(@as(u8, 1), combat.asleep[1]);
+            try equal(@as(u8, 1), combat.actor_conditions[1].sleep_turns);
             try equal(@as(u8, 1), combat.unbalanced[1]);
             if (failure == 0) {
                 const impact = combat.recentItemImpact(1).?;
@@ -2352,11 +2383,11 @@ test "connected spells match static source semantic vectors and preserve rune ow
     combat.refillMagic(1);
     members[2].hp = 3;
     members[2].status = .poisoned;
-    combat.asleep[2] = 1;
+    combat.actor_conditions[2].sleep_turns = 1;
     castNow(combat, 1, spellIndex(combat.*, "spell_9"), 2);
     try equal(members[2].max_hp, members[2].hp);
     try equal(.healthy, members[2].status);
-    try equal(@as(u8, 0), combat.asleep[2]);
+    try equal(@as(u8, 0), combat.actor_conditions[2].sleep_turns);
     for (&members) |*member| member.hp = 1;
     const group_charges = members[1].rune_charges[2];
     castNow(combat, 1, spellIndex(combat.*, "spell_11"), 0);
@@ -2825,7 +2856,7 @@ test "Rain of Kindness heals living allies by300 with cures while preserving rec
         member.balloons = if (i == 2) 0 else 2;
     }
     combat.unbalanced[0] = 1;
-    combat.asleep[0] = 1;
+    combat.actor_conditions[0].sleep_turns = 1;
     const before = members[1].rune_charges[2];
     try combat.castFieldSpell(1, spellIndex(combat.*, "spell_12"), 0);
     for (members, 0..) |member, i| {
@@ -2833,7 +2864,7 @@ test "Rain of Kindness heals living allies by300 with cures while preserving rec
         try equal(if (i == 2) field.game_state.Status.unconscious else field.game_state.Status.healthy, member.status);
         try equal(@as(u8, 0), member.balloons);
     }
-    try equal(@as(u8, 0), combat.asleep[0]);
+    try equal(@as(u8, 0), combat.actor_conditions[0].sleep_turns);
     try equal(@as(u8, 1), combat.unbalanced[0]);
     try equal(before - 1, members[1].rune_charges[2]);
 }
@@ -3326,25 +3357,25 @@ test "Fog and Clay scale additive bonuses and Copper Flesh preserves unrelated e
     try state.beginEncounter(0);
     combat.runes[1] = combat.content.systems.?.runeIndex("water").?;
     combat.refillMagic(1);
-    combat.temporary_stats[6].skill_bonus = 100;
+    combat.actor_conditions[6].stat_modifiers.skill_bonus = 100;
     const base_skill = combat.stats(6).skill - 100;
     castNow(combat, 1, spellIndex(combat.*, "spell_10"), 6);
-    try equal(@as(i16, 80), combat.temporary_stats[6].skill_bonus);
+    try equal(@as(i16, 80), combat.actor_conditions[6].stat_modifiers.skill_bonus);
     try equal(base_skill + 80, combat.stats(6).skill);
     castNow(combat, 1, spellIndex(combat.*, "spell_10"), 6);
-    try equal(@as(i16, 64), combat.temporary_stats[6].skill_bonus);
+    try equal(@as(i16, 64), combat.actor_conditions[6].stat_modifiers.skill_bonus);
     combat.runes[1] = combat.content.systems.?.runeIndex("earth").?;
     combat.refillMagic(1);
-    combat.temporary_stats[0].defense_bonus = 100;
+    combat.actor_conditions[0].stat_modifiers.defense_bonus = 100;
     const defense = combat.stats(0).defense - 100;
     castNow(combat, 1, spellIndex(combat.*, "spell_21"), 0);
-    try equal(@as(i16, 150), combat.temporary_stats[0].defense_bonus);
+    try equal(@as(i16, 150), combat.actor_conditions[0].stat_modifiers.defense_bonus);
     try equal(defense + 150, combat.stats(0).defense);
     members[0].status = .poisoned;
     members[0].balloons = 2;
     combat.unbalanced[0] = 1;
     castNow(combat, 1, spellIndex(combat.*, "spell_23"), 0);
-    try equal(@as(u8, 3), combat.protection[0]);
+    try equal(@as(u8, 3), combat.actor_conditions[0].protection_rounds);
     try equal(field.game_state.Status.poisoned, members[0].status);
     try equal(@as(u8, 2), members[0].balloons);
     try equal(@as(u8, 1), combat.unbalanced[0]);
@@ -3359,11 +3390,11 @@ test "Fog and Clay scale additive bonuses and Copper Flesh preserves unrelated e
         combat.active = null;
         combat.acted = @splat(true);
         combat.tick(.{});
-        try equal(rounds, combat.protection[0]);
+        try equal(rounds, combat.actor_conditions[0].protection_rounds);
     }
     combat.startEncounter();
-    try equal(@as(i16, 0), combat.temporary_stats[0].defense_bonus);
-    try equal(@as(i16, 0), combat.temporary_stats[6].skill_bonus);
+    try equal(@as(i16, 0), combat.actor_conditions[0].stat_modifiers.defense_bonus);
+    try equal(@as(i16, 0), combat.actor_conditions[6].stat_modifiers.skill_bonus);
 }
 
 test "Copper Flesh blocks healing HP changes and leaves cures and item consumption intact" {
@@ -3376,14 +3407,14 @@ test "Copper Flesh blocks healing HP changes and leaves cures and item consumpti
     members[0].hp = 10;
     members[0].status = .poisoned;
     members[0].balloons = 1;
-    combat.protection[0] = 3;
+    combat.actor_conditions[0].protection_rounds = 3;
     combat.runes[1] = combat.content.systems.?.runeIndex("water").?;
     combat.refillMagic(1);
     castNow(combat, 1, spellIndex(combat.*, "spell_9"), 0);
     try equal(@as(u16, 10), members[0].hp);
     try equal(field.game_state.Status.healthy, members[0].status);
     try equal(@as(u8, 0), members[0].balloons);
-    try equal(@as(u8, 3), combat.protection[0]);
+    try equal(@as(u8, 3), combat.actor_conditions[0].protection_rounds);
     var expected = members[1].inventory;
     expected.slots[0].?.uses -= 1;
     combat.actions[1] = .{ .item = .{ .slot = 0, .target = 0, .id = .medicine } };
@@ -3520,13 +3551,13 @@ test "passive round HP and unconscious Prosperity owner matrices retain source s
                 members[0].max_hp = maximum;
                 members[0].hp = hp;
                 members[0].status = if (poisoned) .poisoned else .healthy;
-                combat.protection[0] = protection;
+                combat.actor_conditions[0].protection_rounds = protection;
                 combat.applyRoundBoundaryStatuses();
                 const regeneration: i32 = if (sunbeam) 5 else 0;
                 const poison: i32 = if (poisoned) maximum / 20 else 0;
                 const expected: u16 = if (protection == 2) hp else @intCast(std.math.clamp(@as(i32, hp) + regeneration - poison, 0, maximum));
                 try equal(expected, members[0].hp);
-                try equal(protection -| 1, combat.protection[0]);
+                try equal(protection -| 1, combat.actor_conditions[0].protection_rounds);
                 try equal(expected == 0, members[0].status == .unconscious);
             };
         };
@@ -3850,7 +3881,7 @@ test "an interrupted physical rune causes no damage, charge cost or recovery" {
     combat.tick(.{});
     const before = combat.enemy_hp;
     const charges = members[2].rune_charges;
-    combat.asleep[2] = 1;
+    combat.actor_conditions[2].sleep_turns = 1;
     combat.action_ticks = combat.impactTick() - 1;
     combat.tick(.{});
     try equal(.unavailable, combat.active.?.kind);

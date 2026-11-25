@@ -151,7 +151,7 @@ test "Cover live queued hits retain ward HP through protection KO Buddha and rev
             combat.actions[index] = .defend;
         }
         combat.progress.party[ward].hp = 1;
-        if (scenario == 1) combat.protection[guard] = 2;
+        if (scenario == 1) combat.actor_conditions[guard].protection_rounds = 2;
         if (scenario == 2 or scenario == 3 or scenario == 6) combat.progress.party[guard].hp = 1;
         if (scenario == 3 or scenario == 6) combat.progress.party[guard].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
         if (scenario == 5) combat.actions[guard] = .{ .attack = 0 };

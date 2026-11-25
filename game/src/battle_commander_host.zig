@@ -24,8 +24,8 @@ pub fn beginSourceCommander(self: *State, owner: usize, recipient: ?usize) !void
     const binding = bundle.commanderFor(self.enemy(owner - self.partyCount()).id).?;
     if (recipient != null and binding.solo_program == null) return error.InvalidActorBinding;
     if (self.content.presentation_ready) {
-        try art.checkProgramArt(self.*, bundle, bundle.animations.find(binding.id).?, if (recipient == null) binding.order_program else binding.solo_program.?, 0, 0, false);
-        if (recipient) |target| try art.checkProgramArt(self.*, bundle, bundle.animations.find(self.progress.party[target].id) orelse return error.MissingActorResource, binding.recipient_program.?, 0, 0, false);
+        try art.checkProgramArt(self.*, bundle.library(), bundle.animations.find(binding.id).?, if (recipient == null) binding.order_program else binding.solo_program.?, 0, 0, false);
+        if (recipient) |target| try art.checkProgramArt(self.*, bundle.library(), bundle.animations.find(self.progress.party[target].id) orelse return error.MissingActorResource, binding.recipient_program.?, 0, 0, false);
     }
     self.unite_vm.auxiliary_capacity = @intCast(19 - self.partyCount() - self.enemyCount());
     self.unite_vm.commander_actions[owner] = .{ .id = binding.id, .owner = @intCast(owner), .recipient = if (recipient) |target| @intCast(target) else null, .start_at = self.camera_ticks +% 1, .recipient_done = recipient == null };
@@ -46,7 +46,7 @@ fn prepareActor(self: *State, actor: usize, owner: usize, runtime: *host.Runtime
     try reactions.yieldReactionActor(self, actor);
     runtime.actors[actor] = try host.Actor.init(bundle.animations.resources[resource], q12(self.uniteVmHome(actor)));
     runtime.actors[actor].position_q12 = position;
-    runtime.actors[actor].screen_offset = self.actor_screen_offsets[actor];
+    runtime.actors[actor].screen_offset = self.actor_transforms[actor].screen_offset;
     runtime.actors[actor].baseline_offset = (if (actor < self.partyCount()) self.partyProfile(actor) else self.enemy(actor - self.partyCount())).effect_offset orelse .{ 0, 0 };
     self.unite_vm.scripted_actors[actor] = .{ .family = .commander, .leader = @intCast(owner), .resource = @intCast(resource) };
     self.unite_flags[actor] = 0;

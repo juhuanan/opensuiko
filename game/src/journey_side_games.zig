@@ -1,4 +1,5 @@
 //! Field admission and settlement for the cup and matching-card games.
+const State = @import("journey.zig").State;
 const std = @import("std");
 const events = @import("field_events");
 const pause = @import("pause_menu");
@@ -7,6 +8,11 @@ const Service = @import("field").game_state.event_runtime.FieldService;
 
 pub const shuffle_frames: u8 = 12;
 const mode_status_start = 160;
+pub const Records = struct {
+    cup_profit: i32 = 0,
+    card_records: [4]u32 = @splat(0),
+};
+
 pub const Active = struct {
     shuffle_ticks: u8 = 0,
     message: []const u8 = "",
@@ -28,7 +34,7 @@ pub fn caller(host: games.Host, binding: events.Binding, entity: u16, service: S
     return error.UnknownCaller;
 }
 
-pub fn begin(state: anytype, binding: events.Binding, receipt: events.Receipt, service: Service) !void {
+pub fn begin(state: *State, binding: events.Binding, receipt: events.Receipt, service: Service) !void {
     const program = binding.content.program(receipt.program) orelse return error.MissingFieldGameRequest;
     const host = state.dice_host orelse return error.MissingOptionalGameHost;
     if (host.ownsFrame()) return error.ModeAlreadyOwned;
@@ -75,7 +81,7 @@ pub fn begin(state: anytype, binding: events.Binding, receipt: events.Receipt, s
     state.side_game = .{};
 }
 
-pub fn tick(state: anytype, input: pause.Input) !void {
+pub fn tick(state: *State, input: pause.Input) !void {
     const host = state.dice_host orelse return error.MissingOptionalGameHost;
     var next = host.*;
     var active = state.side_game.?;

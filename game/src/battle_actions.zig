@@ -1,5 +1,5 @@
 const std = @import("std");
-const status = @import("battle_status");
+const presentation_flow = @import("battle_presentation_flow.zig");
 const damage_rules = @import("battle_damage");
 const field = @import("field");
 const battle_systems = @import("battle_systems");
@@ -14,10 +14,6 @@ const critical = damage_rules.critical;
 const priority = damage_rules.priority;
 const Protection = types_mod.Protection;
 const Effect = types_mod.Effect;
-
-pub fn clearKnockoutStatuses(self: *State, target: usize) void {
-    status.clearKnockoutStatuses(self, target);
-}
 
 pub fn resolveCommanderOrder(self: *State) void {
     const effect = &self.active.?;
@@ -38,7 +34,7 @@ pub fn resolveCommanderOrder(self: *State) void {
     if (child_tick == timing.impact_tick) {
         effect.target_reacting = true;
         effect.amount = self.resolvePhysicalDamage(child.actor, effect.target, self.roll(), self.actions[effect.target] != null and self.actions[effect.target].? == .defend);
-        if (self.protection[effect.target] > 0) effect.amount = 0;
+        if (self.actor_conditions[effect.target].protection_rounds > 0) effect.amount = 0;
         const target = &self.progress.party[effect.target];
         target.hp = @intCast(@as(u32, target.hp) -| effect.amount);
         self.markPartyKnockout(effect.target);
@@ -49,7 +45,7 @@ pub fn resolveCommanderOrder(self: *State) void {
     }
     if (child_tick == timing.status_tick and !self.statusImmune(effect.target)) {
         // The original status attempt precedes down-state commitment, even after HP reaches zero.
-        if (systems.statusPercent(self.roll()) < timing.status_percent) self.accuracy_reduced[effect.target] = true;
+        if (systems.statusPercent(self.roll()) < timing.status_percent) self.actor_conditions[effect.target].accuracy_reduced = true;
     }
     if (child_tick == timing.target_release_tick) {
         effect.target_reacting = false;
@@ -145,13 +141,13 @@ const TargetDraws = struct {
     }
 };
 fn sourceTargetStillActive(self: *const State, target: usize) bool {
-    return !self.departed[target] and (self.participates(target) or self.knockout_pending[target] or !self.partyInactive(target));
+    return !self.departed[target] and (self.participates(target) or self.party_knockouts[target].pending or !self.partyInactive(target));
 }
 fn startSelectedEnemyBranch(self: *State, actor: usize, recipient: usize) void {
     self.enemy_branch_selection = .{ .owner = @intCast(actor), .recipient = @intCast(recipient) };
     var waiting = self.active != null;
     for (0..self.partyCount()) |member| if (!battle.revival.committedPartyInactive(self.*, member) and
-        (self.knockout_pending[member] or self.coordinatorLocked(member)))
+        (self.party_knockouts[member].pending or self.coordinatorLocked(member)))
     {
         waiting = true;
     };
@@ -441,7 +437,7 @@ pub fn advanceFrontProjectiles(self: *State) void {
             const defending = self.actions[shot.target] != null and self.actions[shot.target].? == .defend;
             const damage = self.resolvePhysicalDamage(shot.actor, shot.target, self.roll(), defending);
             const target = &self.progress.party[shot.target];
-            target.hp = @intCast(@as(u32, target.hp) -| (if (self.protection[shot.target] == 0) damage else 0));
+            target.hp = @intCast(@as(u32, target.hp) -| (if (self.actor_conditions[shot.target].protection_rounds == 0) damage else 0));
             self.markPartyKnockout(shot.target);
             self.front_hurt_at[shot.target] = self.presentation_tick;
             self.front_hurt_repeated[shot.target] = repeated;
@@ -480,7 +476,7 @@ pub fn rocDecision(self: *State, actor: usize) void {
             return;
         };
         // shortcut: bound cover has a complete Gremio/Defend track; extend other protectors/actions with witnesses.
-        if (guard) |protector_index| if (target != 0 or protector_index != 1 or !std.mem.eql(u8, self.progress.party[0].id, "hero") or !std.mem.eql(u8, self.progress.party[1].id, "gremio") or self.actions[protector_index] == null or self.actions[protector_index].? != .defend or self.asleep[protector_index] > 0) {
+        if (guard) |protector_index| if (target != 0 or protector_index != 1 or !std.mem.eql(u8, self.progress.party[0].id, "hero") or !std.mem.eql(u8, self.progress.party[1].id, "gremio") or self.actions[protector_index] == null or self.actions[protector_index].? != .defend or self.actor_conditions[protector_index].sleep_turns > 0) {
             self.replay_unsupported = .missing_protection;
             return;
         };
@@ -595,7 +591,8 @@ pub fn nextDoubleBeatTarget(self: *const State, actor: usize, current: usize) ?u
 }
 pub fn followupTarget(self: *const State, effect: Effect) ?usize {
     if ((effect.kind != .attack and effect.kind != .miss) or effect.rune_attack or effect.actor >= self.partyCount() or effect.target < self.partyCount()) return null;
-    return self.nextDoubleBeatTarget(effect.actor, effect.target - self.partyCount());
+    const enemy = self.nextDoubleBeatTarget(effect.actor, effect.target - self.partyCount()) orelse return null;
+    return self.partyCount() + enemy;
 }
 pub fn usesProfileAttack(self: *const State, enemy_index: usize) bool {
     if (enemy_index >= self.enemyCount() or self.content.world_art != null or self.enemy(enemy_index).action_policy != .attack) return false;
@@ -604,29 +601,39 @@ pub fn usesProfileAttack(self: *const State, enemy_index: usize) bool {
     return packet.animations.find(self.enemy(enemy_index).id) == null;
 }
 
-pub fn beginAttack(self: *State, actor: usize, requested: usize, enemy_special: bool, previous_target: ?usize) void {
+pub const AttackMode = union(enum) {
+    ordinary,
+    enemy_special,
+    followup: usize, // Previous target actor index.
+};
+
+pub fn beginAttack(self: *State, actor: usize, requested_target: usize, mode: AttackMode) void {
     self.presentation = null;
     self.presentation_refusal = "";
-    const requested_target = if (actor < self.partyCount()) requested + self.partyCount() else requested;
+    const party_count = self.partyCount();
+    const party_actor = actor < party_count;
+    const previous_target = if (mode == .followup) mode.followup else null;
     var target = requested_target;
     // shortcut: retarget the first survivor; add original target policies with enemy AI.
-    if (actor < self.partyCount()) {
+    if (party_actor) {
         if (!self.canStartAttack(actor)) {
             self.active = .{ .actor = actor, .target = actor, .kind = .unavailable };
             return;
         }
-        if (if (self.sharedPartyMelee()) !self.participates(target) else !self.canAttackTarget(actor, requested)) {
-            const replacement = (if (self.sharedPartyMelee()) if (self.firstLiving(false)) |survivor| survivor - self.partyCount() else null else self.firstAttackTarget(actor)) orelse {
+        const shared_melee = self.sharedPartyMelee();
+        if (target < party_count or target >= party_count + self.enemyCount() or
+            (if (shared_melee) !self.participates(target) else !self.canAttackTarget(actor, target - party_count)))
+        {
+            target = (if (shared_melee) self.firstLiving(false) else if (self.firstAttackTarget(actor)) |enemy| party_count + enemy else null) orelse {
                 self.active = .{ .actor = actor, .target = actor, .kind = .unavailable };
                 return;
             };
-            target = replacement + self.partyCount();
         }
-    } else if (!self.participates(target)) target = self.firstLiving(true).?;
-    const profile_attack = self.usesProfileAttack(if (actor < self.partyCount()) target - self.partyCount() else actor - self.partyCount());
-    if (actor < self.partyCount() and !profile_attack) if (self.unite_actors) |bundle| if (bundle.counterPacket()) |packet| {
+    } else if (target >= party_count or !self.participates(target)) target = self.firstLiving(true).?;
+    const profile_attack = self.usesProfileAttack(if (party_actor) target - party_count else actor - party_count);
+    if (party_actor and !profile_attack) if (self.unite_actors) |bundle| if (bundle.counterPacket()) |packet| {
         if (packet.partyAttacker(self.progress.party[actor].id, .melee_hit) != null) {
-            if (!self.startMeleeStrike(actor, target - self.partyCount()) and self.replay_unsupported == null and !self.replay_exhausted) self.acted[actor] = false;
+            if (!self.startMeleeStrike(actor, target - party_count) and self.replay_unsupported == null and !self.replay_exhausted) self.acted[actor] = false;
             if (self.active) |*effect| if (effect.actor == actor and effect.counter_attack) {
                 effect.followup_from = previous_target;
                 effect.retargeted_from = if (target != requested_target) requested_target else null;
@@ -634,19 +641,19 @@ pub fn beginAttack(self: *State, actor: usize, requested: usize, enemy_special: 
             return;
         }
         if (packet.rangedAttacker(self.progress.party[actor].id) != null) {
-            if (!self.startRangedStrike(actor, target - self.partyCount()) and self.replay_unsupported == null and !self.replay_exhausted) self.acted[actor] = false;
+            if (!self.startRangedStrike(actor, target - party_count) and self.replay_unsupported == null and !self.replay_exhausted) self.acted[actor] = false;
             return;
         }
     };
-    if (actor < self.partyCount() and self.hasRune(actor, "double-beat")) self.double_beat_pending[actor] = !self.double_beat_pending[actor];
-    if (actor < self.partyCount() and self.hasRune(actor, "spark")) self.spark_pending = true;
-    const defending = target < self.partyCount() and self.actions[target] != null and self.actions[target].? == .defend;
-    if (enemy_special) {
+    if (party_actor and self.hasRune(actor, "double-beat")) self.double_beat_pending[actor] = !self.double_beat_pending[actor];
+    if (party_actor and self.hasRune(actor, "spark")) self.spark_pending = true;
+    const defending = target < party_count and self.actions[target] != null and self.actions[target].? == .defend;
+    if (mode == .enemy_special) {
         self.active = .{ .actor = actor, .target = target, .kind = .attack, .enemy_special = true, .amount = self.resolvePhysicalDamage(actor, target, self.roll(), defending) * 2 };
         return;
     }
-    const rolled_hit = hitsWithAccuracyPenalty(self.stats(actor).skill, self.stats(target).skill, self.roll(), if (actor < self.partyCount()) self.accuracy_reduced[actor] else target < self.partyCount() and self.hasRune(target, "hazy"));
-    if (!rolled_hit and actor < self.partyCount() and !profile_attack) {
+    const rolled_hit = hitsWithAccuracyPenalty(self.stats(actor).skill, self.stats(target).skill, self.roll(), if (party_actor) self.actor_conditions[actor].accuracy_reduced else target < party_count and self.hasRune(target, "hazy"));
+    if (!rolled_hit and party_actor and !profile_attack) {
         const parry = self.parryAvailable(actor, target) catch {
             self.replay_unsupported = .coordinator_action;
             return;
@@ -661,7 +668,7 @@ pub fn beginAttack(self: *State, actor: usize, requested: usize, enemy_special: 
             return;
         }
     }
-    if (!rolled_hit and actor >= self.partyCount() and !profile_attack) {
+    if (!rolled_hit and !party_actor and !profile_attack) {
         // shortcut: ordinary misses only; extend with each source-qualified special-action policy.
         const counter = self.counterAvailable(actor, target) catch |err| {
             if (err == error.RandomInputExhausted) self.replay_exhausted = true else self.replay_unsupported = .coordinator_action;
@@ -674,15 +681,11 @@ pub fn beginAttack(self: *State, actor: usize, requested: usize, enemy_special: 
             return;
         }
     }
-    const connected = rolled_hit or (if (actor < self.partyCount()) !self.enemy(target - self.partyCount()).dodges_attacks else self.enemy(actor - self.partyCount()).unavoidable_attack);
-    const strike = actor < self.partyCount() and connected and critical(self.stats(actor).skill, self.stats(actor).luck, actor < self.partyCount() and self.hasRune(actor, "killer"), self.roll());
+    const connected = rolled_hit or (if (party_actor) !self.enemy(target - party_count).dodges_attacks else self.enemy(actor - party_count).unavoidable_attack);
+    const strike = party_actor and connected and critical(self.stats(actor).skill, self.stats(actor).luck, self.hasRune(actor, "killer"), self.roll());
     self.active = .{ .actor = actor, .target = target, .kind = if (connected) .attack else .miss, .critical = strike, .followup_from = previous_target, .amount = if (connected) self.resolvePhysicalDamage(actor, target, self.roll(), defending) * @as(u32, if (strike) 3 else 1) else 0, .retargeted_from = if (target != requested_target) requested_target else null };
-    if (actor < self.partyCount()) self.beginAttackPresentation(actor);
+    if (party_actor) presentation_flow.beginAttackPresentation(self, actor);
 }
-pub fn recoverSleep(self: *State, actor: usize) void {
-    status.recoverSleep(self, actor);
-}
-
 pub fn chooseEnemyTarget(self: *State, enemy_index: usize) ?usize {
     if (enemy_index >= self.enemyCount()) return null;
     if (self.enemy(enemy_index).target_policy == .random) {
