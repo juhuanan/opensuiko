@@ -1,0 +1,15 @@
+# Suikoden kit — Python dependencies
+#
+# Install:  pip install -r kit/requirements.txt
+#
+# Pillow is load-bearing: ~18 tools and rebuild_assets.sh render PNG output,
+# and the gate fails loudly without it.
+
+# --- required ---
+Pillow>=9.0          # PNG output (sprite pieces, contact sheets, CLUT swatches)
+numpy>=1.20          # used by render_quads.py and stone_render.py
+
+# --- optional ---
+# matplotlib         # eight_gpu_parse.py / nibble_delta_decode.py diagnostics
+# python-xlib        # tools/emu/boot_live.py and tools/emu/drive.py (emulator
+#                    # rig; retired methodology — needs DISPLAY :99 and Xvfb)

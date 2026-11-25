@@ -1,0 +1,102 @@
+[
+ {
+  "name": "literal_only",
+  "payload": "literal_only.payload.bin",
+  "expected": "literal_only.expected.bin",
+  "expected_sha256": "9ac2197d9258257b1ae8463e4214e4cd0a578bc1517f2415928b91be4283fc48",
+  "mode": "decode_strict",
+  "note": "8 literals; flag-refill-exact termination"
+ },
+ {
+  "name": "match2_abs",
+  "payload": "match2_abs.payload.bin",
+  "expected": "match2_abs.expected.bin",
+  "expected_sha256": "8fc636019a81e548a9e739ac4d45611793256934863719c72da4c3c7e3e86dc6",
+  "mode": "decode_strict",
+  "note": "t0<0x80: len=(t0>>2)+3=3 from 10-bit absolute offset 0x3DE"
+ },
+ {
+  "name": "match1_rel_overlap",
+  "payload": "match1_rel_overlap.payload.bin",
+  "expected": "match1_rel_overlap.expected.bin",
+  "expected_sha256": "a50fad4fd194b3118e8eb5897384fd52cac2590f98f7a2db07997fae6956cd15",
+  "mode": "decode_strict",
+  "note": "0x80<=t0<0xC0: len=((t0&0x30)>>4)+2=5 back=1, overlapping (reads own writes)"
+ },
+ {
+  "name": "literal_run",
+  "payload": "literal_run.payload.bin",
+  "expected": "literal_run.expected.bin",
+  "expected_sha256": "42047b0b9cc2dcb2fc27d6556db34a2fd65ec1ba96cea0b7a20fdfa9ceb942fd",
+  "mode": "decode_strict",
+  "note": "t0>=0xC0: (t0&0x3F)+8 fresh input bytes, NOT RLE (old decoder gave b\"1111111...\")"
+ },
+ {
+  "name": "ring_wrap",
+  "payload": "ring_wrap.payload.bin",
+  "expected": "ring_wrap.expected.bin",
+  "expected_sha256": "f1c18fa18428e5513762fc1e9441618c00ed0458781784cd85a08cf64d67bbc6",
+  "mode": "decode_strict",
+  "note": "hpos wraps 0x400; absolute offset 0x000 reads wrapped history"
+ },
+ {
+  "name": "trunc_run",
+  "payload": "trunc_run.payload.bin",
+  "mode": "must_raise_TruncationError",
+  "note": "strict: literal run cut short by end of input raises TruncationError"
+ },
+ {
+  "name": "trunc_match2",
+  "payload": "trunc_match2.payload.bin",
+  "mode": "must_raise_TruncationError",
+  "note": "strict: 2-byte match missing its offset byte raises TruncationError"
+ },
+ {
+  "name": "dangle_clean",
+  "payload": "dangle_clean.payload.bin",
+  "expected": "dangle_clean.expected.bin",
+  "expected_sha256": "4b68ab3847feda7d6c62c1fbcbeebfa35eab7351ed5e78f4ddadea5df64b8015",
+  "mode": "decode_strict",
+  "note": "token-boundary stop with flag bits pending is clean, not truncation"
+ },
+ {
+  "name": "empty",
+  "payload": "empty.payload.bin",
+  "expected": "empty.expected.bin",
+  "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "mode": "decode_strict",
+  "note": "empty input decodes to empty output"
+ },
+ {
+  "name": "corpus_AIL_S1_c0",
+  "payload": "corpus_AIL_S1_c0.payload.bin",
+  "expected": "corpus_AIL_S1_c0.expected.bin",
+  "expected_sha256": "ecf8d633a1a3e6041a3440a678c3e85a39ef6b6fb7b307bebb91b9e8c96762d9",
+  "mode": "decode_strict",
+  "note": "real AIL.BIN S1.c[0] (3842->16384 bytes)"
+ },
+ {
+  "name": "corpus_AIL_S2_c0",
+  "payload": "corpus_AIL_S2_c0.payload.bin",
+  "expected": "corpus_AIL_S2_c0.expected.bin",
+  "expected_sha256": "37ad358c7cc91989c3aa7703b68151abfe6bbe07238aa2b881634e05da7b6ce7",
+  "mode": "decode_strict",
+  "note": "real AIL.BIN S2.c[0] (3522->16384 bytes)"
+ },
+ {
+  "name": "corpus_ANJ_S1_c0",
+  "payload": "corpus_ANJ_S1_c0.payload.bin",
+  "expected": "corpus_ANJ_S1_c0.expected.bin",
+  "expected_sha256": "27a8d8b815d8a743948d766784359d79908f762f122ff05ce7b47c1481deecf7",
+  "mode": "decode_strict",
+  "note": "real ANJ.BIN S1.c[0] (4323->16384 bytes)"
+ },
+ {
+  "name": "corpus_BT1_1S00",
+  "payload": "corpus_BT1_1S00.payload.bin",
+  "expected": "corpus_BT1_1S00.expected.bin",
+  "expected_sha256": "423662c90420d27876d5e4807650b15df1f00519c877bcf5b36983eade242ed7",
+  "mode": "decode_container",
+  "note": "real BT1_1S00.BIN [u32 comp_len] container -> 16384 bytes (15872 px + 512B palette)"
+ }
+]

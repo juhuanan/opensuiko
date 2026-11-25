@@ -1,0 +1,188 @@
+//! Battle entry/return flow for the journey state.
+const std = @import("std");
+const battle = @import("battle");
+const field = @import("field");
+const encounter_policy = @import("campaign_policies").encounter;
+const party = @import("party_session");
+const save = @import("journey_save");
+const events = field.game_state.event_runtime;
+
+pub fn encounterIndex(content: battle.Content, id: []const u8) ?usize {
+    for (content.encounters, 0..) |encounter, i| if (std.mem.eql(u8, encounter.id, id)) return i;
+    return null;
+}
+
+pub const FieldEncounters = struct {
+    pub const Room = struct {
+        room: []const u8,
+        rate: u8,
+        counter_threshold: u8,
+        candidates: []const encounter_policy.Candidate,
+    };
+
+    schema: []const u8,
+    rooms: []const Room,
+    suppress_when: ?events.Condition = null,
+    clear_suppression_on_world_entry: bool = false,
+
+    pub fn forRoom(self: FieldEncounters, id: []const u8) ?*const Room {
+        for (self.rooms) |*entry| if (std.mem.eql(u8, entry.room, id)) return entry;
+        return null;
+    }
+
+    pub fn validate(self: FieldEncounters, package: field.Package, content: battle.Content) !void {
+        const with_world_reset = std.mem.eql(u8, self.schema, "suikoden-field-movement-encounters/3");
+        const with_suppression = with_world_reset or std.mem.eql(u8, self.schema, "suikoden-field-movement-encounters/2");
+        if ((!with_suppression and !std.mem.eql(u8, self.schema, "suikoden-field-movement-encounters/1")) or
+            self.rooms.len == 0 or self.rooms.len > package.rooms.len) return error.InvalidFieldEncounters;
+        if (self.suppress_when) |condition| {
+            if (!with_suppression or condition.flag.scenarioIndex() == null) return error.InvalidFieldEncounters;
+        }
+        if (self.clear_suppression_on_world_entry and (!with_world_reset or self.suppress_when == null or
+            self.suppress_when.?.kind != .story_mask_set)) return error.InvalidFieldEncounters;
+        for (self.rooms, 0..) |entry, index| {
+            if (package.roomIndex(entry.room) == null) return error.UnknownRoom;
+            if (entry.rate == 0 or entry.candidates.len == 0 or entry.candidates.len > encounter_policy.max_candidates) return error.InvalidFieldEncounters;
+            for (self.rooms[0..index]) |other| if (std.mem.eql(u8, entry.room, other.room)) return error.InvalidFieldEncounters;
+            for (entry.candidates) |candidate| {
+                const encounter = content.encounters[encounterIndex(content, candidate.id) orelse return error.UnknownEncounter];
+                var level_sum: u16 = 0;
+                for (encounter.enemies) |enemy| level_sum += content.enemies[content.enemyIndex(enemy) orelse return error.UnknownEnemy].level;
+                if (candidate.enemy_level_sum != level_sum) return error.InvalidFieldEncounterLevels;
+            }
+        }
+    }
+};
+
+pub fn initialFieldEncounterClock(data: ?FieldEncounters, story: ?events.StoryState) save.Snapshot.EncounterClock {
+    const suppress_when = (data orelse return .{}).suppress_when orelse return .{};
+    const current = story orelse events.StoryState{};
+    return .{ .enabled = !current.matches(&.{suppress_when}) };
+}
+
+pub fn beginReadyFieldEncounter(state: anytype) !bool {
+    const world = &state.field_state;
+    if (!state.field_encounter_clock.ready or state.mode != .field or state.field_event != null or
+        state.menu.phase != .closed or state.menu.pending or world.remaining != 0 or
+        world.dialogue != null or world.rest_ticks != 0) return false;
+    const entry = (state.data.field_encounters orelse return false).forRoom(state.package.rooms[world.room].id) orelse return false;
+    var traits: encounter_policy.Party = .{};
+    for (0..state.combat.partyCount()) |slot| {
+        traits.level_sum += state.combat.levels[slot];
+        traits.suppression_rune = traits.suppression_rune or state.combat.hasRune(slot, "champion's");
+    }
+    const outcome = try encounter_policy.attempt(.{
+        .encounters_enabled = state.field_encounter_clock.enabled,
+        .travel_counter = state.field_encounter_clock.updates,
+        .counter_threshold = entry.counter_threshold,
+    }, traits, .{ .source = .{ .rate = entry.rate, .counter_threshold = entry.counter_threshold } }, entry.candidates, .{ .prng = state.combat.random });
+
+    const random = state.combat.random;
+    const elapsed = state.elapsed_ticks;
+    errdefer {
+        state.combat.random = random;
+        state.elapsed_ticks = elapsed;
+    }
+    switch (outcome) {
+        .blocked => {},
+        .rate_failed => |progress| state.combat.random = progress.draws.prng.?,
+        .rejected => |rejection| state.combat.random = rejection.progress.draws.prng.?,
+        .selected => |selection| {
+            const index = encounterIndex(state.combat.content, selection.candidate.id) orelse return error.UnknownEncounter;
+            state.combat.random = selection.progress.draws.prng.?;
+            state.elapsed_ticks +|= 1;
+            try beginCombat(state, index);
+            return true;
+        },
+    }
+    state.field_encounter_clock.ready = false;
+    return false;
+}
+
+pub fn beginEncounter(state: anytype, index: usize) !void {
+    if (index >= state.data.encounters.len) return error.GameBusy;
+    const encounter = encounterIndex(state.combat.content, state.data.encounters[index].encounter) orelse return error.UnknownEncounter;
+    try beginCombat(state, encounter);
+    state.encounter_trigger = index;
+}
+
+pub fn beginCombat(state: anytype, encounter: usize) !void {
+    if (state.mode != .field or state.scripted_battle != null or state.menu.phase != .closed or state.field_state.dialogue != null or state.field_state.remaining != 0) return error.GameBusy;
+    if (encounter >= state.combat.content.encounters.len) return error.UnknownEncounter;
+    if (state.field_state.progress.party.len > state.extras.len) return error.InvalidExtras;
+    for (state.field_state.progress.party, 0..) |member, slot| {
+        const extra = state.extras[slot];
+        if (extra.member_id.len != 0 and !std.mem.eql(u8, extra.member_id, member.id)) return error.InvalidExtras;
+        if (extra.member_id.len == 0) {
+            if (extra.weapon_element != .none) return error.InvalidExtras;
+            for (extra.weapon_fragments) |count| if (count != 0) return error.InvalidExtras;
+        }
+    }
+    const old_progress = state.combat.progress;
+    state.combat.progress = state.field_state.progress;
+    errdefer state.combat.progress = old_progress;
+    state.checkpoint = try save.Snapshot.capture(state.*);
+    startCombat(state, encounter);
+}
+
+pub fn retryCombat(state: anytype) !void {
+    const checkpoint = state.checkpoint orelse return error.MissingBattleCheckpoint;
+    const encounter = state.combat.encounter;
+    const trigger = state.encounter_trigger;
+    const field_event = state.field_event;
+    const scripted = state.scripted_battle;
+    const suppressed_trigger = state.suppressed_trigger;
+    const encounters_enabled = state.field_encounter_clock.enabled;
+    const field_visit = state.field_state;
+    const initialized_room_visit = state.initialized_room_visit;
+    const checked_arrival_visit = state.checked_arrival_visit;
+    try checkpoint.apply(state);
+    // A combat retry rolls back progress within the current field visit.
+    state.field_state.scene_ticks = field_visit.scene_ticks;
+    state.field_state.movement_updates = field_visit.movement_updates;
+    state.field_state.room_entries = field_visit.room_entries;
+    state.initialized_room_visit = initialized_room_visit;
+    state.checked_arrival_visit = checked_arrival_visit;
+    state.field_encounter_clock.enabled = encounters_enabled;
+    startCombat(state, encounter);
+    state.encounter_trigger = trigger;
+    state.field_event = field_event;
+    state.scripted_battle = scripted;
+    if (scripted != null) state.suppressed_trigger = suppressed_trigger;
+}
+
+fn startCombat(state: anytype, encounter: usize) void {
+    for (0..state.combat.partyCount()) |member| {
+        state.combat.weapon_augments[member] = party.weaponAugment(state.extras[member]);
+    }
+    state.combat.encounter = encounter;
+    state.combat.startEncounter();
+    state.combat.quit_requested = false;
+    state.mode = .battle;
+    state.field_encounter_clock = .{ .enabled = state.field_encounter_clock.enabled };
+    state.field_state.walking = false;
+    state.field_state.action_pending = false;
+}
+
+pub fn returnFromBattle(state: anytype, won: bool) void {
+    if (state.encounter_trigger) |index| {
+        if (won) {
+            state.combat.progress.story.complete(state.data.encounters[index].flag);
+            const uses_prototype_battle = if (state.room_battles) |rooms| rooms.opening_battles.len == 0 else true;
+            if (uses_prototype_battle and state.route.stage == .dungeon and std.mem.eql(u8, state.package.rooms[state.field_state.room].id, "vaa_room_0")) state.route.noteOpeningBattle(.victory_returned);
+        } else {
+            state.world_battle_started = false;
+            state.world_battle_ticks = 0;
+        }
+        state.suppressed_trigger = index;
+    }
+    state.combat.asleep = @splat(0);
+    state.combat.clearTemporaryStats();
+    state.combat.unbalanced = @splat(0);
+    state.field_state.progress = state.combat.progress;
+    state.encounter_trigger = null;
+    state.checkpoint = null;
+    state.mode = .field;
+    state.menu = .{ .preferences = state.menu.preferences, .save_slot = state.menu.save_slot, .region_bgm = state.menu.region_bgm };
+    state.bind();
+}

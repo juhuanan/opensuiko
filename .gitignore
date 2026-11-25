@@ -1,0 +1,173 @@
+# ============================================================================
+# Suikoden kit — git ignore rules
+#
+# Principle: git tracks *knowledge* (docs, tools, tests, curated metadata and
+# manifests). It does NOT track the disc, disc-derived raw bytes, or generated
+# media. Everything ignored here is either reconstructible from the disc with
+# the tools in kit/tools/, or a build artifact.
+# See README.md "What is tracked" and disc/README.md for reconstruction.
+# ============================================================================
+
+# ---- the disc itself (user's own dump; large; never redistribute) ----
+disc/*
+*.[iI][sS][oO]
+*.[cC][hH][dD]
+*.[cC][uU][eE]
+*.[bB][iI][nN]
+*.palbin
+
+# Local documentation
+*.[mM][dD]
+# NOTE 2026-10-04: the rules below used to carry a `suikoden/` path prefix from
+# before this tree was relocated. The prefix matched nothing here, so the
+# disc-derived bytes they were meant to exclude were committed instead (344
+# .BIN / 41 MB under kit/extracted/bin_overlays/, plus .bin/.BIN under kit/work).
+# Prefixes corrected, and the already-committed raws are untracked as of this
+# date. See kit/docs/asset_classification_20261004.md (gap 5) and AGENTS.md §7.
+
+# ---- disc-derived raw bytes (regenerable from the disc) ----
+/kit/work/
+!/kit/data/reports/dump_sprites/*.BIN/
+/kit/data/curated/decoded_text/*.txt
+/kit/data/curated/assets_zig/text/dialogue.json
+/kit/data/reports/war_strings.txt
+/game/assets/campaign/middle/dialogue/*.json
+/game/assets/campaign/opening/field_events.json
+/game/assets/campaign/opening/field_rooms/
+# Synthetic codec fixtures may be checked in. Corpus extracts stay private.
+!/kit/tests/fixtures/lzss/*.bin
+/kit/tests/fixtures/lzss/corpus_*.bin
+kit/extracted/bin_overlays/
+# bin_scan holds both scratch scan OUTPUT and the scan INSTRUMENTS themselves.
+# Excluding the directory wholesale would drop 9 .py scripts + 4 .txt function
+# listings that ARE the error record; `/*` plus negations keeps them tracked
+# while its outputs stay ignored.
+kit/extracted/bin_scan/*
+!kit/extracted/bin_scan/*.py
+!kit/extracted/bin_scan/*.txt
+kit/work/disc_payloads.bin
+kit/work/**/*.8
+kit/work/**/*.obj
+kit/work/**/*.npy
+kit/work/**/*.pkl
+kit/work/*.VA
+kit/work/*.VB
+kit/work/str/
+kit/work/DJ2_decoded.json
+
+# ---- redundant local backups (git is the history now) ----
+*.bak
+*.bak2
+*.bak[0-9]
+
+# ---- generated binary media (all regenerable by a tracked tool) ----
+*.png
+*.webp
+*.jpg
+*.jpeg
+*.gif
+*.wav
+*.mp3
+*.mp4
+*.vag
+*.vag~
+*.ogg
+*.flac
+*.aiff
+*.m4a
+*.mov
+*.psf
+*.minipsf
+*.tim
+*.xa
+*.str
+
+# ---- generated / oversized JSON (handled specially) ----
+kit/work/assets_zig/geometry/
+kit/work/area_tiles/
+kit/work/sprite_gallery*.html
+
+# ---- rebuild_assets.sh scratch tree (bootstrapped sources + candidate package) ----
+# Regenerated from the disc on every build; BUILD_ROOT redirects it entirely.
+kit/work/build/
+
+# ---- candidate outputs (per-plan "fresh candidate output directories") ----
+# Renders, candidate manifests and audit scratch. The findings they support live
+# in kit/docs/ and are pinned by tests in kit/tests/; the bytes are not tracked.
+kit/work/candidates/
+
+# ---- emulator rig (methodology ruled out 2026-10-01; large fixtures) ----
+kit/tools/emu/fixtures/
+kit/tools/emu/shots/
+
+# ---- web-build cruft in goal briefs ----
+goals/**/.artifacts/
+
+# ---- python ----
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# ---- local virtualenv for kit/requirements.txt (regenerable, never tracked) ----
+.venv/
+venv/
+
+# ---- macOS ----
+.DS_Store
+
+# ---- per-run generated manifests (content is verified by rebuild assertions) ----
+kit/work/dump_sprites/manifest.json
+# ---- tool logs ----
+kit/work/**/*.log
+*.log
+
+# ---- music format handoff: raw disc bytes must not be tracked ----
+kit/work/music_handoff/SEQ.BIN
+kit/work/music_handoff/vab/
+kit/work/music_handoff.tar.gz
+
+# ---- VAB source banks extracted from disc (regenerable) ----
+kit/work/assets_zig/audio/banks_src/*.VA
+kit/work/assets_zig/audio/banks_src/*.VB
+kit/work/assets_zig/music/SEQ.BIN
+
+# Obsidian: keep the vault config, ignore per-session UI state.  workspace.json
+# and graph.json record which panes are open and where nodes sit -- they churn on
+# every session and are not knowledge (AGENTS.md section 7: only knowledge is
+# tracked).  app.json (link format) IS config and stays tracked.
+kit/docs/.obsidian/workspace.json
+kit/docs/.obsidian/workspace-mobile.json
+kit/docs/.obsidian/cache
+kit/docs/.obsidian/graph.json
+
+# a 626 KB regenerable tool dump, deliberately not tracked (regenerate with --json)
+kit/work/q_art.json
+
+# Zig caches and installed builds may be external SSD symlinks.
+/.zig-cache/
+game/.zig-cache
+game/zig-out
+
+# Source-only snapshot exclusions
+/archive/
+/kit/data/catalogs/*
+!/kit/data/catalogs/extracted/
+/kit/data/catalogs/extracted/*
+!/kit/data/catalogs/extracted/iso_files.json
+!/kit/data/catalogs/extracted/overlay_lba_table.json
+/kit/extracted/
+/kit/data/registry/
+/kit/data/curated/**
+/kit/data/reports/**
+!/kit/data/curated/**/
+!/kit/data/reports/**/
+!/kit/data/curated/**/*.py
+!/kit/data/reports/**/*.py
+!/kit/data/curated/**/*.sh
+!/kit/data/reports/**/*.sh
+!/kit/data/curated/**/*.lua
+!/kit/data/reports/**/*.lua
+/game/assets/**/*.json
+/game/assets/**/*.zon
+/game/tests/fixtures/**
+/kit/tools/emu/captures/

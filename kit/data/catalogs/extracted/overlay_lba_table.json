@@ -1,0 +1,3472 @@
+{
+ "static_table": {
+  "addr": "0x8004500c",
+  "count": 344,
+  "entry_bytes": 8,
+  "format": "[u32 size][u32 lba], sorted by LBA ascending",
+  "entries": [
+   {
+    "index": 0,
+    "addr": "0x8004500c",
+    "size": 91451,
+    "lba": 18698,
+    "path": "DATA/00_INIT/BATTLE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 1,
+    "addr": "0x80045014",
+    "size": 114116,
+    "lba": 18743,
+    "path": "DATA/00_INIT/LOADING.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 2,
+    "addr": "0x8004501c",
+    "size": 71162,
+    "lba": 22410,
+    "path": "DATA/00_INIT/SEQ.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 3,
+    "addr": "0x80045024",
+    "size": 166534,
+    "lba": 27369,
+    "path": "DATA/01_AREA.A/A_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 4,
+    "addr": "0x8004502c",
+    "size": 163148,
+    "lba": 36347,
+    "path": "DATA/01_AREA.A/DRAGON0.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 5,
+    "addr": "0x80045034",
+    "size": 452536,
+    "lba": 50475,
+    "path": "DATA/01_AREA.A/VA1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 6,
+    "addr": "0x8004503c",
+    "size": 350060,
+    "lba": 50696,
+    "path": "DATA/01_AREA.A/VA2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 7,
+    "addr": "0x80045044",
+    "size": 381994,
+    "lba": 50867,
+    "path": "DATA/01_AREA.A/VA3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 8,
+    "addr": "0x8004504c",
+    "size": 443028,
+    "lba": 51054,
+    "path": "DATA/01_AREA.A/VA4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 9,
+    "addr": "0x80045054",
+    "size": 85260,
+    "lba": 51271,
+    "path": "DATA/01_AREA.A/VA4B.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 10,
+    "addr": "0x8004505c",
+    "size": 130885,
+    "lba": 51313,
+    "path": "DATA/01_AREA.A/VA5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 11,
+    "addr": "0x80045064",
+    "size": 107284,
+    "lba": 51377,
+    "path": "DATA/01_AREA.A/VA6.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 12,
+    "addr": "0x8004506c",
+    "size": 399040,
+    "lba": 51430,
+    "path": "DATA/01_AREA.A/VA7.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 13,
+    "addr": "0x80045074",
+    "size": 253160,
+    "lba": 51625,
+    "path": "DATA/01_AREA.A/VA8.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 14,
+    "addr": "0x8004507c",
+    "size": 147860,
+    "lba": 51749,
+    "path": "DATA/01_AREA.A/VA9.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 15,
+    "addr": "0x80045084",
+    "size": 447732,
+    "lba": 51822,
+    "path": "DATA/01_AREA.A/VAA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 16,
+    "addr": "0x8004508c",
+    "size": 137885,
+    "lba": 52041,
+    "path": "DATA/01_AREA.A/VAAD.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 17,
+    "addr": "0x80045094",
+    "size": 161828,
+    "lba": 56693,
+    "path": "DATA/02_AREA.B/B_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 18,
+    "addr": "0x8004509c",
+    "size": 97654,
+    "lba": 57829,
+    "path": "DATA/02_AREA.B/J_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 19,
+    "addr": "0x800450a4",
+    "size": 279922,
+    "lba": 57877,
+    "path": "DATA/02_AREA.B/VB1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 20,
+    "addr": "0x800450ac",
+    "size": 347104,
+    "lba": 58014,
+    "path": "DATA/02_AREA.B/VB2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 21,
+    "addr": "0x800450b4",
+    "size": 445252,
+    "lba": 58184,
+    "path": "DATA/02_AREA.B/VB3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 22,
+    "addr": "0x800450bc",
+    "size": 272148,
+    "lba": 58402,
+    "path": "DATA/02_AREA.B/VB4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 23,
+    "addr": "0x800450c4",
+    "size": 453044,
+    "lba": 58535,
+    "path": "DATA/02_AREA.B/VB5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 24,
+    "addr": "0x800450cc",
+    "size": 356631,
+    "lba": 58757,
+    "path": "DATA/02_AREA.B/VB5A1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 25,
+    "addr": "0x800450d4",
+    "size": 475156,
+    "lba": 58932,
+    "path": "DATA/02_AREA.B/VB5A2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 26,
+    "addr": "0x800450dc",
+    "size": 16404,
+    "lba": 59165,
+    "path": "DATA/02_AREA.B/VB5A21.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 27,
+    "addr": "0x800450e4",
+    "size": 219892,
+    "lba": 59174,
+    "path": "DATA/02_AREA.B/VB5AB.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 28,
+    "addr": "0x800450ec",
+    "size": 387152,
+    "lba": 59282,
+    "path": "DATA/02_AREA.B/VB5AG.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 29,
+    "addr": "0x800450f4",
+    "size": 465788,
+    "lba": 59472,
+    "path": "DATA/02_AREA.B/VB5B1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 30,
+    "addr": "0x800450fc",
+    "size": 431446,
+    "lba": 59700,
+    "path": "DATA/02_AREA.B/VB5B2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 31,
+    "addr": "0x80045104",
+    "size": 470148,
+    "lba": 59911,
+    "path": "DATA/02_AREA.B/VB5B3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 32,
+    "addr": "0x8004510c",
+    "size": 11396,
+    "lba": 60141,
+    "path": "DATA/02_AREA.B/VB5B31.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 33,
+    "addr": "0x80045114",
+    "size": 296504,
+    "lba": 60147,
+    "path": "DATA/02_AREA.B/VB5B4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 34,
+    "addr": "0x8004511c",
+    "size": 257740,
+    "lba": 60292,
+    "path": "DATA/02_AREA.B/VB5BA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 35,
+    "addr": "0x80045124",
+    "size": 259404,
+    "lba": 60418,
+    "path": "DATA/02_AREA.B/VB5BB.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 36,
+    "addr": "0x8004512c",
+    "size": 460448,
+    "lba": 60545,
+    "path": "DATA/02_AREA.B/VB5BG.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 37,
+    "addr": "0x80045134",
+    "size": 469429,
+    "lba": 60770,
+    "path": "DATA/02_AREA.B/VB5C1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 38,
+    "addr": "0x8004513c",
+    "size": 391382,
+    "lba": 61000,
+    "path": "DATA/02_AREA.B/VB5C2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 39,
+    "addr": "0x80045144",
+    "size": 306932,
+    "lba": 61192,
+    "path": "DATA/02_AREA.B/VB5C3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 40,
+    "addr": "0x8004514c",
+    "size": 561880,
+    "lba": 61342,
+    "path": "DATA/02_AREA.B/VB5C4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 41,
+    "addr": "0x80045154",
+    "size": 292304,
+    "lba": 61617,
+    "path": "DATA/02_AREA.B/VB5CA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 42,
+    "addr": "0x8004515c",
+    "size": 238308,
+    "lba": 61760,
+    "path": "DATA/02_AREA.B/VB5CB.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 43,
+    "addr": "0x80045164",
+    "size": 235491,
+    "lba": 61877,
+    "path": "DATA/02_AREA.B/VB5CC.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 44,
+    "addr": "0x8004516c",
+    "size": 477512,
+    "lba": 61992,
+    "path": "DATA/02_AREA.B/VB5CG.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 45,
+    "addr": "0x80045174",
+    "size": 288672,
+    "lba": 62226,
+    "path": "DATA/02_AREA.B/VB5G.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 46,
+    "addr": "0x8004517c",
+    "size": 140696,
+    "lba": 62367,
+    "path": "DATA/02_AREA.B/VB5I0.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 47,
+    "addr": "0x80045184",
+    "size": 83112,
+    "lba": 62436,
+    "path": "DATA/02_AREA.B/VB5I2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 48,
+    "addr": "0x8004518c",
+    "size": 84428,
+    "lba": 62477,
+    "path": "DATA/02_AREA.B/VB5I3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 49,
+    "addr": "0x80045194",
+    "size": 84752,
+    "lba": 62519,
+    "path": "DATA/02_AREA.B/VB5I4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 50,
+    "addr": "0x8004519c",
+    "size": 458655,
+    "lba": 62561,
+    "path": "DATA/02_AREA.B/VB6.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 51,
+    "addr": "0x800451a4",
+    "size": 206829,
+    "lba": 62785,
+    "path": "DATA/02_AREA.B/VB7.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 52,
+    "addr": "0x800451ac",
+    "size": 320560,
+    "lba": 62886,
+    "path": "DATA/02_AREA.B/VB7A.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 53,
+    "addr": "0x800451b4",
+    "size": 146336,
+    "lba": 63043,
+    "path": "DATA/02_AREA.B/VB7D.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 54,
+    "addr": "0x800451bc",
+    "size": 144024,
+    "lba": 63115,
+    "path": "DATA/02_AREA.B/VB8.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 55,
+    "addr": "0x800451c4",
+    "size": 151333,
+    "lba": 63186,
+    "path": "DATA/02_AREA.B/VB9.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 56,
+    "addr": "0x800451cc",
+    "size": 111552,
+    "lba": 63261,
+    "path": "DATA/03_SHIRO/AZUKARI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 57,
+    "addr": "0x800451d4",
+    "size": 149780,
+    "lba": 63316,
+    "path": "DATA/03_SHIRO/BATH.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 58,
+    "addr": "0x800451dc",
+    "size": 134872,
+    "lba": 63440,
+    "path": "DATA/03_SHIRO/BOOKS.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 59,
+    "addr": "0x800451e4",
+    "size": 59536,
+    "lba": 63516,
+    "path": "DATA/03_SHIRO/COIN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 60,
+    "addr": "0x800451ec",
+    "size": 157380,
+    "lba": 81068,
+    "path": "DATA/03_SHIRO/KARUTA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 61,
+    "addr": "0x800451f4",
+    "size": 59828,
+    "lba": 81207,
+    "path": "DATA/03_SHIRO/MEL_SEL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 62,
+    "addr": "0x800451fc",
+    "size": 321332,
+    "lba": 81237,
+    "path": "DATA/03_SHIRO/SD_TEST.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 63,
+    "addr": "0x80045204",
+    "size": 141092,
+    "lba": 81394,
+    "path": "DATA/03_SHIRO/STONE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 64,
+    "addr": "0x8004520c",
+    "size": 149892,
+    "lba": 83703,
+    "path": "DATA/03_SHIRO/WALL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 65,
+    "addr": "0x80045214",
+    "size": 102148,
+    "lba": 86017,
+    "path": "DATA/03_SHIRO/WIN_SEL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 66,
+    "addr": "0x8004521c",
+    "size": 16547,
+    "lba": 86070,
+    "path": "DATA/03_SHIRO/DATA/BATH_00.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 67,
+    "addr": "0x80045224",
+    "size": 16514,
+    "lba": 86079,
+    "path": "DATA/03_SHIRO/DATA/BATH_01.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 68,
+    "addr": "0x8004522c",
+    "size": 8840,
+    "lba": 86088,
+    "path": "DATA/03_SHIRO/DATA/BATH_02.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 69,
+    "addr": "0x80045234",
+    "size": 14589,
+    "lba": 86093,
+    "path": "DATA/03_SHIRO/DATA/BATH_03.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 70,
+    "addr": "0x8004523c",
+    "size": 14551,
+    "lba": 86101,
+    "path": "DATA/03_SHIRO/DATA/BATH_04.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 71,
+    "addr": "0x80045244",
+    "size": 7866,
+    "lba": 86109,
+    "path": "DATA/03_SHIRO/DATA/BATH_05.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 72,
+    "addr": "0x8004524c",
+    "size": 16314,
+    "lba": 86113,
+    "path": "DATA/03_SHIRO/DATA/BATH_10.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 73,
+    "addr": "0x80045254",
+    "size": 16348,
+    "lba": 86121,
+    "path": "DATA/03_SHIRO/DATA/BATH_11.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 74,
+    "addr": "0x8004525c",
+    "size": 8784,
+    "lba": 86129,
+    "path": "DATA/03_SHIRO/DATA/BATH_12.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 75,
+    "addr": "0x80045264",
+    "size": 13303,
+    "lba": 86134,
+    "path": "DATA/03_SHIRO/DATA/BATH_13.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 76,
+    "addr": "0x8004526c",
+    "size": 13184,
+    "lba": 86141,
+    "path": "DATA/03_SHIRO/DATA/BATH_14.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 77,
+    "addr": "0x80045274",
+    "size": 7522,
+    "lba": 86148,
+    "path": "DATA/03_SHIRO/DATA/BATH_15.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 78,
+    "addr": "0x8004527c",
+    "size": 16450,
+    "lba": 86152,
+    "path": "DATA/03_SHIRO/DATA/BATH_20.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 79,
+    "addr": "0x80045284",
+    "size": 16492,
+    "lba": 86161,
+    "path": "DATA/03_SHIRO/DATA/BATH_21.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 80,
+    "addr": "0x8004528c",
+    "size": 8836,
+    "lba": 86170,
+    "path": "DATA/03_SHIRO/DATA/BATH_22.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 81,
+    "addr": "0x80045294",
+    "size": 13654,
+    "lba": 86175,
+    "path": "DATA/03_SHIRO/DATA/BATH_23.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 82,
+    "addr": "0x8004529c",
+    "size": 13562,
+    "lba": 86182,
+    "path": "DATA/03_SHIRO/DATA/BATH_24.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 83,
+    "addr": "0x800452a4",
+    "size": 7626,
+    "lba": 86189,
+    "path": "DATA/03_SHIRO/DATA/BATH_25.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 84,
+    "addr": "0x800452ac",
+    "size": 15941,
+    "lba": 86193,
+    "path": "DATA/03_SHIRO/DATA/BATH_30.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 85,
+    "addr": "0x800452b4",
+    "size": 15928,
+    "lba": 86201,
+    "path": "DATA/03_SHIRO/DATA/BATH_31.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 86,
+    "addr": "0x800452bc",
+    "size": 8655,
+    "lba": 86209,
+    "path": "DATA/03_SHIRO/DATA/BATH_32.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 87,
+    "addr": "0x800452c4",
+    "size": 13319,
+    "lba": 86214,
+    "path": "DATA/03_SHIRO/DATA/BATH_33.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 88,
+    "addr": "0x800452cc",
+    "size": 12788,
+    "lba": 86221,
+    "path": "DATA/03_SHIRO/DATA/BATH_34.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 89,
+    "addr": "0x800452d4",
+    "size": 7643,
+    "lba": 86228,
+    "path": "DATA/03_SHIRO/DATA/BATH_35.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 90,
+    "addr": "0x800452dc",
+    "size": 7699,
+    "lba": 86232,
+    "path": "DATA/03_SHIRO/DATA/BOOK_0.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 91,
+    "addr": "0x800452e4",
+    "size": 7497,
+    "lba": 86236,
+    "path": "DATA/03_SHIRO/DATA/BOOK_1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 92,
+    "addr": "0x800452ec",
+    "size": 6699,
+    "lba": 86240,
+    "path": "DATA/03_SHIRO/DATA/BOOK_2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 93,
+    "addr": "0x800452f4",
+    "size": 7975,
+    "lba": 86244,
+    "path": "DATA/03_SHIRO/DATA/BOOK_3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 94,
+    "addr": "0x800452fc",
+    "size": 7585,
+    "lba": 86248,
+    "path": "DATA/03_SHIRO/DATA/BOOK_4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 95,
+    "addr": "0x80045304",
+    "size": 5417,
+    "lba": 86252,
+    "path": "DATA/03_SHIRO/DATA/BOOK_5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 96,
+    "addr": "0x8004530c",
+    "size": 7699,
+    "lba": 86255,
+    "path": "DATA/03_SHIRO/DATA/CURIO_0.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 97,
+    "addr": "0x80045314",
+    "size": 11664,
+    "lba": 86259,
+    "path": "DATA/03_SHIRO/DATA/FACE_01.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 98,
+    "addr": "0x8004531c",
+    "size": 11288,
+    "lba": 86265,
+    "path": "DATA/03_SHIRO/DATA/FACE_02.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 99,
+    "addr": "0x80045324",
+    "size": 11492,
+    "lba": 86271,
+    "path": "DATA/03_SHIRO/DATA/FACE_03.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 100,
+    "addr": "0x8004532c",
+    "size": 11495,
+    "lba": 86277,
+    "path": "DATA/03_SHIRO/DATA/FACE_04.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 101,
+    "addr": "0x80045334",
+    "size": 10734,
+    "lba": 86283,
+    "path": "DATA/03_SHIRO/DATA/FACE_05.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 102,
+    "addr": "0x8004533c",
+    "size": 11395,
+    "lba": 86289,
+    "path": "DATA/03_SHIRO/DATA/FACE_06.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 103,
+    "addr": "0x80045344",
+    "size": 11035,
+    "lba": 86295,
+    "path": "DATA/03_SHIRO/DATA/FACE_07.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 104,
+    "addr": "0x8004534c",
+    "size": 10541,
+    "lba": 86301,
+    "path": "DATA/03_SHIRO/DATA/FACE_08.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 105,
+    "addr": "0x80045354",
+    "size": 10876,
+    "lba": 86307,
+    "path": "DATA/03_SHIRO/DATA/FACE_09.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 106,
+    "addr": "0x8004535c",
+    "size": 11289,
+    "lba": 86313,
+    "path": "DATA/03_SHIRO/DATA/FACE_10.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 107,
+    "addr": "0x80045364",
+    "size": 11919,
+    "lba": 86319,
+    "path": "DATA/03_SHIRO/DATA/FACE_11.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 108,
+    "addr": "0x8004536c",
+    "size": 11636,
+    "lba": 86325,
+    "path": "DATA/03_SHIRO/DATA/FACE_12.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 109,
+    "addr": "0x80045374",
+    "size": 10994,
+    "lba": 86331,
+    "path": "DATA/03_SHIRO/DATA/FACE_13.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 110,
+    "addr": "0x8004537c",
+    "size": 10829,
+    "lba": 86337,
+    "path": "DATA/03_SHIRO/DATA/FACE_14.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 111,
+    "addr": "0x80045384",
+    "size": 10953,
+    "lba": 86343,
+    "path": "DATA/03_SHIRO/DATA/FACE_15.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 112,
+    "addr": "0x8004538c",
+    "size": 11070,
+    "lba": 86349,
+    "path": "DATA/03_SHIRO/DATA/FACE_16.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 113,
+    "addr": "0x80045394",
+    "size": 11285,
+    "lba": 86355,
+    "path": "DATA/03_SHIRO/DATA/FACE_17.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 114,
+    "addr": "0x8004539c",
+    "size": 11257,
+    "lba": 86361,
+    "path": "DATA/03_SHIRO/DATA/FACE_18.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 115,
+    "addr": "0x800453a4",
+    "size": 10585,
+    "lba": 86367,
+    "path": "DATA/03_SHIRO/DATA/FACE_19.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 116,
+    "addr": "0x800453ac",
+    "size": 11366,
+    "lba": 86373,
+    "path": "DATA/03_SHIRO/DATA/FACE_20.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 117,
+    "addr": "0x800453b4",
+    "size": 10798,
+    "lba": 86379,
+    "path": "DATA/03_SHIRO/DATA/FACE_21.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 118,
+    "addr": "0x800453bc",
+    "size": 10754,
+    "lba": 86385,
+    "path": "DATA/03_SHIRO/DATA/FACE_22.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 119,
+    "addr": "0x800453c4",
+    "size": 10548,
+    "lba": 86391,
+    "path": "DATA/03_SHIRO/DATA/FACE_23.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 120,
+    "addr": "0x800453cc",
+    "size": 11348,
+    "lba": 86397,
+    "path": "DATA/03_SHIRO/DATA/FACE_24.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 121,
+    "addr": "0x800453d4",
+    "size": 9740,
+    "lba": 86403,
+    "path": "DATA/03_SHIRO/DATA/FACE_25.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 122,
+    "addr": "0x800453dc",
+    "size": 11256,
+    "lba": 86408,
+    "path": "DATA/03_SHIRO/DATA/FACE_26.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 123,
+    "addr": "0x800453e4",
+    "size": 11546,
+    "lba": 86414,
+    "path": "DATA/03_SHIRO/DATA/FACE_27.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 124,
+    "addr": "0x800453ec",
+    "size": 2010,
+    "lba": 86420,
+    "path": "DATA/03_SHIRO/DATA/HANA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 125,
+    "addr": "0x800453f4",
+    "size": 13235,
+    "lba": 86421,
+    "path": "DATA/03_SHIRO/DATA/MIZU_00.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 126,
+    "addr": "0x800453fc",
+    "size": 16422,
+    "lba": 86428,
+    "path": "DATA/03_SHIRO/DATA/PAPER_0.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 127,
+    "addr": "0x80045404",
+    "size": 16347,
+    "lba": 86437,
+    "path": "DATA/03_SHIRO/DATA/PAPER_1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 128,
+    "addr": "0x8004540c",
+    "size": 3461,
+    "lba": 86445,
+    "path": "DATA/03_SHIRO/DATA/PAPER_2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 129,
+    "addr": "0x80045414",
+    "size": 6877,
+    "lba": 86447,
+    "path": "DATA/03_SHIRO/DATA/PAPER_3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 130,
+    "addr": "0x8004541c",
+    "size": 6661,
+    "lba": 86451,
+    "path": "DATA/03_SHIRO/DATA/PAPER_4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 131,
+    "addr": "0x80045424",
+    "size": 1962,
+    "lba": 86455,
+    "path": "DATA/03_SHIRO/DATA/PAPER_5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 132,
+    "addr": "0x8004542c",
+    "size": 16063,
+    "lba": 86456,
+    "path": "DATA/03_SHIRO/DATA/STONE_00.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 133,
+    "addr": "0x80045434",
+    "size": 16186,
+    "lba": 86464,
+    "path": "DATA/03_SHIRO/DATA/STONE_01.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 134,
+    "addr": "0x8004543c",
+    "size": 8690,
+    "lba": 86472,
+    "path": "DATA/03_SHIRO/DATA/STONE_02.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 135,
+    "addr": "0x80045444",
+    "size": 13973,
+    "lba": 86477,
+    "path": "DATA/03_SHIRO/DATA/STONE_03.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 136,
+    "addr": "0x8004544c",
+    "size": 14117,
+    "lba": 86484,
+    "path": "DATA/03_SHIRO/DATA/STONE_04.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 137,
+    "addr": "0x80045454",
+    "size": 7711,
+    "lba": 86491,
+    "path": "DATA/03_SHIRO/DATA/STONE_05.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 138,
+    "addr": "0x8004545c",
+    "size": 15920,
+    "lba": 86495,
+    "path": "DATA/03_SHIRO/DATA/STONE_06.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 139,
+    "addr": "0x80045464",
+    "size": 16159,
+    "lba": 86503,
+    "path": "DATA/03_SHIRO/DATA/STONE_07.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 140,
+    "addr": "0x8004546c",
+    "size": 8774,
+    "lba": 86511,
+    "path": "DATA/03_SHIRO/DATA/STONE_08.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 141,
+    "addr": "0x80045474",
+    "size": 13886,
+    "lba": 86516,
+    "path": "DATA/03_SHIRO/DATA/STONE_09.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 142,
+    "addr": "0x8004547c",
+    "size": 14052,
+    "lba": 86523,
+    "path": "DATA/03_SHIRO/DATA/STONE_0A.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 143,
+    "addr": "0x80045484",
+    "size": 7814,
+    "lba": 86530,
+    "path": "DATA/03_SHIRO/DATA/STONE_0B.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 144,
+    "addr": "0x8004548c",
+    "size": 16214,
+    "lba": 86534,
+    "path": "DATA/03_SHIRO/DATA/STONE_0C.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 145,
+    "addr": "0x80045494",
+    "size": 16434,
+    "lba": 86542,
+    "path": "DATA/03_SHIRO/DATA/STONE_0D.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 146,
+    "addr": "0x8004549c",
+    "size": 8799,
+    "lba": 86551,
+    "path": "DATA/03_SHIRO/DATA/STONE_0E.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 147,
+    "addr": "0x800454a4",
+    "size": 13902,
+    "lba": 86556,
+    "path": "DATA/03_SHIRO/DATA/STONE_0F.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 148,
+    "addr": "0x800454ac",
+    "size": 14272,
+    "lba": 86563,
+    "path": "DATA/03_SHIRO/DATA/STONE_10.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 149,
+    "addr": "0x800454b4",
+    "size": 7715,
+    "lba": 86570,
+    "path": "DATA/03_SHIRO/DATA/STONE_11.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 150,
+    "addr": "0x800454bc",
+    "size": 11812,
+    "lba": 86574,
+    "path": "DATA/03_SHIRO/DATA/YUGE_00.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 151,
+    "addr": "0x800454c4",
+    "size": 16012,
+    "lba": 86583,
+    "path": "DATA/04_PLAY/AIL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 152,
+    "addr": "0x800454cc",
+    "size": 18468,
+    "lba": 86591,
+    "path": "DATA/04_PLAY/ANJ.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 153,
+    "addr": "0x800454d4",
+    "size": 17004,
+    "lba": 86601,
+    "path": "DATA/04_PLAY/ANT.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 154,
+    "addr": "0x800454dc",
+    "size": 17100,
+    "lba": 86610,
+    "path": "DATA/04_PLAY/ARE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 155,
+    "addr": "0x800454e4",
+    "size": 16476,
+    "lba": 86619,
+    "path": "DATA/04_PLAY/BAL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 156,
+    "addr": "0x800454ec",
+    "size": 18404,
+    "lba": 86628,
+    "path": "DATA/04_PLAY/BEL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 157,
+    "addr": "0x800454f4",
+    "size": 17576,
+    "lba": 86637,
+    "path": "DATA/04_PLAY/BLK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 158,
+    "addr": "0x800454fc",
+    "size": 16208,
+    "lba": 86646,
+    "path": "DATA/04_PLAY/CAM.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 159,
+    "addr": "0x80045504",
+    "size": 16416,
+    "lba": 86654,
+    "path": "DATA/04_PLAY/COB.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 160,
+    "addr": "0x8004550c",
+    "size": 16952,
+    "lba": 86663,
+    "path": "DATA/04_PLAY/CRE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 161,
+    "addr": "0x80045514",
+    "size": 14644,
+    "lba": 86672,
+    "path": "DATA/04_PLAY/CRI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 162,
+    "addr": "0x8004551c",
+    "size": 15748,
+    "lba": 86680,
+    "path": "DATA/04_PLAY/CRO.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 163,
+    "addr": "0x80045524",
+    "size": 20416,
+    "lba": 86688,
+    "path": "DATA/04_PLAY/CRW.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 164,
+    "addr": "0x8004552c",
+    "size": 17760,
+    "lba": 86698,
+    "path": "DATA/04_PLAY/CSI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 165,
+    "addr": "0x80045534",
+    "size": 18964,
+    "lba": 86707,
+    "path": "DATA/04_PLAY/EIK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 166,
+    "addr": "0x8004553c",
+    "size": 16860,
+    "lba": 86717,
+    "path": "DATA/04_PLAY/FMA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 167,
+    "addr": "0x80045544",
+    "size": 16672,
+    "lba": 86726,
+    "path": "DATA/04_PLAY/FRI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 168,
+    "addr": "0x8004554c",
+    "size": 16188,
+    "lba": 86735,
+    "path": "DATA/04_PLAY/FUK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 169,
+    "addr": "0x80045554",
+    "size": 16508,
+    "lba": 86743,
+    "path": "DATA/04_PLAY/FUT.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 170,
+    "addr": "0x8004555c",
+    "size": 19136,
+    "lba": 86752,
+    "path": "DATA/04_PLAY/FUU.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 171,
+    "addr": "0x80045564",
+    "size": 16904,
+    "lba": 86762,
+    "path": "DATA/04_PLAY/GEN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 172,
+    "addr": "0x8004556c",
+    "size": 16520,
+    "lba": 86771,
+    "path": "DATA/04_PLAY/GON.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 173,
+    "addr": "0x80045574",
+    "size": 17636,
+    "lba": 86780,
+    "path": "DATA/04_PLAY/GRE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 174,
+    "addr": "0x8004557c",
+    "size": 17376,
+    "lba": 86789,
+    "path": "DATA/04_PLAY/GRI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 175,
+    "addr": "0x80045584",
+    "size": 17124,
+    "lba": 86798,
+    "path": "DATA/04_PLAY/GRN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 176,
+    "addr": "0x8004558c",
+    "size": 17296,
+    "lba": 86807,
+    "path": "DATA/04_PLAY/HAF.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 177,
+    "addr": "0x80045594",
+    "size": 17676,
+    "lba": 86816,
+    "path": "DATA/04_PLAY/HEL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 178,
+    "addr": "0x8004559c",
+    "size": 16780,
+    "lba": 86825,
+    "path": "DATA/04_PLAY/HIC.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 179,
+    "addr": "0x800455a4",
+    "size": 17676,
+    "lba": 86834,
+    "path": "DATA/04_PLAY/JUP.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 180,
+    "addr": "0x800455ac",
+    "size": 16548,
+    "lba": 86843,
+    "path": "DATA/04_PLAY/KAG.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 181,
+    "addr": "0x800455b4",
+    "size": 16420,
+    "lba": 86852,
+    "path": "DATA/04_PLAY/KAI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 182,
+    "addr": "0x800455bc",
+    "size": 16168,
+    "lba": 86861,
+    "path": "DATA/04_PLAY/KAM.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 183,
+    "addr": "0x800455c4",
+    "size": 18444,
+    "lba": 86869,
+    "path": "DATA/04_PLAY/KAS.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 184,
+    "addr": "0x800455cc",
+    "size": 15896,
+    "lba": 86879,
+    "path": "DATA/04_PLAY/KES.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 185,
+    "addr": "0x800455d4",
+    "size": 16136,
+    "lba": 86887,
+    "path": "DATA/04_PLAY/KIB.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 186,
+    "addr": "0x800455dc",
+    "size": 15228,
+    "lba": 86895,
+    "path": "DATA/04_PLAY/KIL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 187,
+    "addr": "0x800455e4",
+    "size": 17780,
+    "lba": 86903,
+    "path": "DATA/04_PLAY/KNA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 188,
+    "addr": "0x800455ec",
+    "size": 16960,
+    "lba": 86912,
+    "path": "DATA/04_PLAY/KRA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 189,
+    "addr": "0x800455f4",
+    "size": 16732,
+    "lba": 86921,
+    "path": "DATA/04_PLAY/KRK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 190,
+    "addr": "0x800455fc",
+    "size": 16980,
+    "lba": 86930,
+    "path": "DATA/04_PLAY/KWA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 191,
+    "addr": "0x80045604",
+    "size": 16356,
+    "lba": 86939,
+    "path": "DATA/04_PLAY/LEO.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 192,
+    "addr": "0x8004560c",
+    "size": 17028,
+    "lba": 86947,
+    "path": "DATA/04_PLAY/LOT.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 193,
+    "addr": "0x80045614",
+    "size": 16224,
+    "lba": 86956,
+    "path": "DATA/04_PLAY/LUB.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 194,
+    "addr": "0x8004561c",
+    "size": 16912,
+    "lba": 86964,
+    "path": "DATA/04_PLAY/LUK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 195,
+    "addr": "0x80045624",
+    "size": 14832,
+    "lba": 86973,
+    "path": "DATA/04_PLAY/MAA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 196,
+    "addr": "0x8004562c",
+    "size": 17420,
+    "lba": 86981,
+    "path": "DATA/04_PLAY/MEG.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 197,
+    "addr": "0x80045634",
+    "size": 16660,
+    "lba": 86990,
+    "path": "DATA/04_PLAY/MES.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 198,
+    "addr": "0x8004563c",
+    "size": 20248,
+    "lba": 86999,
+    "path": "DATA/04_PLAY/MIL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 199,
+    "addr": "0x80045644",
+    "size": 15284,
+    "lba": 87009,
+    "path": "DATA/04_PLAY/MIS.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 200,
+    "addr": "0x8004564c",
+    "size": 19444,
+    "lba": 87017,
+    "path": "DATA/04_PLAY/MOH.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 201,
+    "addr": "0x80045654",
+    "size": 15320,
+    "lba": 87027,
+    "path": "DATA/04_PLAY/MOS.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 202,
+    "addr": "0x8004565c",
+    "size": 17472,
+    "lba": 87035,
+    "path": "DATA/04_PLAY/MRI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 203,
+    "addr": "0x80045664",
+    "size": 15328,
+    "lba": 87044,
+    "path": "DATA/04_PLAY/MUU.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 204,
+    "addr": "0x8004566c",
+    "size": 19456,
+    "lba": 87052,
+    "path": "DATA/04_PLAY/MYI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 205,
+    "addr": "0x80045674",
+    "size": 14992,
+    "lba": 87062,
+    "path": "DATA/04_PLAY/ODE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 206,
+    "addr": "0x8004567c",
+    "size": 19924,
+    "lba": 87070,
+    "path": "DATA/04_PLAY/PAN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 207,
+    "addr": "0x80045684",
+    "size": 17580,
+    "lba": 87080,
+    "path": "DATA/04_PLAY/PSU.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 208,
+    "addr": "0x8004568c",
+    "size": 15808,
+    "lba": 87089,
+    "path": "DATA/04_PLAY/QIN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 209,
+    "addr": "0x80045694",
+    "size": 17580,
+    "lba": 87097,
+    "path": "DATA/04_PLAY/REP.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 210,
+    "addr": "0x8004569c",
+    "size": 17108,
+    "lba": 87106,
+    "path": "DATA/04_PLAY/RES.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 211,
+    "addr": "0x800456a4",
+    "size": 15240,
+    "lba": 87115,
+    "path": "DATA/04_PLAY/ROR.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 212,
+    "addr": "0x800456ac",
+    "size": 15296,
+    "lba": 87123,
+    "path": "DATA/04_PLAY/RYK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 213,
+    "addr": "0x800456b4",
+    "size": 17036,
+    "lba": 87131,
+    "path": "DATA/04_PLAY/SAS.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 214,
+    "addr": "0x800456bc",
+    "size": 15912,
+    "lba": 87140,
+    "path": "DATA/04_PLAY/SEI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 215,
+    "addr": "0x800456c4",
+    "size": 15756,
+    "lba": 87148,
+    "path": "DATA/04_PLAY/SEL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 216,
+    "addr": "0x800456cc",
+    "size": 17332,
+    "lba": 87156,
+    "path": "DATA/04_PLAY/SHU.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 217,
+    "addr": "0x800456d4",
+    "size": 18652,
+    "lba": 87165,
+    "path": "DATA/04_PLAY/SID.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 218,
+    "addr": "0x800456dc",
+    "size": 14248,
+    "lba": 87175,
+    "path": "DATA/04_PLAY/SIL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 219,
+    "addr": "0x800456e4",
+    "size": 19420,
+    "lba": 87182,
+    "path": "DATA/04_PLAY/SNI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 220,
+    "addr": "0x800456ec",
+    "size": 16200,
+    "lba": 87192,
+    "path": "DATA/04_PLAY/STA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 221,
+    "addr": "0x800456f4",
+    "size": 15752,
+    "lba": 87200,
+    "path": "DATA/04_PLAY/SYY.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 222,
+    "addr": "0x800456fc",
+    "size": 16140,
+    "lba": 87208,
+    "path": "DATA/04_PLAY/TAI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 223,
+    "addr": "0x80045704",
+    "size": 14192,
+    "lba": 87216,
+    "path": "DATA/04_PLAY/TED.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 224,
+    "addr": "0x8004570c",
+    "size": 17452,
+    "lba": 87223,
+    "path": "DATA/04_PLAY/TEN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 225,
+    "addr": "0x80045714",
+    "size": 16140,
+    "lba": 87232,
+    "path": "DATA/04_PLAY/VIC.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 226,
+    "addr": "0x8004571c",
+    "size": 18248,
+    "lba": 87240,
+    "path": "DATA/04_PLAY/VRE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 227,
+    "addr": "0x80045724",
+    "size": 15460,
+    "lba": 87249,
+    "path": "DATA/04_PLAY/WOU.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 228,
+    "addr": "0x8004572c",
+    "size": 16544,
+    "lba": 87257,
+    "path": "DATA/04_PLAY/YAM.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 229,
+    "addr": "0x80045734",
+    "size": 146624,
+    "lba": 90627,
+    "path": "DATA/05_BATLE/GAMEOVER.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 230,
+    "addr": "0x8004573c",
+    "size": 170146,
+    "lba": 96338,
+    "path": "DATA/06_AREA.C/C_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 231,
+    "addr": "0x80045744",
+    "size": 327309,
+    "lba": 98566,
+    "path": "DATA/06_AREA.C/VC1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 232,
+    "addr": "0x8004574c",
+    "size": 244860,
+    "lba": 98726,
+    "path": "DATA/06_AREA.C/VC2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 233,
+    "addr": "0x80045754",
+    "size": 248940,
+    "lba": 98846,
+    "path": "DATA/06_AREA.C/VC3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 234,
+    "addr": "0x8004575c",
+    "size": 233952,
+    "lba": 98968,
+    "path": "DATA/06_AREA.C/VC4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 235,
+    "addr": "0x80045764",
+    "size": 156428,
+    "lba": 99083,
+    "path": "DATA/06_AREA.C/VC5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 236,
+    "addr": "0x8004576c",
+    "size": 458752,
+    "lba": 99160,
+    "path": "DATA/06_AREA.C/VC6.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 237,
+    "addr": "0x80045774",
+    "size": 31412,
+    "lba": 99384,
+    "path": "DATA/06_AREA.C/VC61.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 238,
+    "addr": "0x8004577c",
+    "size": 86288,
+    "lba": 99400,
+    "path": "DATA/06_AREA.C/VCD.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 239,
+    "addr": "0x80045784",
+    "size": 163282,
+    "lba": 114798,
+    "path": "DATA/07_AREA.D/D_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 240,
+    "addr": "0x8004578c",
+    "size": 165462,
+    "lba": 115838,
+    "path": "DATA/07_AREA.D/K_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 241,
+    "addr": "0x80045794",
+    "size": 454152,
+    "lba": 118927,
+    "path": "DATA/07_AREA.D/VD1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 242,
+    "addr": "0x8004579c",
+    "size": 401384,
+    "lba": 119149,
+    "path": "DATA/07_AREA.D/VD2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 243,
+    "addr": "0x800457a4",
+    "size": 415460,
+    "lba": 119345,
+    "path": "DATA/07_AREA.D/VD3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 244,
+    "addr": "0x800457ac",
+    "size": 319284,
+    "lba": 119548,
+    "path": "DATA/07_AREA.D/VD4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 245,
+    "addr": "0x800457b4",
+    "size": 428248,
+    "lba": 119704,
+    "path": "DATA/07_AREA.D/VD5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 246,
+    "addr": "0x800457bc",
+    "size": 456068,
+    "lba": 119914,
+    "path": "DATA/07_AREA.D/VD6.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 247,
+    "addr": "0x800457c4",
+    "size": 305932,
+    "lba": 120137,
+    "path": "DATA/07_AREA.D/VD7.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 248,
+    "addr": "0x800457cc",
+    "size": 171938,
+    "lba": 148191,
+    "path": "DATA/08_AREA.E/E_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 249,
+    "addr": "0x800457d4",
+    "size": 372680,
+    "lba": 149107,
+    "path": "DATA/08_AREA.E/VE1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 250,
+    "addr": "0x800457dc",
+    "size": 449872,
+    "lba": 149289,
+    "path": "DATA/08_AREA.E/VE2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 251,
+    "addr": "0x800457e4",
+    "size": 594072,
+    "lba": 149509,
+    "path": "DATA/08_AREA.E/VE3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 252,
+    "addr": "0x800457ec",
+    "size": 270572,
+    "lba": 149800,
+    "path": "DATA/08_AREA.E/VE4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 253,
+    "addr": "0x800457f4",
+    "size": 391728,
+    "lba": 149933,
+    "path": "DATA/08_AREA.E/VE5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 254,
+    "addr": "0x800457fc",
+    "size": 362584,
+    "lba": 150125,
+    "path": "DATA/08_AREA.E/VE6.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 255,
+    "addr": "0x80045804",
+    "size": 167946,
+    "lba": 153258,
+    "path": "DATA/09_AREA.F/F_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 256,
+    "addr": "0x8004580c",
+    "size": 451576,
+    "lba": 153341,
+    "path": "DATA/09_AREA.F/VF1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 257,
+    "addr": "0x80045814",
+    "size": 395292,
+    "lba": 153562,
+    "path": "DATA/09_AREA.F/VF2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 258,
+    "addr": "0x8004581c",
+    "size": 418124,
+    "lba": 153756,
+    "path": "DATA/09_AREA.F/VF3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 259,
+    "addr": "0x80045824",
+    "size": 350656,
+    "lba": 153961,
+    "path": "DATA/09_AREA.F/VF4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 260,
+    "addr": "0x8004582c",
+    "size": 163586,
+    "lba": 156805,
+    "path": "DATA/10_AREA.G/G_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 261,
+    "addr": "0x80045834",
+    "size": 265440,
+    "lba": 156885,
+    "path": "DATA/10_AREA.G/VG1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 262,
+    "addr": "0x8004583c",
+    "size": 265024,
+    "lba": 157015,
+    "path": "DATA/10_AREA.G/VG2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 263,
+    "addr": "0x80045844",
+    "size": 146288,
+    "lba": 157145,
+    "path": "DATA/10_AREA.G/VG3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 264,
+    "addr": "0x8004584c",
+    "size": 165026,
+    "lba": 157249,
+    "path": "DATA/11_AREA.H/H_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 265,
+    "addr": "0x80045854",
+    "size": 452332,
+    "lba": 157330,
+    "path": "DATA/11_AREA.H/VH1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 266,
+    "addr": "0x8004585c",
+    "size": 193584,
+    "lba": 157551,
+    "path": "DATA/11_AREA.H/VH2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 267,
+    "addr": "0x80045864",
+    "size": 140104,
+    "lba": 161871,
+    "path": "DATA/12_IKKI/PAN_TEO.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 268,
+    "addr": "0x8004586c",
+    "size": 138612,
+    "lba": 161940,
+    "path": "DATA/12_IKKI/SHU_KWA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 269,
+    "addr": "0x80045874",
+    "size": 138712,
+    "lba": 162008,
+    "path": "DATA/12_IKKI/SHU_TEO.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 270,
+    "addr": "0x8004587c",
+    "size": 4597,
+    "lba": 162078,
+    "path": "DATA/12_IKKI/DATA/BT1_1S00.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 271,
+    "addr": "0x80045884",
+    "size": 12183,
+    "lba": 162081,
+    "path": "DATA/12_IKKI/DATA/BT2_1S00.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 272,
+    "addr": "0x8004588c",
+    "size": 12792,
+    "lba": 162087,
+    "path": "DATA/12_IKKI/DATA/BT2_1S01.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 273,
+    "addr": "0x80045894",
+    "size": 12353,
+    "lba": 162094,
+    "path": "DATA/12_IKKI/DATA/BT2_1S02.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 274,
+    "addr": "0x8004589c",
+    "size": 12764,
+    "lba": 162101,
+    "path": "DATA/12_IKKI/DATA/BT2_1S03.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 275,
+    "addr": "0x800458a4",
+    "size": 12201,
+    "lba": 162108,
+    "path": "DATA/12_IKKI/DATA/BT2_1S04.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 276,
+    "addr": "0x800458ac",
+    "size": 13450,
+    "lba": 162114,
+    "path": "DATA/12_IKKI/DATA/BT2_1S05.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 277,
+    "addr": "0x800458b4",
+    "size": 12752,
+    "lba": 162121,
+    "path": "DATA/12_IKKI/DATA/BT2_1S06.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 278,
+    "addr": "0x800458bc",
+    "size": 13156,
+    "lba": 162128,
+    "path": "DATA/12_IKKI/DATA/BT2_1S07.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 279,
+    "addr": "0x800458c4",
+    "size": 13243,
+    "lba": 162135,
+    "path": "DATA/12_IKKI/DATA/BT2_1S08.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 280,
+    "addr": "0x800458cc",
+    "size": 10611,
+    "lba": 162142,
+    "path": "DATA/12_IKKI/DATA/BT2_1S09.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 281,
+    "addr": "0x800458d4",
+    "size": 5300,
+    "lba": 162148,
+    "path": "DATA/12_IKKI/DATA/IC_KWA_0.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 282,
+    "addr": "0x800458dc",
+    "size": 5250,
+    "lba": 162151,
+    "path": "DATA/12_IKKI/DATA/IC_KWA_1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 283,
+    "addr": "0x800458e4",
+    "size": 5584,
+    "lba": 162154,
+    "path": "DATA/12_IKKI/DATA/IC_KWA_2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 284,
+    "addr": "0x800458ec",
+    "size": 4650,
+    "lba": 162157,
+    "path": "DATA/12_IKKI/DATA/IC_KWA_3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 285,
+    "addr": "0x800458f4",
+    "size": 3255,
+    "lba": 162160,
+    "path": "DATA/12_IKKI/DATA/IC_KWA_4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 286,
+    "addr": "0x800458fc",
+    "size": 3427,
+    "lba": 162162,
+    "path": "DATA/12_IKKI/DATA/IC_KWA_5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 287,
+    "addr": "0x80045904",
+    "size": 3718,
+    "lba": 162164,
+    "path": "DATA/12_IKKI/DATA/IC_KWA_6.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 288,
+    "addr": "0x8004590c",
+    "size": 4609,
+    "lba": 162166,
+    "path": "DATA/12_IKKI/DATA/IC_PAN_0.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 289,
+    "addr": "0x80045914",
+    "size": 4577,
+    "lba": 162169,
+    "path": "DATA/12_IKKI/DATA/IC_PAN_1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 290,
+    "addr": "0x8004591c",
+    "size": 4560,
+    "lba": 162172,
+    "path": "DATA/12_IKKI/DATA/IC_PAN_2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 291,
+    "addr": "0x80045924",
+    "size": 3824,
+    "lba": 162175,
+    "path": "DATA/12_IKKI/DATA/IC_PAN_3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 292,
+    "addr": "0x8004592c",
+    "size": 3672,
+    "lba": 162177,
+    "path": "DATA/12_IKKI/DATA/IC_PAN_4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 293,
+    "addr": "0x80045934",
+    "size": 3590,
+    "lba": 162179,
+    "path": "DATA/12_IKKI/DATA/IC_PAN_5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 294,
+    "addr": "0x8004593c",
+    "size": 2013,
+    "lba": 162181,
+    "path": "DATA/12_IKKI/DATA/IC_PAN_6.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 295,
+    "addr": "0x80045944",
+    "size": 4998,
+    "lba": 162182,
+    "path": "DATA/12_IKKI/DATA/IC_SHU_0.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 296,
+    "addr": "0x8004594c",
+    "size": 5261,
+    "lba": 162185,
+    "path": "DATA/12_IKKI/DATA/IC_SHU_1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 297,
+    "addr": "0x80045954",
+    "size": 5069,
+    "lba": 162188,
+    "path": "DATA/12_IKKI/DATA/IC_SHU_2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 298,
+    "addr": "0x8004595c",
+    "size": 3855,
+    "lba": 162191,
+    "path": "DATA/12_IKKI/DATA/IC_SHU_3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 299,
+    "addr": "0x80045964",
+    "size": 5323,
+    "lba": 162193,
+    "path": "DATA/12_IKKI/DATA/IC_SHU_4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 300,
+    "addr": "0x8004596c",
+    "size": 3384,
+    "lba": 162196,
+    "path": "DATA/12_IKKI/DATA/IC_SHU_5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 301,
+    "addr": "0x80045974",
+    "size": 3244,
+    "lba": 162198,
+    "path": "DATA/12_IKKI/DATA/IC_SHU_6.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 302,
+    "addr": "0x8004597c",
+    "size": 5227,
+    "lba": 162200,
+    "path": "DATA/12_IKKI/DATA/IC_TEO_0.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 303,
+    "addr": "0x80045984",
+    "size": 4917,
+    "lba": 162203,
+    "path": "DATA/12_IKKI/DATA/IC_TEO_1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 304,
+    "addr": "0x8004598c",
+    "size": 5342,
+    "lba": 162206,
+    "path": "DATA/12_IKKI/DATA/IC_TEO_2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 305,
+    "addr": "0x80045994",
+    "size": 4228,
+    "lba": 162209,
+    "path": "DATA/12_IKKI/DATA/IC_TEO_3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 306,
+    "addr": "0x8004599c",
+    "size": 5596,
+    "lba": 162212,
+    "path": "DATA/12_IKKI/DATA/IC_TEO_4.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 307,
+    "addr": "0x800459a4",
+    "size": 3514,
+    "lba": 162215,
+    "path": "DATA/12_IKKI/DATA/IC_TEO_5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 308,
+    "addr": "0x800459ac",
+    "size": 3348,
+    "lba": 162217,
+    "path": "DATA/12_IKKI/DATA/IC_TEO_6.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 309,
+    "addr": "0x800459b4",
+    "size": 9769,
+    "lba": 162219,
+    "path": "DATA/12_IKKI/DATA/SKY1_1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 310,
+    "addr": "0x800459bc",
+    "size": 9057,
+    "lba": 162224,
+    "path": "DATA/12_IKKI/DATA/SKY1_2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 311,
+    "addr": "0x800459c4",
+    "size": 9519,
+    "lba": 162229,
+    "path": "DATA/12_IKKI/DATA/SKY1_3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 312,
+    "addr": "0x800459cc",
+    "size": 12130,
+    "lba": 162234,
+    "path": "DATA/12_IKKI/DATA/SKY2_1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 313,
+    "addr": "0x800459d4",
+    "size": 12472,
+    "lba": 162240,
+    "path": "DATA/12_IKKI/DATA/SKY2_2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 314,
+    "addr": "0x800459dc",
+    "size": 11508,
+    "lba": 162247,
+    "path": "DATA/12_IKKI/DATA/SKY2_3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 315,
+    "addr": "0x800459e4",
+    "size": 13129,
+    "lba": 162253,
+    "path": "DATA/12_IKKI/DATA/SKY3_1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 316,
+    "addr": "0x800459ec",
+    "size": 13501,
+    "lba": 162260,
+    "path": "DATA/12_IKKI/DATA/SKY3_2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 317,
+    "addr": "0x800459f4",
+    "size": 13813,
+    "lba": 162267,
+    "path": "DATA/12_IKKI/DATA/SKY3_3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 318,
+    "addr": "0x800459fc",
+    "size": 2,
+    "lba": 164771,
+    "path": "DATA/13_AREA.I/I_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 319,
+    "addr": "0x80045a04",
+    "size": 360220,
+    "lba": 164772,
+    "path": "DATA/13_AREA.I/VI1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 320,
+    "addr": "0x80045a0c",
+    "size": 334928,
+    "lba": 164948,
+    "path": "DATA/13_AREA.I/VI2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 321,
+    "addr": "0x80045a14",
+    "size": 477524,
+    "lba": 165113,
+    "path": "DATA/14_AREA.S/VS1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 322,
+    "addr": "0x80045a1c",
+    "size": 409636,
+    "lba": 165347,
+    "path": "DATA/14_AREA.S/VS2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 323,
+    "addr": "0x80045a24",
+    "size": 446596,
+    "lba": 179356,
+    "path": "DATA/15_AREA.Z/VAC.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 324,
+    "addr": "0x80045a2c",
+    "size": 561700,
+    "lba": 179575,
+    "path": "DATA/15_AREA.Z/VAD.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 325,
+    "addr": "0x80045a34",
+    "size": 117600,
+    "lba": 179850,
+    "path": "DATA/15_AREA.Z/VZ1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 326,
+    "addr": "0x80045a3c",
+    "size": 346024,
+    "lba": 179908,
+    "path": "DATA/15_AREA.Z/VZ2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 327,
+    "addr": "0x80045a44",
+    "size": 390790,
+    "lba": 180077,
+    "path": "DATA/15_AREA.Z/VZ3.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 328,
+    "addr": "0x80045a4c",
+    "size": 129397,
+    "lba": 180268,
+    "path": "DATA/15_AREA.Z/VZ5.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 329,
+    "addr": "0x80045a54",
+    "size": 444284,
+    "lba": 180332,
+    "path": "DATA/15_AREA.Z/VZ7.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 330,
+    "addr": "0x80045a5c",
+    "size": 100772,
+    "lba": 180549,
+    "path": "DATA/15_AREA.Z/VZ8.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 331,
+    "addr": "0x80045a64",
+    "size": 134628,
+    "lba": 180599,
+    "path": "DATA/15_AREA.Z/VZV.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 332,
+    "addr": "0x80045a6c",
+    "size": 165974,
+    "lba": 180665,
+    "path": "DATA/15_AREA.Z/Z_DATA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 333,
+    "addr": "0x80045a74",
+    "size": 538756,
+    "lba": 180804,
+    "path": "DATA/16_WAR/WAR1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 334,
+    "addr": "0x80045a7c",
+    "size": 627812,
+    "lba": 181068,
+    "path": "DATA/16_WAR/WAR_GARA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 335,
+    "addr": "0x80045a84",
+    "size": 624852,
+    "lba": 181375,
+    "path": "DATA/16_WAR/WAR_KITA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 336,
+    "addr": "0x80045a8c",
+    "size": 620504,
+    "lba": 181681,
+    "path": "DATA/16_WAR/WAR_KUWA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 337,
+    "addr": "0x80045a94",
+    "size": 620036,
+    "lba": 181984,
+    "path": "DATA/16_WAR/WAR_LAST.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 338,
+    "addr": "0x80045a9c",
+    "size": 618436,
+    "lba": 182287,
+    "path": "DATA/16_WAR/WAR_SCA1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 339,
+    "addr": "0x80045aa4",
+    "size": 611708,
+    "lba": 182589,
+    "path": "DATA/16_WAR/WAR_SCA2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 340,
+    "addr": "0x80045aac",
+    "size": 619636,
+    "lba": 182888,
+    "path": "DATA/16_WAR/WAR_SHAS.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 341,
+    "addr": "0x80045ab4",
+    "size": 625596,
+    "lba": 183191,
+    "path": "DATA/16_WAR/WAR_TEO1.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 342,
+    "addr": "0x80045abc",
+    "size": 625448,
+    "lba": 183497,
+    "path": "DATA/16_WAR/WAR_TEO2.BIN",
+    "iso_size_match": true
+   },
+   {
+    "index": 343,
+    "addr": "0x80045ac4",
+    "size": 67,
+    "lba": 183803,
+    "path": "DATA/16_WAR/W_HEADER.BIN",
+    "iso_size_match": true
+   }
+  ]
+ },
+ "id_registry": {
+  "addr": "0x80044d94",
+  "count": 78,
+  "entry_bytes": 8,
+  "format": "[u32 overlay_id][u32 desc_ptr -> static_table entry]",
+  "entries": [
+   {
+    "id": 8,
+    "table_index": 216,
+    "desc_addr": "0x800456cc",
+    "size": 17332,
+    "lba": 87156,
+    "path": "DATA/04_PLAY/SHU.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 2,
+    "table_index": 173,
+    "desc_addr": "0x80045574",
+    "size": 17636,
+    "lba": 86780,
+    "path": "DATA/04_PLAY/GRE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 6,
+    "table_index": 206,
+    "desc_addr": "0x8004567c",
+    "size": 19924,
+    "lba": 87070,
+    "path": "DATA/04_PLAY/PAN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 1,
+    "table_index": 160,
+    "desc_addr": "0x8004550c",
+    "size": 16952,
+    "lba": 86663,
+    "path": "DATA/04_PLAY/CRE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 108,
+    "table_index": 223,
+    "desc_addr": "0x80045704",
+    "size": 14192,
+    "lba": 87216,
+    "path": "DATA/04_PLAY/TED.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 35,
+    "table_index": 225,
+    "desc_addr": "0x80045714",
+    "size": 16140,
+    "lba": 87232,
+    "path": "DATA/04_PLAY/VIC.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 109,
+    "table_index": 205,
+    "desc_addr": "0x80045674",
+    "size": 14992,
+    "lba": 87062,
+    "path": "DATA/04_PLAY/ODE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 3,
+    "table_index": 182,
+    "desc_addr": "0x800455bc",
+    "size": 16168,
+    "lba": 86861,
+    "path": "DATA/04_PLAY/KAM.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 32,
+    "table_index": 222,
+    "desc_addr": "0x800456fc",
+    "size": 16140,
+    "lba": 87208,
+    "path": "DATA/04_PLAY/TAI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 14,
+    "table_index": 159,
+    "desc_addr": "0x80045504",
+    "size": 16416,
+    "lba": 86654,
+    "path": "DATA/04_PLAY/COB.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 4,
+    "table_index": 186,
+    "desc_addr": "0x800455dc",
+    "size": 15228,
+    "lba": 86895,
+    "path": "DATA/04_PLAY/KIL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 47,
+    "table_index": 211,
+    "desc_addr": "0x800456a4",
+    "size": 15240,
+    "lba": 87115,
+    "path": "DATA/04_PLAY/ROR.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 75,
+    "table_index": 220,
+    "desc_addr": "0x800456ec",
+    "size": 16200,
+    "lba": 87192,
+    "path": "DATA/04_PLAY/STA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 36,
+    "table_index": 226,
+    "desc_addr": "0x8004571c",
+    "size": 18248,
+    "lba": 87240,
+    "path": "DATA/04_PLAY/VRE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 0,
+    "table_index": 151,
+    "desc_addr": "0x800454c4",
+    "size": 16012,
+    "lba": 86583,
+    "path": "DATA/04_PLAY/AIL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 38,
+    "table_index": 228,
+    "desc_addr": "0x8004572c",
+    "size": 16544,
+    "lba": 87257,
+    "path": "DATA/04_PLAY/YAM.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 30,
+    "table_index": 209,
+    "desc_addr": "0x80045694",
+    "size": 17580,
+    "lba": 87097,
+    "path": "DATA/04_PLAY/REP.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 15,
+    "table_index": 161,
+    "desc_addr": "0x80045514",
+    "size": 14644,
+    "lba": 86672,
+    "path": "DATA/04_PLAY/CRI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 39,
+    "table_index": 179,
+    "desc_addr": "0x800455a4",
+    "size": 17676,
+    "lba": 86834,
+    "path": "DATA/04_PLAY/JUP.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 45,
+    "table_index": 185,
+    "desc_addr": "0x800455d4",
+    "size": 16136,
+    "lba": 86887,
+    "path": "DATA/04_PLAY/KIB.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 21,
+    "table_index": 176,
+    "desc_addr": "0x8004558c",
+    "size": 17296,
+    "lba": 86807,
+    "path": "DATA/04_PLAY/HAF.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 74,
+    "table_index": 162,
+    "desc_addr": "0x8004551c",
+    "size": 15748,
+    "lba": 86680,
+    "path": "DATA/04_PLAY/CRO.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 5,
+    "table_index": 201,
+    "desc_addr": "0x80045654",
+    "size": 15320,
+    "lba": 87027,
+    "path": "DATA/04_PLAY/MOS.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 62,
+    "table_index": 221,
+    "desc_addr": "0x800456f4",
+    "size": 15752,
+    "lba": 87200,
+    "path": "DATA/04_PLAY/SYY.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 63,
+    "table_index": 178,
+    "desc_addr": "0x8004559c",
+    "size": 16780,
+    "lba": 86825,
+    "path": "DATA/04_PLAY/HIC.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 91,
+    "table_index": 181,
+    "desc_addr": "0x800455b4",
+    "size": 16420,
+    "lba": 86852,
+    "path": "DATA/04_PLAY/KAI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 31,
+    "table_index": 217,
+    "desc_addr": "0x800456d4",
+    "size": 18652,
+    "lba": 87165,
+    "path": "DATA/04_PLAY/SID.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 18,
+    "table_index": 168,
+    "desc_addr": "0x8004554c",
+    "size": 16188,
+    "lba": 86735,
+    "path": "DATA/04_PLAY/FUK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 9,
+    "table_index": 218,
+    "desc_addr": "0x800456dc",
+    "size": 14248,
+    "lba": 87175,
+    "path": "DATA/04_PLAY/SIL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 20,
+    "table_index": 171,
+    "desc_addr": "0x80045564",
+    "size": 16904,
+    "lba": 86762,
+    "path": "DATA/04_PLAY/GEN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 76,
+    "table_index": 196,
+    "desc_addr": "0x8004562c",
+    "size": 17420,
+    "lba": 86981,
+    "path": "DATA/04_PLAY/MEG.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 26,
+    "table_index": 194,
+    "desc_addr": "0x8004561c",
+    "size": 16912,
+    "lba": 86964,
+    "path": "DATA/04_PLAY/LUK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 7,
+    "table_index": 212,
+    "desc_addr": "0x800456ac",
+    "size": 15296,
+    "lba": 87123,
+    "path": "DATA/04_PLAY/RYK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 13,
+    "table_index": 156,
+    "desc_addr": "0x800454ec",
+    "size": 18404,
+    "lba": 86628,
+    "path": "DATA/04_PLAY/BEL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 22,
+    "table_index": 180,
+    "desc_addr": "0x800455ac",
+    "size": 16548,
+    "lba": 86843,
+    "path": "DATA/04_PLAY/KAG.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 65,
+    "table_index": 170,
+    "desc_addr": "0x8004555c",
+    "size": 19136,
+    "lba": 86752,
+    "path": "DATA/04_PLAY/FUU.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 55,
+    "table_index": 166,
+    "desc_addr": "0x8004553c",
+    "size": 16860,
+    "lba": 86717,
+    "path": "DATA/04_PLAY/FMA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 61,
+    "table_index": 204,
+    "desc_addr": "0x8004566c",
+    "size": 19456,
+    "lba": 87052,
+    "path": "DATA/04_PLAY/MYI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 73,
+    "table_index": 157,
+    "desc_addr": "0x800454f4",
+    "size": 17576,
+    "lba": 86637,
+    "path": "DATA/04_PLAY/BLK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 81,
+    "table_index": 189,
+    "desc_addr": "0x800455f4",
+    "size": 16732,
+    "lba": 86921,
+    "path": "DATA/04_PLAY/KRK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 54,
+    "table_index": 214,
+    "desc_addr": "0x800456bc",
+    "size": 15912,
+    "lba": 87140,
+    "path": "DATA/04_PLAY/SEI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 101,
+    "table_index": 153,
+    "desc_addr": "0x800454d4",
+    "size": 17004,
+    "lba": 86601,
+    "path": "DATA/04_PLAY/ANT.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 102,
+    "table_index": 210,
+    "desc_addr": "0x8004569c",
+    "size": 17108,
+    "lba": 87106,
+    "path": "DATA/04_PLAY/RES.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 53,
+    "table_index": 188,
+    "desc_addr": "0x800455ec",
+    "size": 16960,
+    "lba": 86912,
+    "path": "DATA/04_PLAY/KRA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 64,
+    "table_index": 163,
+    "desc_addr": "0x80045524",
+    "size": 20416,
+    "lba": 86688,
+    "path": "DATA/04_PLAY/CRW.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 17,
+    "table_index": 167,
+    "desc_addr": "0x80045544",
+    "size": 16672,
+    "lba": 86726,
+    "path": "DATA/04_PLAY/FRI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 16,
+    "table_index": 164,
+    "desc_addr": "0x8004552c",
+    "size": 17760,
+    "lba": 86698,
+    "path": "DATA/04_PLAY/CSI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 10,
+    "table_index": 219,
+    "desc_addr": "0x800456e4",
+    "size": 19420,
+    "lba": 87182,
+    "path": "DATA/04_PLAY/SNI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 19,
+    "table_index": 169,
+    "desc_addr": "0x80045554",
+    "size": 16508,
+    "lba": 86743,
+    "path": "DATA/04_PLAY/FUT.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 11,
+    "table_index": 152,
+    "desc_addr": "0x800454cc",
+    "size": 18468,
+    "lba": 86591,
+    "path": "DATA/04_PLAY/ANJ.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 48,
+    "table_index": 154,
+    "desc_addr": "0x800454dc",
+    "size": 17100,
+    "lba": 86610,
+    "path": "DATA/04_PLAY/ARE.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 12,
+    "table_index": 155,
+    "desc_addr": "0x800454e4",
+    "size": 16476,
+    "lba": 86619,
+    "path": "DATA/04_PLAY/BAL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 67,
+    "table_index": 158,
+    "desc_addr": "0x800454fc",
+    "size": 16208,
+    "lba": 86646,
+    "path": "DATA/04_PLAY/CAM.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 66,
+    "table_index": 165,
+    "desc_addr": "0x80045534",
+    "size": 18964,
+    "lba": 86707,
+    "path": "DATA/04_PLAY/EIK.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 80,
+    "table_index": 172,
+    "desc_addr": "0x8004556c",
+    "size": 16520,
+    "lba": 86771,
+    "path": "DATA/04_PLAY/GON.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 42,
+    "table_index": 174,
+    "desc_addr": "0x8004557c",
+    "size": 17376,
+    "lba": 86789,
+    "path": "DATA/04_PLAY/GRI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 49,
+    "table_index": 175,
+    "desc_addr": "0x80045584",
+    "size": 17124,
+    "lba": 86798,
+    "path": "DATA/04_PLAY/GRN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 59,
+    "table_index": 177,
+    "desc_addr": "0x80045594",
+    "size": 17676,
+    "lba": 86816,
+    "path": "DATA/04_PLAY/HEL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 23,
+    "table_index": 183,
+    "desc_addr": "0x800455c4",
+    "size": 18444,
+    "lba": 86869,
+    "path": "DATA/04_PLAY/KAS.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 40,
+    "table_index": 184,
+    "desc_addr": "0x800455cc",
+    "size": 15896,
+    "lba": 86879,
+    "path": "DATA/04_PLAY/KES.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 43,
+    "table_index": 187,
+    "desc_addr": "0x800455e4",
+    "size": 17780,
+    "lba": 86903,
+    "path": "DATA/04_PLAY/KNA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 25,
+    "table_index": 190,
+    "desc_addr": "0x800455fc",
+    "size": 16980,
+    "lba": 86930,
+    "path": "DATA/04_PLAY/KWA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 41,
+    "table_index": 191,
+    "desc_addr": "0x80045604",
+    "size": 16356,
+    "lba": 86939,
+    "path": "DATA/04_PLAY/LEO.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 56,
+    "table_index": 192,
+    "desc_addr": "0x8004560c",
+    "size": 17028,
+    "lba": 86947,
+    "path": "DATA/04_PLAY/LOT.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 51,
+    "table_index": 193,
+    "desc_addr": "0x80045614",
+    "size": 16224,
+    "lba": 86956,
+    "path": "DATA/04_PLAY/LUB.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 70,
+    "table_index": 195,
+    "desc_addr": "0x80045624",
+    "size": 14832,
+    "lba": 86973,
+    "path": "DATA/04_PLAY/MAA.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 71,
+    "table_index": 197,
+    "desc_addr": "0x80045634",
+    "size": 16660,
+    "lba": 86990,
+    "path": "DATA/04_PLAY/MES.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 28,
+    "table_index": 198,
+    "desc_addr": "0x8004563c",
+    "size": 20248,
+    "lba": 86999,
+    "path": "DATA/04_PLAY/MIL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 69,
+    "table_index": 199,
+    "desc_addr": "0x80045644",
+    "size": 15284,
+    "lba": 87009,
+    "path": "DATA/04_PLAY/MIS.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 52,
+    "table_index": 200,
+    "desc_addr": "0x8004564c",
+    "size": 19444,
+    "lba": 87017,
+    "path": "DATA/04_PLAY/MOH.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 29,
+    "table_index": 202,
+    "desc_addr": "0x8004565c",
+    "size": 17472,
+    "lba": 87035,
+    "path": "DATA/04_PLAY/MRI.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 72,
+    "table_index": 203,
+    "desc_addr": "0x80045664",
+    "size": 15328,
+    "lba": 87044,
+    "path": "DATA/04_PLAY/MUU.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 107,
+    "table_index": 207,
+    "desc_addr": "0x80045684",
+    "size": 17580,
+    "lba": 87080,
+    "path": "DATA/04_PLAY/PSU.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 68,
+    "table_index": 208,
+    "desc_addr": "0x8004568c",
+    "size": 15808,
+    "lba": 87089,
+    "path": "DATA/04_PLAY/QIN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 95,
+    "table_index": 213,
+    "desc_addr": "0x800456b4",
+    "size": 17036,
+    "lba": 87131,
+    "path": "DATA/04_PLAY/SAS.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 92,
+    "table_index": 215,
+    "desc_addr": "0x800456c4",
+    "size": 15756,
+    "lba": 87148,
+    "path": "DATA/04_PLAY/SEL.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 33,
+    "table_index": 224,
+    "desc_addr": "0x8004570c",
+    "size": 17452,
+    "lba": 87223,
+    "path": "DATA/04_PLAY/TEN.BIN",
+    "iso_size_match": true
+   },
+   {
+    "id": 37,
+    "table_index": 227,
+    "desc_addr": "0x80045724",
+    "size": 15460,
+    "lba": 87249,
+    "path": "DATA/04_PLAY/WOU.BIN",
+    "iso_size_match": true
+   }
+  ]
+ }
+}
