@@ -47,7 +47,8 @@ test "scripted crossing owns Journey input and arrives before its final movement
     try std.testing.expectError(error.UnsupportedCrossingCaller, journey.travel.Active.begin(state.package, state.field_state, origin, wrong_caller));
     state.auto_travel = try journey.travel.Active.begin(state.package, state.field_state, origin, program);
     try std.testing.expectError(error.GameBusy, journey.Snapshot.capture(state));
-    _ = try state.tickWithFieldEvents(.{ .menu = true, .field = .{ .direction = .right } }, .{});
+    const scripted = try state.advanceSimulation(.{ .menu = .{ .menu = true, .field = .{ .direction = .right } } }, null);
+    try expect(scripted.crossing == .scripted);
     try equal(@as(f32, 951.5), state.field_state.position(state.package).x);
     for (0..304) |_| _ = try state.tickWithFieldEvents(.{ .menu = true, .field = .{ .direction = .right, .action = true } }, .{});
     try equal(@as(usize, 1), state.field_state.room);
@@ -72,14 +73,20 @@ test "scripted crossing owns Journey input and arrives before its final movement
     state.field_state.facing = .right;
     state.boat_travel = try journey.travel.Boat.begin(state.package, state.field_state, .left);
     const boat_rng = state.combat.random;
+    const idle = try state.advanceSimulation(.{}, null);
+    try expect(idle.crossing == .steered and idle.crossing.steered == null);
     const paused_boat = state.boat_travel.?;
-    _ = try state.tickWithFieldEvents(.{ .menu = true }, .{});
+    const pause_open = try state.advanceSimulation(.{ .menu = .{ .menu = true } }, null);
+    try expect(pause_open.crossing == .none);
     try equal(pause.Phase.root, state.menu.phase);
     _ = try state.tickWithFieldEvents(.{ .field = .{ .direction = .right } }, .{});
     try std.testing.expectEqualDeep(paused_boat, state.boat_travel.?);
     _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
     try equal(pause.Phase.closed, state.menu.phase);
-    for (0..18 * 16) |_| _ = try state.tickWithFieldEvents(.{ .field = .{ .direction = .right } }, .{});
+    for (0..18 * 16) |_| {
+        const steered = try state.advanceSimulation(.{ .menu = .{ .field = .{ .direction = .right } } }, null);
+        try expect(steered.crossing == .steered and steered.crossing.steered == .east);
+    }
     try equal(field.Point{ .x = 944, .y = 600 }, state.field_state.destination);
     const boat_save = try journey.Snapshot.capture(state);
     var invalid_boat = boat_save;
@@ -3985,7 +3992,15 @@ test "Journey dice and party selection refuse input without a source request" {
     try std.testing.expectEqualDeep(before, try journey.Snapshot.capture(state));
     state.party_selection = .{ .receipt = .{ .content_sha256 = "", .program = "", .instance = 0, .batch = 0 } };
     try std.testing.expectError(error.GameBusy, journey.Snapshot.capture(state));
-    state.party_selection = null;
+    const field_ticks = state.field_state.scene_ticks;
+    const headless_ticks = state.elapsed_ticks;
+    try equal(.none, try state.tickWithFieldEvents(.{ .menu = true }, .{}));
+    try equal(headless_ticks + 1, state.elapsed_ticks);
+    try equal(field_ticks, state.field_state.scene_ticks);
+    try equal(.closed, state.menu.phase);
+    const ticks = state.elapsed_ticks;
+    try std.testing.expectError(error.MissingFieldPartySelectRequest, state.advanceSimulation(.{ .party = .{} }, null));
+    try equal(ticks, state.elapsed_ticks);
 }
 
 test "dice entry waits for text closure and permits repeated instructions" {
@@ -4071,13 +4086,16 @@ test "journey modalOwner follows strict modal and traversal priority" {
     state.menu.phase = .root;
     try expect(state.modalOwner(.{}) == .field_menu);
 
+    state.party_selection = @as(journey.party_selection.Active, undefined);
+    try expect(state.modalOwner(.{}) == .party_selection);
+
     state.dice_game = @as(journey.dice.Active, undefined);
-    try expect(state.modalOwner(.{}) == .dice_or_party_selection);
+    try expect(state.modalOwner(.{}) == .dice);
 
     state.boat_travel = @as(journey.travel.Boat, undefined);
     state.menu.phase = .closed;
     try expect(state.modalOwner(.{}) == .boat_travel);
-    try expect(state.modalOwner(.{ .menu = true }) == .dice_or_party_selection);
+    try expect(state.modalOwner(.{ .menu = true }) == .dice);
 
     state.auto_travel = @as(journey.travel.Active, undefined);
     try expect(state.modalOwner(.{}) == .auto_travel);
@@ -4107,7 +4125,7 @@ test "journey simulation cancels teleport ahead of a pending party selector" {
     const input = pause.Input{ .field = .{ .cancel = true } };
     const owner = state.modalOwner(input);
     try equal(.teleport, owner);
-    try equal(.none, try state.tickWithModalOwner(owner, input, .{}));
+    try equal(.none, (try state.advanceSimulation(.{ .menu = input }, null)).effect);
     try expect(state.teleport_session == null);
     try expect(state.party_selection != null);
 }

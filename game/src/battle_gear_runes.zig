@@ -108,21 +108,20 @@ pub fn canCast(self: *const State, member: usize, spell: usize) bool {
     if (member >= self.partyCount() or spell >= rules.spells.len) return false;
     if (rules.spells[spell].kind == .source_rule and self.integration == null) return false;
     const tier = self.spellTier(member, spell) orelse return false;
-    return self.participates(member) and self.actor_conditions[member].sleep_turns == 0 and self.unbalanced[member] == 0 and !self.actor_conditions[member].rune_blocked and self.progress.party[member].rune_charges[tier] > 0;
+    return self.canStartAttack(member) and !self.actor_conditions[member].rune_blocked and self.progress.party[member].rune_charges[tier] > 0;
 }
 pub fn physicalRune(self: *const State, member: usize) ?systems.PhysicalRune {
     const owned = self.rune(member) orelse return null;
     return owned.physical;
 }
 pub fn canPhysicalRune(self: *const State, member: usize) bool {
+    if (!self.canStartAttack(member) or self.actor_conditions[member].rune_blocked) return false;
     if (self.unite_actors) |bundle| if (bundle.physicalPacket()) |packet| {
-        if (!(member < self.partyCount() and self.participates(member) and self.unbalanced[member] == 0 and self.actor_conditions[member].sleep_turns == 0 and !self.actor_conditions[member].rune_blocked)) return false;
         const technique = technique_systems.physical.techniqueForRune(self.runeByteFor(member) orelse return false) orelse return false;
         for (packet.find(technique).?.members) |id| if (std.mem.eql(u8, id, self.progress.party[member].id)) return true;
         return false;
     };
-    if (member < self.partyCount() and self.partyProfile(member).motion == null and self.partyProfile(member).attack.len == 0) return false;
-    if (!(member < self.partyCount() and self.participates(member) and self.unbalanced[member] == 0 and self.actor_conditions[member].sleep_turns == 0 and !self.actor_conditions[member].rune_blocked)) return false;
+    if (self.partyProfile(member).motion == null and self.partyProfile(member).attack.len == 0) return false;
     if (self.physicalRune(member) != null) return true;
     // Battle techniques add Shrike/Falcon/Trick, which the shared systems catalogue
     // does not list as physical techniques; the source rune byte is the
@@ -173,7 +172,7 @@ pub fn unitePartner(self: *const State, actor: usize) ?usize {
     const definition = self.uniteDefinition(actor) orelse return null;
     const id = self.partyProfile(actor).id;
     const other = if (std.mem.eql(u8, id, definition.members[0])) definition.members[1] else definition.members[0];
-    for (self.progress.party, 0..) |member, i| if (std.mem.eql(u8, member.id, other) and self.participates(i) and member.status != .poisoned and self.actor_conditions[i].sleep_turns == 0 and self.unbalanced[i] == 0) return i;
+    for (self.progress.party, 0..) |member, i| if (std.mem.eql(u8, member.id, other) and self.canStartAttack(i) and member.status != .poisoned) return i;
     return null;
 }
 pub fn actionMotion(self: *const State, member: usize) ?presentation.Motion {
@@ -191,7 +190,7 @@ pub fn attackFrames(self: *const State, member: usize) []const Frame {
 pub fn canUnite(self: *const State, actor: usize) bool {
     if (self.integration != null) return self.canUniteIntegrated(actor);
     const partner = self.unitePartner(actor) orelse return false;
-    return self.participates(actor) and self.progress.party[actor].status != .poisoned and self.actor_conditions[actor].sleep_turns == 0 and self.unbalanced[actor] == 0 and (self.actions[partner] == null or (self.actions[partner].? == .assist and self.actions[partner].?.assist == actor));
+    return self.canStartAttack(actor) and self.progress.party[actor].status != .poisoned and (self.actions[partner] == null or (self.actions[partner].? == .assist and self.actions[partner].?.assist == actor));
 }
 pub fn roll(self: *State) u15 {
     if (self.replay_draws) |draws| return draws.next() catch {

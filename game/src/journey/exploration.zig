@@ -51,15 +51,52 @@ fn usesDerivedRoomExit(state: *const journey.State, room: []const u8) bool {
     return true;
 }
 
-pub fn tickAutomaticTravel(state: *journey.State) !void {
+pub fn tickTeleport(state: *journey.State, input: pause.Input) !void {
+    var session = state.teleport_session.?;
+    const command: journey.travel.teleport.Input = if (input.field.cancel)
+        .cancel
+    else if (input.field.action)
+        .confirm
+    else if (input.left)
+        .left
+    else if (input.right)
+        .right
+    else switch (input.field.menu_direction orelse return) {
+        .up => .up,
+        .down => .down,
+        .left => .left,
+        .right => .right,
+    };
+    if (command == .confirm and session.visibleCount() == 0) return;
+    switch (try session.tick(command)) {
+        .none => state.teleport_session = session,
+        .cancelled => state.teleport_session = null,
+        .confirmed => |proposal| {
+            try journey.travel.commitTeleport(&session, state.package, &state.field_state, proposal);
+            state.teleport_session = null;
+            try onRoomChange(state, false);
+        },
+    }
+}
+
+pub const CrossingUpdate = union(enum) {
+    none,
+    scripted,
+    steered: ?journey.travel.BoatDirection,
+};
+
+pub fn tickAutomaticTravel(state: *journey.State) !CrossingUpdate {
     if (state.mode != .field or state.menu.phase != .closed) return error.InvalidCrossingOwner;
-    const arrived = try state.auto_travel.?.tick(state.package, &state.field_state);
+    const travel = &state.auto_travel.?;
+    const flight = travel.flight;
+    const arrived = try travel.tick(state.package, &state.field_state);
     state.elapsed_ticks +|= 1;
     if (arrived) {
         state.auto_travel = null;
         state.field_event = null;
         try onRoomChange(state, false);
     }
+    return if (flight) .none else .scripted;
 }
 
 pub fn shouldTickBoat(state: *const journey.State, input: pause.Input) bool {
@@ -67,15 +104,17 @@ pub fn shouldTickBoat(state: *const journey.State, input: pause.Input) bool {
         !(input.menu and state.field_state.remaining == 0);
 }
 
-pub fn tickBoat(state: *journey.State, direction: ?field.Direction) !void {
+pub fn tickBoat(state: *journey.State, direction: ?field.Direction) !CrossingUpdate {
+    const steering = journey.travel.boatDirection(direction);
     const packet = state.boat_data orelse return error.MissingBoatOwner;
-    const arrived = try state.boat_travel.?.tick(packet.*, state.package, &state.field_state, direction);
+    const arrived = try state.boat_travel.?.tick(packet.*, state.package, &state.field_state, steering);
     state.elapsed_ticks +|= 1;
     if (arrived) {
         state.boat_travel = null;
         state.field_event = null;
         try onRoomChange(state, false);
     }
+    return .{ .steered = steering };
 }
 
 pub fn tickFieldExploration(state: *journey.State, input: pause.Input, room_events: journey.RoomEventMode) !pause.Effect {
@@ -83,10 +122,8 @@ pub fn tickFieldExploration(state: *journey.State, input: pause.Input, room_even
     const old_entry = state.field_state.room_entries;
     const old_x = state.field_state.x;
     const old_y = state.field_state.y;
-    const old_dialogue = state.field_state.dialogue;
-    const old_movement_updates = state.field_state.movement_updates;
     const can_arm = state.menu.phase == .closed and !state.menu.pending and !input.menu and
-        old_dialogue == null and state.field_state.rest_ticks == 0 and state.field_state.remaining == 0 and input.field.direction != null;
+        state.field_state.dialogue == null and state.field_state.rest_ticks == 0 and state.field_state.remaining == 0 and input.field.direction != null;
     var menu_input = input;
     menu_input.weapon_pieces = true;
     menu_input.has_shared_items = state.shared_items[0] != null;
@@ -99,7 +136,8 @@ pub fn tickFieldExploration(state: *journey.State, input: pause.Input, room_even
         .query = roomBoundaryGroundQuery,
         .authoritative = true,
     } else null;
-    var effect = state.menu.tickWithArrivalAndGround(state.package, &state.field_state, menu_input, arrival, ground);
+    var update = state.menu.tickWithArrivalAndGround(state.package, &state.field_state, menu_input, arrival, ground);
+    var effect = update.effect;
     if (effect == .blinking_mirror) {
         journey.travel.useMirror(state.teleport_catalogue.?, state.package, &state.field_state, state.menu.member, state.menu.slot) catch |err| {
             if (err != error.OutsideRequired) return err;
@@ -127,15 +165,15 @@ pub fn tickFieldExploration(state: *journey.State, input: pause.Input, room_even
         state.menu.slot = @min(state.menu.slot, state.combat.progress.party[state.menu.member].inventory.count() -| 1);
         effect = .none;
     }
-    const moved = old_movement_updates != state.field_state.movement_updates;
-    if (arrival == .deferred and moved and state.field_state.remaining == 0) {
+    const moved = update.movement.movement_advanced;
+    if (arrival == .deferred and update.movement.step_completed) {
         _ = try events_host.admitRoomEvent(state, .{ .direction = input.field.direction }, .automatic);
         if (state.field_event == null) {
-            state.field_state.finishStepArrival(state.package);
+            update.movement.room_entered = state.field_state.finishStepArrival(state.package);
             state.menu.finishPending(&state.field_state);
         } else state.menu.pending = false;
     }
-    if (old_entry != state.field_state.room_entries) try onRoomChange(state, false);
+    if (update.movement.room_entered) try onRoomChange(state, false);
     if (moved) {
         state.combat.applyFieldStatuses();
     }
@@ -209,6 +247,7 @@ pub fn tickFieldExploration(state: *journey.State, input: pause.Input, room_even
         state.field_encounter_clock.updates +|= @intFromBool(moved);
         if (can_arm and state.menu.phase == .closed and state.field_state.dialogue == null) state.field_encounter_clock.ready = true;
     }
+    const old_dialogue = update.closed_dialogue;
     if (old_dialogue != null and state.field_state.dialogue == null and input.field.action and old_dialogue.?.source == .npc) {
         const npc = state.package.rooms[old_room].npcs[old_dialogue.?.source.npc];
         if (!input.field.cancel and old_dialogue.?.phase == .recruitment_joined and std.mem.eql(u8, npc.id, "maas")) {

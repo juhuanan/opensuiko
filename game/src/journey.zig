@@ -88,7 +88,15 @@ pub fn load(allocator: std.mem.Allocator, bytes: []const u8, package: field.Pack
     return parsed;
 }
 pub const Mode = enum { field, battle, duel, war, ending, defeat, game_over };
+pub const TickSounds = struct {
+    field: ?u16,
+    party_window_count: u8,
+    battle: []const battle.unite_playback.Sound,
+};
+
 pub const ModalOwner = dispatch.ModalOwner;
+pub const SimulationInput = dispatch.SimulationInput;
+pub const SimulationStep = dispatch.SimulationStep;
 pub const RoomEventMode = enum { enabled, disabled };
 pub const ActiveDuel = struct {
     parsed: std.json.Parsed(duel.Content),
@@ -520,6 +528,16 @@ pub const State = struct {
         try field_dialogue_view.compose(font, owner.session, owner.binding.dialogue, self.fieldCamera(), list, choice_box);
     }
 
+    pub fn takeTickSounds(self: *State) TickSounds {
+        const field_sound = if (self.mode == .field) self.takeFieldSound() else null;
+        const queued_battle = self.combat.unite_vm.takeSounds();
+        return .{
+            .field = field_sound,
+            .party_window_count = party_selection.takeWindowOpenCues(self),
+            .battle = if (self.mode == .battle or self.mode == .defeat) queued_battle else &.{},
+        };
+    }
+
     pub fn takeFieldSound(self: *State) ?u16 {
         if (self.menu.pending_sound) |cue| {
             self.menu.pending_sound = null;
@@ -557,12 +575,11 @@ pub const State = struct {
         return events_host.sharedItemNames(self);
     }
 
-    pub noinline fn tickWithFieldEvents(self: *State, input: pause.Input, combat_input: battle.Input) !pause.Effect {
-        return self.tickWithModalOwner(self.modalOwner(input), input, combat_input);
-    }
+    pub const advanceSimulation = dispatch.advanceSimulation;
 
-    pub fn tickWithModalOwner(self: *State, owner: ModalOwner, input: pause.Input, combat_input: battle.Input) !pause.Effect {
-        return dispatch.tickWithModalOwner(self, owner, input, combat_input);
+    pub noinline fn tickWithFieldEvents(self: *State, input: pause.Input, combat_input: battle.Input) !pause.Effect {
+        // Headless field replays provide neither a modeled dice audio host nor a party sample.
+        return (try self.advanceSimulation(.{ .menu = input, .battle = combat_input }, null)).effect;
     }
 
     pub fn tickPartySelection(self: *State, controls: party_selection.selector.Controls) !void {
@@ -582,12 +599,12 @@ pub const State = struct {
     }
 
     pub fn tick(self: *State, input: pause.Input, combat_input: battle.Input) pause.Effect {
-        if (self.auto_travel == null and exploration.handleReadyFieldEncounter(self)) return .none;
-        return dispatch.tickCore(self, input, combat_input, .disabled) catch |err| {
+        const step = self.advanceSimulation(.{ .menu = input, .battle = combat_input, .room_events = .disabled }, null) catch |err| {
             std.log.warn("Room setup failed: {s}", .{@errorName(err)});
             self.menu.notify("Room setup failed.");
             return .none;
         };
+        return step.effect;
     }
 
     pub fn startDuelById(self: *State, allocator: std.mem.Allocator, duel_id: []const u8) !void {

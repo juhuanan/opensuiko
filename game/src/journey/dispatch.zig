@@ -12,9 +12,9 @@ const modes = @import("modes.zig");
 /// 3. `item_overload` — forced item-overload disposal blocks movement/events.
 /// 4. `pending_field_music` — field event waits until the host completes requested BGM swap/fade.
 /// 5. `auto_travel` / 6. `boat_travel` — active crossings override free exploration.
-/// 7. `dice_or_party_selection` — the frame supplies input and audio for this owner.
-/// 8. `field_menu` — open pause menu without an owning field event bypasses room-event admission.
-/// 9. `world_or_event` — normal room event admission and mode-specific `tickCore`.
+/// 7. `dice` / 8. `party_selection` — the active modal owns the frame until its field handoff completes.
+/// 9. `field_menu` — open pause menu without an owning field event bypasses room-event admission.
+/// 10. `world_or_event` — normal room event admission and mode-specific `tickCore`.
 pub const ModalOwner = enum {
     teleport,
     side_game,
@@ -22,7 +22,8 @@ pub const ModalOwner = enum {
     pending_field_music,
     auto_travel,
     boat_travel,
-    dice_or_party_selection,
+    dice,
+    party_selection,
     field_menu,
     world_or_event,
 };
@@ -34,73 +35,65 @@ pub fn modalOwner(state: *const journey.State, input: pause.Input) ModalOwner {
     if (state.pendingFieldMusic() != null) return .pending_field_music;
     if (state.auto_travel != null) return .auto_travel;
     if (exploration.shouldTickBoat(state, input)) return .boat_travel;
-    if (state.dice_game != null or state.party_selection != null) return .dice_or_party_selection;
+    if (state.dice_game != null) return .dice;
+    if (state.party_selection != null) return .party_selection;
     if (state.field_event == null and state.menu.phase != .closed) return .field_menu;
     return .world_or_event;
 }
 
-fn tickTeleport(state: *journey.State, input: pause.Input) !void {
-    var session = state.teleport_session.?;
-    const command: journey.travel.teleport.Input = if (input.field.cancel)
-        .cancel
-    else if (input.field.action)
-        .confirm
-    else if (input.left)
-        .left
-    else if (input.right)
-        .right
-    else switch (input.field.menu_direction orelse return) {
-        .up => .up,
-        .down => .down,
-        .left => .left,
-        .right => .right,
-    };
-    if (command == .confirm and session.visibleCount() == 0) return;
-    switch (try session.tick(command)) {
-        .none => state.teleport_session = session,
-        .cancelled => state.teleport_session = null,
-        .confirmed => |proposal| {
-            try journey.travel.commitTeleport(&session, state.package, &state.field_state, proposal);
-            state.teleport_session = null;
-            try exploration.onRoomChange(state, false);
-        },
-    }
-}
+pub const SimulationInput = struct {
+    menu: pause.Input = .{},
+    battle: battle.Input = .{},
+    dice: journey.dice.Entry.Controls = .{},
+    party: ?journey.party_selection.selector.Sampler.Sample = null,
+    room_events: journey.RoomEventMode = .enabled,
+};
 
-pub noinline fn tickWithModalOwner(state: *journey.State, modal: ModalOwner, input: pause.Input, combat_input: battle.Input) !pause.Effect {
-    switch (modal) {
+pub const SimulationStep = struct {
+    crossing: exploration.CrossingUpdate = .none,
+    effect: pause.Effect = .none,
+    poll_field_music: bool = false,
+    dice_audio: journey.dice.AudioEvents = .{},
+};
+
+pub noinline fn advanceSimulation(state: *journey.State, frame: SimulationInput, audio: anytype) !SimulationStep {
+    const input = frame.menu;
+    const combat_input = frame.battle;
+    const owner = modalOwner(state, input);
+    if (frame.room_events == .disabled and (owner == .world_or_event or owner == .boat_travel) and
+        exploration.handleReadyFieldEncounter(state)) return .{};
+    switch (owner) {
         .teleport => {
-            try tickTeleport(state, input);
-            return .none;
+            try exploration.tickTeleport(state, input);
+            return .{};
         },
         .side_game => {
             try journey.side_games.tick(state, input);
             state.elapsed_ticks +|= 1;
-            return .none;
+            return .{};
         },
         .item_overload => {
             try journey.overload.tick(state, input);
             state.elapsed_ticks +|= 1;
-            return .none;
+            return .{};
         },
-        .pending_field_music => return .none,
-        .auto_travel => {
-            try exploration.tickAutomaticTravel(state);
-            return .none;
+        .pending_field_music => return .{ .poll_field_music = true },
+        .auto_travel => return .{ .crossing = try exploration.tickAutomaticTravel(state) },
+        .boat_travel => return .{ .crossing = try exploration.tickBoat(state, input.field.direction) },
+        .dice => return .{ .dice_audio = try journey.dice.advanceFrame(state, input, frame.dice, audio) },
+        .party_selection => {
+            try journey.party_selection.advanceFrame(state, frame.party);
+            return .{};
         },
-        .boat_travel => {
-            try exploration.tickBoat(state, input.field.direction);
-            return .none;
-        },
-        .dice_or_party_selection => {
-            if (state.dice_game != null and !journey.dice.usesModel(state)) try journey.dice.tickPlain(state, input);
-            state.elapsed_ticks +|= 1;
-            return .none;
-        },
-        .field_menu => return tickCore(state, input, combat_input, .disabled),
-        .world_or_event => {},
+        .field_menu => return .{ .effect = try tickCore(state, input, combat_input, .disabled) },
+        .world_or_event => return .{ .effect = if (frame.room_events == .enabled)
+            try tickWorldOrEvent(state, input, combat_input)
+        else
+            try tickCore(state, input, combat_input, .disabled) },
     }
+}
 
+fn tickWorldOrEvent(state: *journey.State, input: pause.Input, combat_input: battle.Input) !pause.Effect {
     try events_host.initializeRoomVisit(state);
     const consumed_action = try events_host.admitRoomEvent(state, input.field, .all);
     const owner = state.field_event orelse {
@@ -119,19 +112,7 @@ pub noinline fn tickWithModalOwner(state: *journey.State, modal: ModalOwner, inp
     return events_host.tickActiveFieldEvent(state, owner, input, consumed_action);
 }
 
-pub fn tickCore(state: *journey.State, input: pause.Input, combat_input: battle.Input, room_events: journey.RoomEventMode) !pause.Effect {
-    if (exploration.shouldTickBoat(state, input)) {
-        try exploration.tickBoat(state, input.field.direction);
-        return .none;
-    }
-    if (state.auto_travel != null) {
-        try exploration.tickAutomaticTravel(state);
-        return .none;
-    }
-    if (state.dice_game != null or state.party_selection != null) {
-        state.elapsed_ticks +|= 1;
-        return .none;
-    }
+fn tickCore(state: *journey.State, input: pause.Input, combat_input: battle.Input, room_events: journey.RoomEventMode) !pause.Effect {
     if (state.mode == .game_over) return .none;
     if (state.mode != .field or state.menu.phase == .closed) state.elapsed_ticks +|= 1;
     state.bind();

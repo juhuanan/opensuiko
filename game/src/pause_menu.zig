@@ -34,6 +34,12 @@ const facilities = @import("menu/services/facilities.zig");
 pub const Command = enum { item, strength, rune, formation, equipment, setup, storage, appraisal, save, load, new_game, back };
 pub const labels = [_][]const u8{ "Item", "Strength", "Rune", "Formation", "Equipment", "Setup", "Storage", "Appraisal", "Save", "Load", "New Game", "Return" };
 pub const Phase = enum { appraisal, confirm_appraisal, appraisal_notice, storage, storage_items, confirm_storage, storage_notice, closed, root, save_slots, load_slots, name_save, setup, strength, confirm_save, confirm_load, confirm_new_game, notice, items, item_action, item_transfer, confirm_discard, item_target, confirm_weapon_piece, item_notice, shop, blacksmith, confirm_blacksmith, rune_service, rune_attach, confirm_rune_attach, confirm_rune_remove, buy_member, confirm_buy, sell_items, confirm_sell, shop_notice, formation, formation_target, equipment, equipment_items, rune, rune_target, character_notice, shared_items, bathhouse, bath, tablet, library, library_reading, window_style, window_color, sound_theme, jukebox };
+pub const TickResult = struct {
+    effect: Effect = .none,
+    movement: field.Update = .{},
+    closed_dialogue: ?field.Dialogue = null,
+};
+
 pub const Effect = enum { none, save, load, inspect_saves, settings_changed, party_give, party_discard, party_equip, weapon_piece, blinking_mirror, new_game };
 pub const Input = struct { field: field.Input = .{}, menu: bool = false, left: bool = false, right: bool = false, text: []const u8 = "", erase: bool = false, party_transactions: bool = false, weapon_pieces: bool = false, has_shared_items: bool = false, travel_tools: bool = false };
 
@@ -126,22 +132,31 @@ pub const State = struct {
     }
 
     pub fn tickWithArrival(self: *State, package: field.Package, game: *field.State, input: Input, arrival: field.StepArrival) Effect {
-        return self.tickWithArrivalAndGround(package, game, input, arrival, null);
+        return self.tickWithArrivalAndGround(package, game, input, arrival, null).effect;
     }
 
-    pub fn tickWithArrivalAndGround(self: *State, package: field.Package, game: *field.State, input: Input, arrival: field.StepArrival, ground: ?field.Ground) Effect {
-        if (self.phase == .closed) {
-            if (service_dispatch.openPendingOrDialogue(self, package, game, input)) |effect| return effect;
-            if (input.menu and game.dialogue == null and game.rest_ticks == 0) self.pending = true;
-            if (self.pending) {
-                if (game.remaining > 0) {
-                    game.tickWithArrival(package, .{}, ground, arrival);
-                    if (arrival == .deferred and game.remaining == 0) return .none;
-                }
-                self.finishPending(game);
-            } else game.tickWithArrival(package, input.field, ground, arrival);
-            return .none;
+    pub fn tickWithArrivalAndGround(self: *State, package: field.Package, game: *field.State, input: Input, arrival: field.StepArrival, ground: ?field.Ground) TickResult {
+        const dialogue = game.dialogue;
+        var result = self.advanceFrame(package, game, input, arrival, ground);
+        if (game.dialogue == null) result.closed_dialogue = dialogue;
+        return result;
+    }
+
+    fn advanceFrame(self: *State, package: field.Package, game: *field.State, input: Input, arrival: field.StepArrival, ground: ?field.Ground) TickResult {
+        if (self.phase != .closed) return .{ .effect = self.tickMenu(game, input) };
+        if (service_dispatch.openPendingOrDialogue(self, package, game, input)) |effect| return .{ .effect = effect };
+        if (input.menu and game.dialogue == null and game.rest_ticks == 0) self.pending = true;
+        if (!self.pending) return .{ .movement = game.tickWithArrival(package, input.field, ground, arrival) };
+        var update: field.Update = .{};
+        if (game.remaining > 0) {
+            update = game.tickWithArrival(package, .{}, ground, arrival);
+            if (arrival == .deferred and game.remaining == 0) return .{ .movement = update };
         }
+        self.finishPending(game);
+        return .{ .movement = update };
+    }
+
+    fn tickMenu(self: *State, game: *field.State, input: Input) Effect {
         if (input.field.cancel) {
             nav.handleCancel(self);
             return .none;

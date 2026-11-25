@@ -81,14 +81,13 @@ pub noinline fn pump(self: *Session, binding: Binding, state: *field.State, stor
         }
     };
     if (stepped.batch) |batch| {
-        if (staged.instance.?.pendingBattle()) |id| {
-            staged.pending_battle = id;
-            self.* = staged;
-            return true;
-        }
-        if (staged.instance.?.pendingFixedDice() or staged.instance.?.pendingPartySelect() or staged.instance.?.pendingItemOverload() or (handoffs.pendingFieldMusic(&staged) != null and program.entry != .initialization)) {
-            self.* = staged;
-            return true;
+        if (handoffs.pendingGameplayRequest(&staged)) |request| {
+            // Initialization music is applied in the same batch as before.
+            if (request != .field_music or program.entry != .initialization) {
+                if (request == .battle) staged.pending_battle = request.battle.id;
+                self.* = staged;
+                return true;
+            }
         }
         var staged_state_progress: field.game_state.Progress = undefined;
         var staged_state = state.stageProgress(&staged_state_progress);

@@ -249,6 +249,14 @@ pub fn enemyRow(self: *const State, target: usize) Row {
 pub fn weaponRange(self: *const State, member: usize) WeaponRange {
     return self.partyProfile(member).weapon_range orelse .short;
 }
+// The source round boundary and legacy resolution give simultaneous defeats different precedence.
+pub fn combatOutcome(self: *const State, first: enum { party, enemy }) enum { ongoing, victory, defeat } {
+    if (first == .party and self.firstLiving(true) == null) return .defeat;
+    if (self.firstLiving(false) == null) return .victory;
+    if (first == .enemy and self.firstLiving(true) == null) return .defeat;
+    return .ongoing;
+}
+
 pub fn canStartAttack(self: *const State, member: usize) bool {
     return member < self.partyCount() and self.participates(member) and self.unbalanced[member] == 0 and self.actor_conditions[member].sleep_turns == 0;
 }

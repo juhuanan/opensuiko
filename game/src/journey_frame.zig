@@ -37,54 +37,14 @@ fn inspectTitleSaves(init: std.process.Init, save_path: ?[]const u8, state: *jou
     }
 }
 
-pub const SimulationInput = struct {
-    menu: pause.Input = .{},
-    battle: @import("battle").Input = .{},
-    dice: journey.dice.Entry.Controls = .{},
-    party: journey.party_selection.selector.Sampler.Sample = .{},
-};
+pub const SimulationInput = journey.SimulationInput;
 
-pub fn advanceSimulation(state: *journey.State, input: SimulationInput, audio_player: anytype) !struct { effect: pause.Effect, dice_audio: audio_sync.DiceAudioEvents } {
-    var dice_events: audio_sync.DiceAudioEvents = .{};
-
-    const owner = state.modalOwner(input.menu);
-    if (owner == .pending_field_music) {
-        try audio_sync.syncPendingFieldMusic(state, audio_player);
-        return .{ .effect = .none, .dice_audio = .{} };
-    }
-    const effect: pause.Effect = if (owner == .dice_or_party_selection and state.dice_game != null and journey.dice.usesModel(state)) blk: {
-        const active = state.dice_game.?;
-        if (!active.entry_audio_ready) {
-            try audio_player.requestDiceMusic(.dice);
-            try journey.dice.tick(state, .entry_audio_ready);
-        } else if (active.pending_exit and !active.exit_ready) {
-            try audio_player.requestDiceMusic(.dice);
-            try journey.dice.tick(state, .exit_ready);
-        } else {
-            if (active.pending_exit and active.exit_ready) try audio_player.requestDiceMusic(.area_b);
-            try journey.dice.tickFrame(state, input.dice);
-            if (active.animation != null) {
-                const frame = state.dice_game.?.frame.?;
-                for (frame.landed) |landed| dice_events.landings += @intFromBool(landed);
-            }
-        }
-        if (state.dice_game) |next| {
-            dice_events.box_opened = active.dialogue.phase == .allocate and next.dialogue.phase == .opening;
-            if (active.result) |report| {
-                const advanced = if (next.result) |result| result.cursor != report.cursor else true;
-                const session = state.dice_host.?.session.?.dice;
-                dice_events.won = report.hand_report and report.cursor == 0 and advanced and
-                    session.phase == .proposal and session.decision.?.outcome == .win;
-            }
-        }
-        state.elapsed_ticks +|= 1;
-        break :blk .none;
-    } else if (owner == .dice_or_party_selection and state.party_selection != null) blk: {
-        try state.tickPartySelection(input.party.forPhase(state.party_selection.?.menu.phase));
-        state.elapsed_ticks +|= 1;
-        break :blk .none;
-    } else try state.tickWithModalOwner(owner, input.menu, input.battle);
-    return .{ .effect = effect, .dice_audio = dice_events };
+pub fn advanceSimulation(state: *journey.State, input: SimulationInput, audio_player: anytype) !journey.SimulationStep {
+    var frame = input;
+    frame.party = input.party orelse .{};
+    const step = try state.advanceSimulation(frame, audio_player);
+    if (step.poll_field_music) try audio_sync.syncPendingFieldMusic(state, audio_player);
+    return step;
 }
 
 const App = struct {
@@ -204,28 +164,23 @@ const App = struct {
 
     fn stepSimulationTick(self: *App, held_direction: ?field.Direction) !bool {
         const package = self.boot_state.bundle.package;
-        const party_input = self.input.samplePartySelection();
         const crossing_before = render_mod.crossingState(&self.state);
-        const boat_advances = self.state.menu.phase == .closed and (!self.input.menu_input.menu or self.state.field_state.remaining != 0);
-        const simulation = try advanceSimulation(&self.state, .{
+        const step = try advanceSimulation(&self.state, .{
             .menu = self.input.menu_input,
             .battle = self.input.battle_input,
             .dice = self.input.dice_input,
-            .party = party_input,
+            .party = self.input.samplePartySelection(),
         }, &self.resources.audio_player);
 
         if (render_mod.crossingState(&self.state)) |current| {
             const view = self.resources.crossing_view orelse return error.MissingCrossingArt;
             const model = self.boot_state.bundle.crossing_art.?.*;
             if (crossing_before) |before| {
-                if (current.scripted) try view.stepScripted(model, before, current) else if (boat_advances) try view.step(model, before, current, .{
-                    .direction = if (self.input.menu_input.field.direction) |d| switch (d) {
-                        .up => .north,
-                        .right => .east,
-                        .down => .south,
-                        .left => .west,
-                    } else null,
-                });
+                switch (step.crossing) {
+                    .none => {},
+                    .scripted => try view.stepScripted(model, before, current),
+                    .steered => |direction| try view.step(model, before, current, .{ .direction = direction }),
+                }
             } else view.reload(model);
         }
 
@@ -240,8 +195,8 @@ const App = struct {
             return false;
         }
 
-        try audio_sync.syncTickAudio(&self.state, package, &self.resources.audio_player, simulation.dice_audio);
-        try self.applyMenuEffect(simulation.effect);
+        try audio_sync.syncTickAudio(&self.state, package, &self.resources.audio_player, step.dice_audio);
+        try self.applyMenuEffect(step.effect);
         self.input.clearStepEdges(held_direction);
         return true;
     }
@@ -276,10 +231,10 @@ const App = struct {
         else
             .{};
         ui.setWindowAppearance(self.resources.ui_context.appearance);
-        try self.resources.syncPartyBackground(self.state.party_selection != null);
-        const crossing = render_mod.crossingState(&self.state);
-        try render_mod.prepareSubRenderers(self.init_ctx.gpa, self.boot_state, &self.state, self.title, &self.resources, crossing, self.input.collision);
-        try render_mod.presentFrame(self.boot_state, &self.state, self.title, &self.resources, &self.input.recovery, &self.mode_fade, &self.presented_mode, fade_updates, crossing);
+        const scene = render_mod.resolveScene(&self.state, self.title);
+        try self.resources.syncPartyBackground(scene == .party_selection);
+        try render_mod.prepareSubRenderers(self.init_ctx.gpa, self.boot_state, &self.state, &self.resources, scene, self.input.collision);
+        try render_mod.presentFrame(self.boot_state, &self.state, self.title, &self.resources, &self.input.recovery, &self.mode_fade, &self.presented_mode, fade_updates, scene);
     }
 };
 

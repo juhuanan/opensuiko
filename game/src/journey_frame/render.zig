@@ -30,6 +30,36 @@ pub fn crossingState(state: *const journey.State) ?world.State {
     return null;
 }
 
+pub const Scene = union(enum) {
+    title,
+    field,
+    battle,
+    duel,
+    war,
+    ending,
+    dice,
+    side_game,
+    teleport,
+    party_selection,
+    crossing: world.State,
+};
+
+pub fn resolveScene(state: *const journey.State, title: pause.title.State) Scene {
+    if (title.phase != .playing) return .title;
+    if (state.dice_game != null) return .dice;
+    if (state.side_game != null) return .side_game;
+    if (state.teleport_session != null) return .teleport;
+    if (state.party_selection != null) return .party_selection;
+    if (crossingState(state)) |motion| return .{ .crossing = motion };
+    return switch (state.mode) {
+        .field => .field,
+        .duel => .duel,
+        .war => .war,
+        .ending => .ending,
+        .battle, .defeat, .game_over => .battle,
+    };
+}
+
 fn findPortraitRect(rooms: @FieldType(journey.State, "room_battles"), prefix: []const u8) ?field.Rect {
     const rb = rooms orelse return null;
     for (rb.bindings) |binding| {
@@ -290,19 +320,16 @@ pub fn prepareSubRenderers(
     allocator: std.mem.Allocator,
     boot_state: *const boot.Boot,
     state: *journey.State,
-    title: pause.title.State,
     res: *resources_mod.Resources,
-    crossing: ?world.State,
+    scene: Scene,
     collision: bool,
 ) !void {
-    if (title.phase == .playing and state.mode == .field and state.dice_game == null and crossing == null and state.party_selection == null) {
-        try prepareFieldCanvas(allocator, boot_state, state, res, collision);
-    }
-    if (title.phase == .playing and state.mode == .war) {
-        if (state.active_war) |*active| try res.war_renderer.prepare(allocator, &active.session.engine, active.session.command_index);
-    }
-    if (title.phase == .playing and (state.mode == .battle or state.mode == .defeat or state.mode == .game_over)) {
-        battle_view.prepare(state.combat.*, res.actors, res.floor, res.battle_ground, res.effect_atlas, &res.dynamic_effect);
+    switch (scene) {
+        // Keep the retained field canvas current under field overlays.
+        .field, .side_game, .teleport => try prepareFieldCanvas(allocator, boot_state, state, res, collision),
+        .war => if (state.active_war) |*active| try res.war_renderer.prepare(allocator, &active.session.engine, active.session.command_index),
+        .battle => battle_view.prepare(state.combat.*, res.actors, res.floor, res.battle_ground, res.effect_atlas, &res.dynamic_effect),
+        else => {},
     }
 }
 
@@ -458,45 +485,41 @@ pub fn drawActiveScene(
     state: *journey.State,
     title: pause.title.State,
     res: *resources_mod.Resources,
-    crossing: ?world.State,
+    scene: Scene,
 ) !void {
-    if (title.phase != .playing) {
-        if (title.phase != .movie or !res.movie_player.draw()) {
-            title_view.drawWithMedia(title, state.data.title, &res.ui_context, &res.title_media);
-        }
-    } else if (state.dice_game) |active| {
-        try drawDiceScene(boot_state, state, active, res);
-    } else if (state.side_game != null) {
-        side_game_view.draw(state);
-    } else if (state.teleport_session) |session| {
-        drawTeleportOverlay(session);
-    } else if (state.party_selection) |active| {
-        try drawPartySelectionScene(state, active, boot_state, res);
-    } else if (crossing) |motion| {
-        try drawCrossingScene(boot_state, res, motion);
-    } else if (state.mode == .field) {
-        rl.drawTextureRec(res.field_canvas.texture, raylib_app.canvasSource(res.field_canvas.texture), .{ .x = 64, .y = 0 }, .white);
-        if (state.episodeObjective()) |guide| {
-            ui.panel(6, 440, 628, 34);
-            ui.text(guide, 14, 450, 13, .gold);
-        }
-    } else if (state.mode == .duel) {
-        drawDuelScene(boot_state, state, res);
-    } else if (state.mode == .war) {
-        if (state.active_war != null) {
-            rl.drawTexturePro(
-                res.war_renderer.canvas.texture,
-                raylib_app.canvasSource(res.war_renderer.canvas.texture),
-                .{ .x = 0, .y = 0, .width = 640, .height = 480 },
-                .{ .x = 0, .y = 0 },
-                0,
-                .white,
-            );
-        }
-    } else if (state.mode == .ending) {
-        drawEndingScene(state);
-    } else {
-        drawBattleScene(state, res);
+    switch (scene) {
+        .title => {
+            if (title.phase != .movie or !res.movie_player.draw()) {
+                title_view.drawWithMedia(title, state.data.title, &res.ui_context, &res.title_media);
+            }
+        },
+        .dice => try drawDiceScene(boot_state, state, state.dice_game.?, res),
+        .side_game => side_game_view.draw(state),
+        .teleport => drawTeleportOverlay(state.teleport_session.?),
+        .party_selection => try drawPartySelectionScene(state, state.party_selection.?, boot_state, res),
+        .crossing => |motion| try drawCrossingScene(boot_state, res, motion),
+        .field => {
+            rl.drawTextureRec(res.field_canvas.texture, raylib_app.canvasSource(res.field_canvas.texture), .{ .x = 64, .y = 0 }, .white);
+            if (state.episodeObjective()) |guide| {
+                ui.panel(6, 440, 628, 34);
+                ui.text(guide, 14, 450, 13, .gold);
+            }
+        },
+        .duel => drawDuelScene(boot_state, state, res),
+        .war => {
+            if (state.active_war != null) {
+                rl.drawTexturePro(
+                    res.war_renderer.canvas.texture,
+                    raylib_app.canvasSource(res.war_renderer.canvas.texture),
+                    .{ .x = 0, .y = 0, .width = 640, .height = 480 },
+                    .{ .x = 0, .y = 0 },
+                    0,
+                    .white,
+                );
+            }
+        },
+        .ending => drawEndingScene(state),
+        .battle => drawBattleScene(state, res),
     }
 }
 
@@ -509,7 +532,7 @@ pub fn presentFrame(
     mode_fade: *recovery_layer.display.ModeFade,
     presented_mode: *?journey.Mode,
     fade_updates: u8,
-    crossing: ?world.State,
+    scene: Scene,
 ) !void {
     const next_mode: ?journey.Mode = if (title.phase == .playing)
         (if (state.mode == .defeat) .battle else state.mode)
@@ -532,7 +555,7 @@ pub fn presentFrame(
         rl.beginTextureMode(res.canvas);
         defer rl.endTextureMode();
         rl.clearBackground(.black);
-        try drawActiveScene(boot_state, state, title, res, crossing);
+        try drawActiveScene(boot_state, state, title, res, scene);
     }
 
     // One integer layout policy; an unsupported transient size keeps

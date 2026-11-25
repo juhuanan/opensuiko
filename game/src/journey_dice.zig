@@ -4,6 +4,7 @@ const field = @import("field");
 const std = @import("std");
 const battle = @import("battle");
 const events = @import("field_events");
+const pause = @import("pause_menu");
 pub const games = @import("hq").optional_games;
 pub const visual = @import("dice_presentation");
 pub const Entry = @import("dice_entry.zig");
@@ -50,6 +51,52 @@ pub const Input = union(enum) {
     payout_tick: bool,
     animation_tick,
 };
+
+pub const AudioEvents = struct {
+    landings: u2 = 0,
+    box_opened: bool = false,
+    won: bool = false,
+};
+
+pub fn advanceFrame(state: *State, menu_input: pause.Input, controls: Entry.Controls, audio: anytype) !AudioEvents {
+    var cues: AudioEvents = .{};
+    if (!usesModel(state)) {
+        try tickPlain(state, menu_input);
+    } else if (comptime @TypeOf(audio) != @TypeOf(null)) {
+        cues = try advanceModel(state, controls, audio);
+    }
+    state.elapsed_ticks +|= 1;
+    return cues;
+}
+
+fn advanceModel(state: *State, controls: Entry.Controls, audio: anytype) !AudioEvents {
+    const active = state.dice_game.?;
+    var cues: AudioEvents = .{};
+    if (!active.entry_audio_ready) {
+        try audio.requestDiceMusic(.dice);
+        try tick(state, .entry_audio_ready);
+    } else if (active.pending_exit and !active.exit_ready) {
+        try audio.requestDiceMusic(.dice);
+        try tick(state, .exit_ready);
+    } else {
+        if (active.pending_exit and active.exit_ready) try audio.requestDiceMusic(.area_b);
+        try tickFrame(state, controls);
+        if (active.animation != null) {
+            const frame = state.dice_game.?.frame.?;
+            for (frame.landed) |landed| cues.landings += @intFromBool(landed);
+        }
+    }
+    if (state.dice_game) |next| {
+        cues.box_opened = active.dialogue.phase == .allocate and next.dialogue.phase == .opening;
+        if (active.result) |report| {
+            const advanced = if (next.result) |result| result.cursor != report.cursor else true;
+            const session = state.dice_host.?.session.?.dice;
+            cues.won = report.hand_report and report.cursor == 0 and advanced and
+                session.phase == .proposal and session.decision.?.outcome == .win;
+        }
+    }
+    return cues;
+}
 
 pub fn usesModel(state: *const State) bool {
     return state.dice_model != null and state.dice_host.?.session.?.dice.entry.variant == .fixed;
@@ -285,7 +332,7 @@ pub fn finish(state: *State) !void {
     state.dice_game = null;
 }
 
-pub fn tickPlain(state: *State, input: @import("pause_menu").Input) !void {
+fn tickPlain(state: *State, input: pause.Input) !void {
     var active = try validateOwner(state);
     const host = state.dice_host.?;
     var next = host.*;
@@ -353,7 +400,7 @@ pub fn tickPlain(state: *State, input: @import("pause_menu").Input) !void {
     if (active.exit_ready) try finish(state);
 }
 
-pub fn tickFrame(state: *State, input: Entry.Controls) !void {
+fn tickFrame(state: *State, input: Entry.Controls) !void {
     const active = try validateOwner(state);
     if (!active.entry_audio_ready) return;
     if (active.animation != null) return tick(state, .animation_tick);

@@ -158,6 +158,7 @@ test "scripted battle retries defeat and resumes the field event through the Jou
     try std.testing.expectError(error.InvalidFieldBattleReceipt, journey_state.attachFieldEvent(&session, &binding));
     try queued.apply(allocator, binding, &session, state);
     const request = session.queuedBattle().?;
+    try std.testing.expectEqualDeep(request, session.queuedGameplayRequest().?.battle);
     journey_state.menu.phase = .root;
     try std.testing.expectError(error.GameBusy, journey_state.beginScriptedBattle(&session, binding));
     try std.testing.expectEqualStrings(request.id, session.queuedBattle().?.id);

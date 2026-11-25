@@ -246,10 +246,14 @@ test "blocked movement changes facing; a walk step takes six fixed ticks" {
     step(&state, content, .right);
     try std.testing.expectEqual(@as(i32, 8), state.x);
     try std.testing.expectEqual(field.Direction.right, state.facing);
-    state.tick(content, .{ .direction = .up });
+    const start = state.tickWithArrival(content, .{ .direction = .up }, null, .immediate);
+    try std.testing.expectEqualDeep(field.Update{ .movement_advanced = true }, start);
     try std.testing.expectEqual(@as(u16, 5), state.remaining);
     try std.testing.expectApproxEqAbs(@as(f32, 16.0 - 8.0 / 6.0), state.position(content).y, 0.001);
-    for (0..5) |_| state.tick(content, .{});
+    for (0..4) |_| state.tick(content, .{});
+    const finish = state.tickWithArrival(content, .{}, null, .deferred);
+    try std.testing.expectEqualDeep(field.Update{ .movement_advanced = true, .step_completed = true }, finish);
+    try std.testing.expect(!state.finishStepArrival(content));
     try std.testing.expectEqual(@as(i32, 8), state.y);
     try std.testing.expectEqual(@as(u16, 0), state.remaining);
     step(&state, content, .up);

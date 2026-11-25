@@ -169,7 +169,7 @@ pub fn advanceCoordinator(self: *State) void {
                 clock.completed = true;
                 clock.stage = .select;
                 clock.remaining = 0;
-            } else if (actor >= self.partyCount() and (self.enemy(actor - self.partyCount()).action_policy == .source_melee or self.enemy(actor - self.partyCount()).action_policy == .source_magic or self.enemy(actor - self.partyCount()).action_policy == .source_projectile or self.enemy(actor - self.partyCount()).action_policy == .source_ninja or self.enemy(actor - self.partyCount()).action_policy == .source_dagon or self.enemy(actor - self.partyCount()).action_policy == .source_whip_wolf or self.enemy(actor - self.partyCount()).action_policy == .source_holly_fairy or self.enemy(actor - self.partyCount()).action_policy == .source_sorcerer or self.enemy(actor - self.partyCount()).action_policy == .source_siren or self.enemy(actor - self.partyCount()).action_policy == .source_earth_golem or self.enemy(actor - self.partyCount()).action_policy == .source_creeper or self.enemy(actor - self.partyCount()).action_policy == .source_shadow_man or self.enemy(actor - self.partyCount()).action_policy == .source_mirage_f or self.enemy(actor - self.partyCount()).action_policy == .source_mirage_h or self.hasSourceAnt(actor))) {
+            } else if (dispatch.usesScriptedEnemyAction(self, actor)) {
                 self.sourceEnemyDecision(actor);
                 if (self.pending_enemy_actor != null or self.replay_unsupported != null or self.replay_exhausted) return;
             } else if (self.hasSourceRabbit(actor)) {
@@ -552,7 +552,7 @@ pub fn startRangedStrike(self: *State, actor: usize, requested: usize) bool {
     return startActorStrike(self, actor, requested, false);
 }
 fn startActorStrike(self: *State, actor: usize, requested: usize, melee: bool) bool {
-    if (actor >= self.partyCount() or requested >= self.enemyCount() or !self.participates(actor) or self.enemy_hp[requested] == 0 or self.actor_conditions[actor].sleep_turns > 0 or self.unbalanced[actor] > 0 or (!self.sharedPartyMelee() and !self.canAttackTarget(actor, requested))) {
+    if (!self.canStartAttack(actor) or requested >= self.enemyCount() or self.enemy_hp[requested] == 0 or (!self.sharedPartyMelee() and !self.canAttackTarget(actor, requested))) {
         self.replay_unsupported = .coordinator_action;
         return false;
     }

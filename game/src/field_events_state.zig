@@ -401,6 +401,7 @@ pub const Session = struct {
 
     pub const takeBattle = handoffs.takeBattle;
     pub const queuedBattle = handoffs.queuedBattle;
+    pub const queuedGameplayRequest = handoffs.queuedGameplayRequest;
     pub const queuedFixedDice = handoffs.queuedFixedDice;
     pub const queuedItemOverload = handoffs.queuedItemOverload;
     pub const resumeItemOverload = handoffs.resumeItemOverload;

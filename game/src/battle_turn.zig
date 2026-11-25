@@ -81,13 +81,14 @@ pub fn resolveTick(state: *State) void {
     if (state.coordinator) |clock| {
         if (clock.stage == .round_ready and state.active == null) {
             if (state.hasPendingRevival()) return;
-            if (state.firstLiving(false) == null) {
+            const outcome = state.combatOutcome(.enemy);
+            if (outcome == .victory) {
                 if (state.hasUniteReturns()) return;
                 state.coordinator.?.stage = .victory_wait;
                 state.coordinator.?.remaining = 30;
                 state.coordinator.?.elapsed += 1;
                 state.action_ticks = state.coordinator.?.elapsed;
-            } else if (state.firstLiving(true) == null) {
+            } else if (outcome == .defeat) {
                 state.action_ticks = clock.elapsed + 1;
                 state.phase = .defeat;
                 state.coordinator = null;
@@ -310,13 +311,14 @@ pub fn resolveTick(state: *State) void {
             if (clock.current_actor == previous.actor) clock.completed = true;
             return;
         }
-        if (state.firstLiving(true) == null and !state.hasPendingRevival()) {
-            state.phase = .defeat;
-            return;
-        }
-        if (state.firstLiving(false) == null and !state.hasUniteReturns() and !state.hasPendingRevival()) {
-            state.commitRewards();
-            state.phase = .victory;
+        if (state.hasPendingRevival()) return;
+        switch (state.combatOutcome(.party)) {
+            .defeat => state.phase = .defeat,
+            .victory => if (!state.hasUniteReturns()) {
+                state.commitRewards();
+                state.phase = .victory;
+            },
+            .ongoing => {},
         }
     }
 }

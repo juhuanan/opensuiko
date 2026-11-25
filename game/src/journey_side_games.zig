@@ -81,98 +81,125 @@ pub fn begin(state: *State, binding: events.Binding, receipt: events.Receipt, se
     state.side_game = .{};
 }
 
+const Outcome = union(enum) { playing, settle, finish, replay: u64, refused_wager };
+
+const Controls = struct {
+    x: i8,
+    y: i8,
+    confirm: bool,
+    cancel: bool,
+};
+
+fn updateCupGame(next: *games.Host, active: *Active, controls: Controls) !Outcome {
+    const coin = next.session.?.coin;
+    const x = controls.x;
+    const y = controls.y;
+    switch (coin.phase) {
+        .select => if (controls.cancel) {
+            try next.tick(.coin_exit);
+            return .finish;
+        } else if (x != 0 or y != 0) {
+            active.message = "";
+            try next.tick(.{ .coin_select = if (y != 0) y else x });
+        } else if (controls.confirm) {
+            next.tick(.coin_admit) catch |err| switch (err) {
+                error.InsufficientFunds => return .refused_wager,
+                else => return err,
+            };
+            active.message = "";
+            if (next.session.?.coin.phase == .exited) return .finish;
+        },
+        .shuffling => {
+            active.shuffle_ticks += 1;
+            if (active.shuffle_ticks == shuffle_frames) {
+                active.shuffle_ticks = 0;
+                try next.tick(.{ .shuffle = true });
+            }
+        },
+        .choice => if (active.shuffle_ticks < shuffle_frames) {
+            active.shuffle_ticks += 1;
+        } else if (x != 0 or y != 0) {
+            try next.tick(.{ .coin_move = if (x != 0) x else y });
+        } else if (controls.confirm) {
+            try next.tick(.coin_commit);
+        },
+        .reveal => try next.tick(.reveal_tick),
+        .proposal => return .settle,
+        .acknowledged => {
+            if (controls.cancel or (controls.confirm and coin.consequence == .profit_flag)) return .finish;
+            if (controls.confirm) return .{ .replay = coin.receipt_id };
+        },
+        .exited => return .finish,
+    }
+    return .playing;
+}
+
+fn updateCardGame(next: *games.Host, controls: Controls) !Outcome {
+    const cards = next.session.?.karuta;
+    const x = controls.x;
+    const y = controls.y;
+    switch (cards.phase) {
+        .select => if (controls.cancel) {
+            try next.tick(.karuta_exit);
+            return .finish;
+        } else if (x != 0 or y != 0) {
+            try next.tick(.{ .karuta_select = if (y != 0) y else x });
+        } else if (controls.confirm) {
+            try next.tick(.karuta_confirm_round);
+            if (next.session.?.karuta.phase == .exited) return .finish;
+        },
+        .dealing, .play => {
+            if (controls.cancel) {
+                try next.tick(.karuta_exit);
+                return .finish;
+            }
+            if (cards.phase == .play and cards.boardStable()) {
+                if (x != 0 or y != 0) try next.tick(.{ .karuta_move = .{ .row = y, .column = x } });
+                if (controls.confirm) next.tick(.karuta_confirm) catch |err| switch (err) {
+                    error.CellNotSelectable => {},
+                    else => return err,
+                };
+            }
+            try next.tick(.karuta_advance);
+        },
+        .proposal => return .settle,
+        .acknowledged => {
+            if (controls.cancel or (controls.confirm and cards.consequence == .story_flag)) return .finish;
+            if (controls.confirm) return .{ .replay = cards.receipt_id };
+        },
+        .exited => return .finish,
+    }
+    return .playing;
+}
+
 pub fn tick(state: *State, input: pause.Input) !void {
     const host = state.dice_host orelse return error.MissingOptionalGameHost;
     var next = host.*;
     var active = state.side_game.?;
-    const session = next.session orelse return error.MissingOptionalGame;
-    const x: i8 = @as(i8, @intFromBool(input.right)) - @as(i8, @intFromBool(input.left));
-    const y: i8 = @as(i8, @intFromBool(input.field.menu_direction == .down)) - @as(i8, @intFromBool(input.field.menu_direction == .up));
-    const confirm = input.field.action;
-    const cancel = input.field.cancel;
-    var settle = false;
-    var finish = false;
-    var replay: ?u64 = null;
-    switch (session) {
-        .coin => |coin| switch (coin.phase) {
-            .select => if (cancel) {
-                try next.tick(.coin_exit);
-                finish = true;
-            } else if (x != 0 or y != 0) {
-                active.message = "";
-                try next.tick(.{ .coin_select = if (y != 0) y else x });
-            } else if (confirm) {
-                next.tick(.coin_admit) catch |err| switch (err) {
-                    error.InsufficientFunds => {
-                        state.side_game.?.message = "You do not have enough bits for that wager.";
-                        return;
-                    },
-                    else => return err,
-                };
-                active.message = "";
-                finish = next.session.?.coin.phase == .exited;
-            },
-            .shuffling => {
-                active.shuffle_ticks += 1;
-                if (active.shuffle_ticks == shuffle_frames) {
-                    active.shuffle_ticks = 0;
-                    try next.tick(.{ .shuffle = true });
-                }
-            },
-            .choice => if (active.shuffle_ticks < shuffle_frames) {
-                active.shuffle_ticks += 1;
-            } else if (x != 0 or y != 0) {
-                try next.tick(.{ .coin_move = if (x != 0) x else y });
-            } else if (confirm) {
-                try next.tick(.coin_commit);
-            },
-            .reveal => try next.tick(.reveal_tick),
-            .proposal => settle = true,
-            .acknowledged => if (cancel or (confirm and coin.consequence == .profit_flag)) {
-                finish = true;
-            } else if (confirm) {
-                replay = coin.receipt_id;
-            },
-            .exited => finish = true,
-        },
-        .karuta => |cards| switch (cards.phase) {
-            .select => if (cancel) {
-                try next.tick(.karuta_exit);
-                finish = true;
-            } else if (x != 0 or y != 0) {
-                try next.tick(.{ .karuta_select = if (y != 0) y else x });
-            } else if (confirm) {
-                try next.tick(.karuta_confirm_round);
-                finish = next.session.?.karuta.phase == .exited;
-            },
-            .dealing, .play => if (cancel) {
-                try next.tick(.karuta_exit);
-                finish = true;
-            } else {
-                if (cards.phase == .play and cards.boardStable()) {
-                    if (x != 0 or y != 0) try next.tick(.{ .karuta_move = .{ .row = y, .column = x } });
-                    if (confirm) next.tick(.karuta_confirm) catch |err| switch (err) {
-                        error.CellNotSelectable => {},
-                        else => return err,
-                    };
-                }
-                try next.tick(.karuta_advance);
-            },
-            .proposal => settle = true,
-            .acknowledged => if (cancel or (confirm and cards.consequence == .story_flag)) {
-                finish = true;
-            } else if (confirm) {
-                replay = cards.receipt_id;
-            },
-            .exited => finish = true,
-        },
+    const controls: Controls = .{
+        .x = @as(i8, @intFromBool(input.right)) - @as(i8, @intFromBool(input.left)),
+        .y = @as(i8, @intFromBool(input.field.menu_direction == .down)) - @as(i8, @intFromBool(input.field.menu_direction == .up)),
+        .confirm = input.field.action,
+        .cancel = input.field.cancel,
+    };
+    const outcome = switch (next.session orelse return error.MissingOptionalGame) {
+        .coin => try updateCupGame(&next, &active, controls),
+        .karuta => try updateCardGame(&next, controls),
         .dice => return error.WrongGameInput,
+    };
+    if (outcome == .refused_wager) {
+        state.side_game.?.message = "You do not have enough bits for that wager.";
+        return;
     }
-    if (replay) |receipt| {
+    if (outcome == .replay) {
+        const receipt = outcome.replay;
         // last_receipt rejects earlier results after the in-session receipt window fills.
         if (next.wallet.receipt_count == games.host.max_receipts) next.wallet.receipt_count = 0;
         try next.nextRound(try std.math.add(u64, receipt, 1));
+        active.shuffle_ticks = 0;
     }
+    const settle = outcome == .settle;
+    const finish = outcome == .finish;
     if (settle) _ = try next.settleMode();
     if (settle or finish) {
         const random = next.draws.prng orelse return error.InvalidRandomSource;

@@ -8,22 +8,46 @@ const Session = events.Session;
 const Binding = events.Binding;
 const semanticEqual = events.semanticEqual;
 
-fn battleRequest(self: *const Session) ?events.BattleRequest {
+pub fn pendingGameplayRequest(self: *const Session) ?events.GameplayRequest {
     const owner = if (self.instance) |*value| value else return null;
-    const id = owner.pendingBattle() orelse return null;
-    const command = owner.pending.?.batch.effects[0];
-    return .{ .id = id, .defeat_target = command.defeat_target, .defeat_ends_run = command.defeat_ends_run, .receipt = .{
+    const pending = if (owner.pending) |*value| value else return null;
+    if (pending.batch.effect_count != 1) return null;
+    const command = &pending.batch.effects[0];
+    const receipt: events.Receipt = .{
         .content_sha256 = owner.content_sha256,
         .program = owner.program_id,
         .instance = self.serial,
-        .batch = owner.pending.?.batch.id,
-    } };
+        .batch = pending.batch.id,
+    };
+    return switch (command.kind) {
+        .battle => .{ .battle = .{
+            .id = command.battle orelse return null,
+            .defeat_target = command.defeat_target,
+            .defeat_ends_run = command.defeat_ends_run,
+            .receipt = receipt,
+        } },
+        .fixed_dice => .{ .dice = receipt },
+        .party_select => .{ .party_selection = receipt },
+        .item_overload => .{ .item_overload = .{ .item_name = command.item_name.?, .receipt = receipt } },
+        .field_music => .{ .field_music = command.music orelse return null },
+        else => null,
+    };
+}
+
+pub fn queuedGameplayRequest(self: *const Session) ?events.GameplayRequest {
+    const request = pendingGameplayRequest(self) orelse return null;
+    if (request == .battle and !std.mem.eql(u8, self.pending_battle orelse return null, request.battle.id)) return null;
+    return request;
+}
+
+fn battleRequest(self: *const Session) ?events.BattleRequest {
+    const request = pendingGameplayRequest(self) orelse return null;
+    return if (request == .battle) request.battle else null;
 }
 
 pub fn queuedBattle(self: *const Session) ?events.BattleRequest {
-    const id = self.pending_battle orelse return null;
-    const request = battleRequest(self) orelse return null;
-    return if (std.mem.eql(u8, id, request.id)) request else null;
+    const request = queuedGameplayRequest(self) orelse return null;
+    return if (request == .battle) request.battle else null;
 }
 
 pub fn takeBattle(self: *Session) ?events.BattleRequest {
@@ -33,25 +57,13 @@ pub fn takeBattle(self: *Session) ?events.BattleRequest {
 }
 
 pub fn queuedFixedDice(self: *const Session) ?events.Receipt {
-    const owner = if (self.instance) |*value| value else return null;
-    if (!owner.pendingFixedDice()) return null;
-    return .{
-        .content_sha256 = owner.content_sha256,
-        .program = owner.program_id,
-        .instance = self.serial,
-        .batch = owner.pending.?.batch.id,
-    };
+    const request = pendingGameplayRequest(self) orelse return null;
+    return if (request == .dice) request.dice else null;
 }
 
-pub fn queuedItemOverload(self: *const Session) ?struct { item_name: []const u8, receipt: events.Receipt } {
-    const owner = self.instance orelse return null;
-    if (!owner.pendingItemOverload()) return null;
-    return .{ .item_name = owner.pending.?.batch.effects[0].item_name.?, .receipt = .{
-        .content_sha256 = owner.content_sha256,
-        .program = owner.program_id,
-        .instance = self.serial,
-        .batch = owner.pending.?.batch.id,
-    } };
+pub fn queuedItemOverload(self: *const Session) ?events.ItemOverloadRequest {
+    const request = pendingGameplayRequest(self) orelse return null;
+    return if (request == .item_overload) request.item_overload else null;
 }
 
 pub fn resumeItemOverload(self: *Session, binding: Binding, state: *field.State, completed: events.Receipt) !void {
@@ -69,9 +81,8 @@ pub fn resumeItemOverload(self: *Session, binding: Binding, state: *field.State,
 }
 
 pub fn queuedPartySelect(self: *const Session) ?events.Receipt {
-    const owner = if (self.instance) |*value| value else return null;
-    if (!owner.pendingPartySelect()) return null;
-    return .{ .content_sha256 = owner.content_sha256, .program = owner.program_id, .instance = self.serial, .batch = owner.pending.?.batch.id };
+    const request = pendingGameplayRequest(self) orelse return null;
+    return if (request == .party_selection) request.party_selection else null;
 }
 
 pub fn partySelectReservesSlot(self: *const Session) bool {
@@ -125,10 +136,8 @@ pub fn updateSelectorParty(self: *Session, binding: Binding, completed: events.R
 }
 
 pub fn pendingFieldMusic(self: *const Session) ?runtime.FieldMusic {
-    const owner = if (self.instance) |*value| value else return null;
-    const pending = owner.pending orelse return null;
-    if (pending.batch.effect_count != 1 or pending.batch.effects[0].kind != .field_music) return null;
-    return pending.batch.effects[0].music;
+    const request = pendingGameplayRequest(self) orelse return null;
+    return if (request == .field_music) request.field_music else null;
 }
 
 pub fn resumeFieldMusic(self: *Session, binding: Binding, state: *field.State, requested: runtime.FieldMusic) !void {

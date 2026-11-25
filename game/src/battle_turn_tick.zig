@@ -185,22 +185,43 @@ pub fn previousActor(self: *const State) ?usize {
     }
     return null;
 }
+pub const TargetSelection = struct {
+    first_actor: usize,
+    count: usize,
+
+    pub fn actorAt(self: TargetSelection, slot: usize) ?usize {
+        return if (slot < self.count) self.first_actor + slot else null;
+    }
+};
+
+pub fn targetSelection(self: *const State) ?TargetSelection {
+    const party = switch (self.phase) {
+        .target, .rune_target, .unite_target => false,
+        .item_target => true,
+        .spell_target => self.content.systems.?.spells[self.spell_slot].allies,
+        else => return null,
+    };
+    return if (party) .{ .first_actor = 0, .count = self.partyCount() } else .{ .first_actor = self.partyCount(), .count = self.enemyCount() };
+}
+
 pub fn canSelectTarget(self: *const State, slot: usize) bool {
+    const targets = self.targetSelection() orelse return false;
+    const actor = targets.actorAt(slot) orelse return false;
     return switch (self.phase) {
         .target => self.canAttackTarget(self.actor, slot),
-        .rune_target, .unite_target => slot < self.enemyCount() and self.participates(self.partyCount() + slot),
-        .item_target => slot < self.partyCount() and self.participates(slot),
-        .spell_target => blk: {
-            const spell = self.content.systems.?.spells[self.spell_slot];
-            const count = if (spell.allies) self.partyCount() else self.enemyCount();
-            const start = if (spell.allies) 0 else self.partyCount();
-            break :blk slot < count and self.spellValid(spell, start + slot);
-        },
-        else => false,
+        .rune_target, .unite_target, .item_target => self.participates(actor),
+        .spell_target => self.spellValid(self.content.systems.?.spells[self.spell_slot], actor),
+        else => unreachable,
     };
 }
-pub fn moveTarget(self: *State, party: bool, backwards: bool) void {
-    const count: usize = if (party) self.partyCount() else self.enemyCount();
+
+pub fn selectedTargetActor(self: *const State) ?usize {
+    return if (self.canSelectTarget(self.selection)) self.targetSelection().?.actorAt(self.selection) else null;
+}
+
+pub fn moveTarget(self: *State, backwards: bool) void {
+    const targets = self.targetSelection() orelse return;
+    const count = targets.count;
     for (0..count) |_| {
         self.selection = (self.selection + if (backwards) count - 1 else 1) % count;
         if (self.canSelectTarget(self.selection)) return;
@@ -358,8 +379,8 @@ pub fn tickCore(self: *State, input: Input) void {
             }
             const unite_choice = self.phase == .unite_target and self.integration != null;
             if (unite_choice and (input.left or input.right)) self.cycleUnite(self.actor, input.left);
-            if (input.up or (!unite_choice and input.left)) self.moveTarget(party, true);
-            if (input.down or (!unite_choice and input.right)) self.moveTarget(party, false);
+            if (input.up or (!unite_choice and input.left)) self.moveTarget(true);
+            if (input.down or (!unite_choice and input.right)) self.moveTarget(false);
             if (input.confirm) {
                 if (party) {
                     self.queue(.{ .item = .{ .slot = self.item_slot, .target = self.selection, .id = self.progress.party[self.actor].inventory.slots[self.item_slot].?.id } });
@@ -428,7 +449,7 @@ pub fn tickCore(self: *State, input: Input) void {
             }
             const back = input.up or input.left;
             const forward = input.down or input.right;
-            if (back != forward) self.moveTarget(spell.allies, back);
+            if (back != forward) self.moveTarget(back);
             if (input.confirm) self.queue(.{ .spell = .{ .index = self.spell_slot, .target = self.selection } });
         },
         .escaped => {

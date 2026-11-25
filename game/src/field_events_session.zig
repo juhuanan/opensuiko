@@ -189,7 +189,7 @@ pub noinline fn tickPad(self: *Session, binding: Binding, state: *field.State, p
             .mode_ready = !binding.scripted_motion or (aligned and pan_done and push_done),
             .room_transition_ready = if (binding.room_package != null) aligned and pan_done and push_done else null,
         });
-        if (next.pending_battle != null or next.queuedFixedDice() != null or next.queuedPartySelect() != null or next.queuedItemOverload() != null or next.pendingFieldMusic() != null) {
+        if (next.queuedGameplayRequest() != null) {
             self.* = next;
             return .running;
         }

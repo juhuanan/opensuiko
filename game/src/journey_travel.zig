@@ -6,7 +6,18 @@ const Program = field.game_state.event_runtime.Program;
 const travel = @import("travel_modes");
 const boat_core = @import("travel").boat;
 const world_map = @import("world");
+pub const BoatDirection = world_map.Direction;
 pub const BoatData = boat_core.Packet;
+
+pub fn boatDirection(direction: ?field.Direction) ?BoatDirection {
+    return if (direction) |value| switch (value) {
+        .up => .north,
+        .right => .east,
+        .down => .south,
+        .left => .west,
+    } else null;
+}
+
 pub const boat_json = @import("travel_data").navigation.boat_json;
 pub const loadBoatData = boat_core.load;
 pub const source = travel.first_crossing;
@@ -155,20 +166,14 @@ pub const Boat = struct {
         if (facing != expected) return error.InvalidBoatState;
     }
 
-    pub fn tick(self: *Boat, packet: BoatData, package: field.Package, state: *field.State, direction: ?field.Direction) !bool {
+    pub fn tick(self: *Boat, packet: BoatData, package: field.Package, state: *field.State, direction: ?BoatDirection) !bool {
         const story = state.progress.story.scenario orelse return error.MissingSourceStoryState;
         if (!std.mem.eql(u8, package.rooms[state.room].id, source.world_room) or story.world_mode != 1 or state.auto_route_id != null) return error.StaleBoatOwner;
         const upgraded = story.scenario[231] & 32 != 0;
         if ((self.session.vessel orelse return error.StaleBoatOwner).upgraded != upgraded) return error.StaleBoatOwner;
-        const requested: ?world_map.Direction = if (direction) |d| switch (d) {
-            .up => .north,
-            .right => .east,
-            .down => .south,
-            .left => .west,
-        } else null;
         var next = self.*;
         var destination = state.*;
-        const step = try next.session.steer(packet, requested, .{
+        const step = try next.session.steer(packet, direction, .{
             .story = story,
             .recruitment_tier = story.castle_tier,
             .hero_x = @divTrunc(state.x, 8),
@@ -376,7 +381,7 @@ pub const Active = struct {
         world.scene_ticks +%= 1;
         if (self.flight and world.remaining == 0) {
             const before = world.room;
-            world.finishStepArrival(package);
+            _ = world.finishStepArrival(package);
             if (world.room != before) {
                 world.auto_route_id = null;
                 world.progress.story.scenario.?.world_mode = 0;

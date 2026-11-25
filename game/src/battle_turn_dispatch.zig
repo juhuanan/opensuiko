@@ -28,7 +28,7 @@ pub fn sourceRounds(self: *const State) bool {
     return false;
 }
 
-fn sourceEnemyActor(self: *const State, actor: usize) bool {
+pub fn usesScriptedEnemyAction(self: *const State, actor: usize) bool {
     if (actor < self.partyCount()) return false;
     return self.hasSourceAnt(actor) or switch (self.enemy(actor - self.partyCount()).action_policy) {
         .source_melee, .source_magic, .source_projectile, .source_ninja, .source_dagon, .source_whip_wolf, .source_holly_fairy, .source_sorcerer, .source_siren, .source_earth_golem, .source_creeper, .source_shadow_man, .source_mirage_f, .source_mirage_h => true,
@@ -293,15 +293,11 @@ pub fn startRuneAttack(self: *State, actor: usize, requested: usize) ActionStart
 }
 
 pub fn nextAction(self: *State) void {
-    if (self.firstLiving(true) == null) {
-        if (!self.hasUniteReturns() and !self.hasPendingRevival()) self.phase = .defeat;
-        return;
-    }
-    if (self.firstLiving(false) == null) {
-        if (!self.hasUniteReturns() and !self.hasPendingRevival()) {
-            self.commitRewards();
-            self.phase = .victory;
-        }
+    const outcome = self.combatOutcome(.party);
+    if (outcome != .ongoing) {
+        if (self.hasUniteReturns() or self.hasPendingRevival()) return;
+        if (outcome == .victory) self.commitRewards();
+        self.phase = if (outcome == .victory) .victory else .defeat;
         return;
     }
     var selected = self.pending_party_actor;
@@ -350,7 +346,7 @@ pub fn nextAction(self: *State) void {
         return;
     }
     if (actor < self.partyCount() and for (self.partyCount()..self.partyCount() + self.enemyCount()) |enemy| {
-        if (sourceEnemyActor(self, enemy)) break true;
+        if (usesScriptedEnemyAction(self, enemy)) break true;
     } else false) {
         self.action_ticks = 0;
         self.coordinator = .{ .stage = .dispatch, .current_actor = actor, .elapsed = 0 };
@@ -370,7 +366,7 @@ pub fn nextAction(self: *State) void {
         self.active = .{ .actor = actor, .target = actor, .kind = .sleeping };
         return;
     }
-    if (sourceEnemyActor(self, actor)) {
+    if (usesScriptedEnemyAction(self, actor)) {
         self.coordinator = .{ .stage = .dispatch, .current_actor = actor, .elapsed = 0 };
         self.sourceEnemyDecision(actor);
         return;

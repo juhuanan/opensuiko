@@ -79,10 +79,14 @@ pub fn initializeRoomVisit(state: *journey.State) !void {
     state.initialized_room_visit = world.room_entries;
 }
 
-pub fn attachFieldEvent(state: *journey.State, session: *field_events.Session, binding: *const field_events.Binding) !void {
+fn canStartFieldEvent(state: *const journey.State) bool {
     const world = &state.field_state;
-    if (state.mode != .field or state.field_event != null or state.menu.phase != .closed or
-        world.remaining != 0 or world.dialogue != null or world.rest_ticks != 0) return error.GameBusy;
+    return state.mode == .field and state.field_event == null and state.menu.phase == .closed and
+        world.remaining == 0 and world.dialogue == null and world.rest_ticks == 0;
+}
+
+pub fn attachFieldEvent(state: *journey.State, session: *field_events.Session, binding: *const field_events.Binding) !void {
+    if (!canStartFieldEvent(state)) return error.GameBusy;
     try session.validate(binding.*);
     if (!session.busy()) return error.InactiveFieldEvent;
     if (session.instance) |*instance| {
@@ -172,8 +176,7 @@ pub fn resumeScriptedBattle(state: *journey.State, event: *field_events.Session,
 pub noinline fn admitRoomEvent(state: *journey.State, input: field.Input, selection: enum { automatic, all }) !bool {
     const rooms = state.room_battles orelse return false;
     const world = &state.field_state;
-    if (state.mode != .field or state.field_event != null or state.menu.phase != .closed or
-        world.remaining != 0 or world.dialogue != null or world.rest_ticks != 0) return false;
+    if (!canStartFieldEvent(state)) return false;
     const binding = rooms.bindingFor(state.package.rooms[world.room].id) orelse return false;
     if (world.progress.story.scenario == null) {
         state.setScenarioStory(rooms.initial_story);
@@ -552,10 +555,13 @@ pub fn tickActiveFieldEvent(state: *journey.State, owner: journey.ActiveFieldEve
             try exploration.onRoomChange(state, scripted_world_exit);
         }
     }
-    if (owner.session.queuedBattle() != null) try beginScriptedBattle(state, owner.session, binding);
-    if (owner.session.queuedFixedDice() != null) try journey.dice.begin(state);
-    if (owner.session.queuedPartySelect() != null) try journey.party_selection.begin(state);
-    if (owner.session.queuedItemOverload() != null) try journey.overload.begin(state);
+    if (owner.session.queuedGameplayRequest()) |request| switch (request) {
+        .battle => try beginScriptedBattle(state, owner.session, binding),
+        .dice => try journey.dice.begin(state),
+        .party_selection => try journey.party_selection.begin(state),
+        .item_overload => try journey.overload.begin(state),
+        .field_music => {},
+    };
     if (!owner.session.busy()) {
         if (state.room_battles) |rooms| if (before_entry == state.field_state.room_entries and owner.session == &rooms.session and
             std.mem.eql(u8, binding.room, state.package.rooms[state.field_state.room].id))

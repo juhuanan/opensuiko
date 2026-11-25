@@ -9,6 +9,18 @@ const roster = @import("journey_roster.zig");
 pub const selector = party.selector;
 pub const Active = struct { receipt: events.Receipt, menu: selector.Selector = .{}, windows: selector.Windows = .{} };
 
+pub fn advanceFrame(state: *State, input: ?selector.Sampler.Sample) !void {
+    if (input) |sample| try tick(state, sample.forPhase(state.party_selection.?.menu.phase));
+    state.elapsed_ticks +|= 1;
+}
+
+pub fn takeWindowOpenCues(state: *State) u8 {
+    const active = if (state.party_selection) |*value| value else return 0;
+    var count: u8 = 0;
+    while (active.windows.takeOpenCue()) count += 1;
+    return count;
+}
+
 pub fn inspect(state: *const State, id: []const u8) !selector.Details {
     for (state.combat.progress.party, 0..) |member, index| if (std.mem.eql(u8, member.id, id)) {
         return selector.Details.derive(state.combat.*, state.combat.ownedMember(index), state.extras[index]);

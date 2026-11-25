@@ -332,6 +332,15 @@ pub const Binding = struct {
 };
 // Selected definitions retain their placement role; they are not permission to draw an actor.
 pub const Actor = struct { entity: u8, x: i32, y: i32, placed: bool };
+pub const ItemOverloadRequest = struct { item_name: []const u8, receipt: Receipt };
+pub const GameplayRequest = union(enum) {
+    battle: BattleRequest,
+    dice: Receipt,
+    party_selection: Receipt,
+    item_overload: ItemOverloadRequest,
+    field_music: runtime.FieldMusic,
+};
+
 pub const Receipt = struct { content_sha256: []const u8, program: []const u8, instance: u64, batch: u64 };
 pub const BattleRequest = struct { id: []const u8, receipt: Receipt, defeat_target: ?u16 = null, defeat_ends_run: bool = false };
 pub const BattleOutcome = enum { victory, escape, defeat };

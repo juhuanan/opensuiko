@@ -21,34 +21,25 @@ pub fn choosingMember(state: battle.State) ?usize {
     };
 }
 
-pub fn selectionTarget(state: *const battle.State) ?usize {
-    if (!state.canSelectTarget(state.selection)) return null;
-    return switch (state.phase) {
-        .target, .unite_target, .rune_target => state.partyCount() + state.selection,
-        .item_target => state.selection,
-        .spell_target => state.selection + if (state.content.systems.?.spells[state.spell_slot].allies) @as(usize, 0) else state.partyCount(),
-        else => null,
-    };
-}
+pub const selectionTarget = battle.State.selectedTargetActor;
 
 pub fn drawTargetMarker(x: f32, y: f32) void {
     rl.drawEllipseLines(@intFromFloat(x), @intFromFloat(y), 30, 9, .gold);
     text(">", @intFromFloat(x - 42), @intFromFloat(y - 32), 22, .gold);
 }
 
-fn drawTargetList(state: *const battle.State, heading: []const u8, allies: bool) void {
+fn drawTargetList(state: *const battle.State, heading: []const u8) void {
     text(heading, command_x, 339, 15, .gold);
-    const count = if (allies) state.partyCount() else state.enemyCount();
-    const start = if (allies) 0 else state.partyCount();
-    for (0..count) |slot| {
-        const fighter = start + slot;
+    const targets = state.targetSelection().?;
+    for (0..targets.count) |slot| {
+        const fighter = targets.actorAt(slot).?;
         const y = 361 + @as(i32, @intCast(slot)) * 16;
         const enabled = state.canSelectTarget(slot);
         const selected = enabled and slot == state.selection;
         var buffer: [96]u8 = undefined;
         const color: rl.Color = if (selected) .gold else if (enabled) .ray_white else .gray;
         number("{s}{s}", .{ if (selected) "> " else "  ", fighterLabel(state, fighter, &buffer) }, command_x, y, 12, color);
-        const status = if (allies and state.departed[fighter]) "Departed" else if (state.hp(fighter) == 0) "KO" else if (!enabled) "Unavailable" else "";
+        const status = if (fighter < state.partyCount() and state.departed[fighter]) "Departed" else if (state.hp(fighter) == 0) "KO" else if (!enabled) "Unavailable" else "";
         if (status.len != 0) text(status, 548, y, 11, .light_gray);
     }
 }
@@ -610,7 +601,7 @@ pub fn draw(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, groun
         },
         .target, .unite_target, .rune_target => {
             const heading = if (state.phase == .unite_target) state.uniteName(state.actor) else if (state.phase == .rune_target) state.rune(state.actor).?.name else "Attack target";
-            drawTargetList(&state, heading, false);
+            drawTargetList(&state, heading);
             if (state.phase == .unite_target and state.integration != null) text("Left/right: Unite   Up/down: target", command_x, 454, 10, .light_gray);
         },
         .item => {
@@ -623,7 +614,7 @@ pub fn draw(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, groun
                 if (item.id == .sacrificial_buddha) number("{s}{s}: automatic", .{ cursor, item.name() }, command_x, y, 11, color) else if (item.id == .dragon_seal_incense) number("{s}{s}: reusable", .{ cursor, item.name() }, command_x, y, 11, color) else number("{s}{s}: {d}", .{ cursor, item.name(), item.uses }, command_x, y, 11, color);
             }
         },
-        .item_target => drawTargetList(&state, state.progress.party[state.actor].inventory.slots[state.item_slot].?.name(), true),
+        .item_target => drawTargetList(&state, state.progress.party[state.actor].inventory.slots[state.item_slot].?.name()),
         .spell => {
             const owned = state.rune(state.actor).?;
             number("{s}  MGC {d}", .{ owned.name, state.stats(state.actor).magic }, command_x, 339, 15, .gold);
@@ -637,7 +628,7 @@ pub fn draw(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, groun
         },
         .spell_target => {
             const spell = state.content.systems.?.spells[state.spell_slot];
-            drawTargetList(&state, spell.name, spell.allies);
+            drawTargetList(&state, spell.name);
         },
         .escaped => {
             panel(110, 110, 420, 160);

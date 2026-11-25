@@ -638,6 +638,8 @@ test "cancel target, item target, earlier actor, round and quit without mutating
     const mixed_bag = bag.*;
     state.choose(0);
     try choose(&state, .attack);
+    try std.testing.expectEqual(state.partyCount() + state.selection, state.selectedTargetActor().?);
+    try std.testing.expectEqual(state.enemyCount(), state.targetSelection().?.count);
     state.tick(.{ .cancel = true });
     try std.testing.expectEqual(.command, state.phase);
     try choose(&state, .attack);
@@ -650,6 +652,8 @@ test "cancel target, item target, earlier actor, round and quit without mutating
     state.tick(.{ .down = true });
     state.tick(.{ .confirm = true });
     state.tick(.{ .up = true });
+    try std.testing.expectEqual(state.selection, state.selectedTargetActor().?);
+    try std.testing.expectEqual(state.partyCount(), state.targetSelection().?.count);
     state.tick(.{ .cancel = true });
     try std.testing.expectEqual(.item, state.phase);
     try std.testing.expectEqual(@as(usize, 3), state.selection);

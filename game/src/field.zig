@@ -612,6 +612,11 @@ pub fn load(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Parsed(Pa
 
 pub const Input = struct { direction: ?Direction = null, menu_direction: ?Direction = null, action: bool = false, cancel: bool = false };
 pub const StepArrival = enum { immediate, deferred };
+pub const Update = struct {
+    movement_advanced: bool = false,
+    step_completed: bool = false,
+    room_entered: bool = false,
+};
 pub const Dialogue = @import("field_dialogue").Dialogue;
 pub const revealedCount = @import("field_dialogue").revealedCount;
 
@@ -750,30 +755,30 @@ pub const State = struct {
     /// consults the source footprint first and falls back to the exported
     /// walkable string for rooms without geometry.
     pub fn tickWithGround(self: *State, package: Package, input: Input, ground: ?Ground) void {
-        self.tickWithArrival(package, input, ground, .immediate);
+        _ = self.tickWithArrival(package, input, ground, .immediate);
     }
 
-    pub fn tickWithArrival(self: *State, package: Package, input: Input, ground: ?Ground, arrival: StepArrival) void {
+    pub fn tickWithArrival(self: *State, package: Package, input: Input, ground: ?Ground, arrival: StepArrival) Update {
         self.scene_ticks +%= 1;
         if (self.rest_ticks > 0) {
             self.rest_ticks -= 1;
-            return;
+            return .{};
         }
         const room = package.rooms[self.room];
-        if (services.handleDialogue(self, room, input)) return;
+        if (services.handleDialogue(self, room, input)) return .{};
         self.action_pending = !input.cancel and (self.action_pending or input.action);
         if (self.remaining > 0) {
-            self.advance(package, arrival);
+            const update = self.advance(package, arrival);
             if (self.remaining == 0 and input.direction == null) self.walking = false;
-            return;
+            return update;
         }
-        if (self.triggerEvent(room)) return;
+        if (self.triggerEvent(room)) return .{};
         if (input.direction) |facing| self.facing = facing;
-        if (interaction.interact(self, package, room)) return;
+        if (interaction.interact(self, package, room)) return .{};
         const direction = input.direction orelse {
             self.animation_ticks = 0;
             self.walking = false;
-            return;
+            return .{};
         };
         self.facing = direction;
         const delta: Point = switch (direction) {
@@ -794,7 +799,7 @@ pub const State = struct {
             self.dialogue = .{ .source = .boat_rapids, .reveal_started = self.scene_ticks };
             self.action_pending = false;
             self.walking = false;
-            return;
+            return .{};
         }
         const can_walk = if (river) |passage| passage == .open else if (world_mode != 0 and room.boat_walkable != null)
             room.canMoveInMode(next.x, next.y, world_mode)
@@ -804,19 +809,26 @@ pub const State = struct {
             self.destination = next;
             self.remaining = package.step_ticks;
             self.walking = true;
-            self.advance(package, arrival);
-        } else {
-            self.animation_ticks = 0;
-            self.walking = false;
+            return self.advance(package, arrival);
         }
+        self.animation_ticks = 0;
+        self.walking = false;
+        return .{};
     }
 
-    fn advance(self: *State, package: Package, arrival: StepArrival) void {
-        if (movement.advance(self) and arrival == .immediate) self.finishStepArrival(package);
+    fn advance(self: *State, package: Package, arrival: StepArrival) Update {
+        const completed = movement.advance(self);
+        return .{
+            .movement_advanced = true,
+            .step_completed = completed,
+            .room_entered = completed and arrival == .immediate and self.finishStepArrival(package),
+        };
     }
 
-    pub fn finishStepArrival(self: *State, package: Package) void {
+    pub fn finishStepArrival(self: *State, package: Package) bool {
+        const before = self.room_entries;
         movement.finish(self, package);
+        return self.room_entries != before;
     }
 
     fn triggerEvent(self: *State, room: Room) bool {
