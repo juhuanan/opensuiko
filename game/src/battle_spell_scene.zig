@@ -50,6 +50,7 @@ pub const Spell = types.Spell;
 pub const max_file_size = types.max_file_size;
 pub const Packet = packet_mod.Packet;
 pub const load = packet_mod.load;
+pub const parseSchemaVersion = packet_mod.parseSchemaVersion;
 pub const transition = instance_mod.transition;
 pub const cameraAt = instance_mod.cameraAt;
 pub const TrailPoint = instance_mod.TrailPoint;

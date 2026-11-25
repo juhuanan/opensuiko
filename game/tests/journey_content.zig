@@ -2130,3 +2130,15 @@ test "journey ending mode initializes and advances through epilogue cleanly" {
     try std.testing.expectEqual(journey.Mode.field, state.mode);
     try std.testing.expect(state.active_ending == null);
 }
+
+test "BattleRooms.schema_versions.parseSchemaVersion parses numbered and current schemas" {
+    const schema_mod = content.BattleRooms.schema_versions;
+    try std.testing.expectEqual(@as(?u8, 1), schema_mod.parseVersion(content.BattleRooms.legacy_schema));
+    try std.testing.expectEqual(@as(?u8, 19), schema_mod.parseVersion(content.BattleRooms.campaign_schema));
+    try std.testing.expectEqual(@as(?u8, 52), schema_mod.parseVersion(content.BattleRooms.scenery_mutation_schema));
+    try std.testing.expectEqual(@as(?u8, 53), schema_mod.parseVersion(content.BattleRooms.current_schema));
+    try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("suikoden-battle-field-events/0"));
+    try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("suikoden-battle-field-events/01"));
+    try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("suikoden-battle-field-events/53"));
+    try std.testing.expectEqual(@as(?u8, null), schema_mod.parseVersion("bad"));
+}

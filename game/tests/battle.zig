@@ -4621,3 +4621,13 @@ test "Unite scoped graphic capacity retains schema bounds and pose validation" {
     content.unite_graphics = graphics[0..65];
     try std.testing.expectError(error.InvalidUniteGraphics, content.validate());
 }
+
+test "battle.spell_scene.parseSchemaVersion parses v1..v52 and rejects invalid schemas" {
+    try std.testing.expectEqual(@as(?u8, 1), battle.spell_scene.parseSchemaVersion("suikoden-spell-scenes/1"));
+    try std.testing.expectEqual(@as(?u8, 25), battle.spell_scene.parseSchemaVersion("suikoden-spell-scenes/25"));
+    try std.testing.expectEqual(@as(?u8, 52), battle.spell_scene.parseSchemaVersion("suikoden-spell-scenes/52"));
+    try std.testing.expectEqual(@as(?u8, null), battle.spell_scene.parseSchemaVersion("suikoden-spell-scenes/0"));
+    try std.testing.expectEqual(@as(?u8, null), battle.spell_scene.parseSchemaVersion("suikoden-spell-scenes/01"));
+    try std.testing.expectEqual(@as(?u8, null), battle.spell_scene.parseSchemaVersion("suikoden-spell-scenes/53"));
+    try std.testing.expectEqual(@as(?u8, null), battle.spell_scene.parseSchemaVersion("bad"));
+}
