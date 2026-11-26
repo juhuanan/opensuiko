@@ -483,6 +483,87 @@ test "packaged teleport has a cancel path and the Blinking Mirror returns to hea
     }
 }
 
+test "modeled Kaku dice matches plain settlement and RNG through headless acknowledgements" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, "../kit/data/reports/dice_presentation.json", allocator, .limited(128 * 1024));
+    defer allocator.free(bytes);
+    const model = try journey.dice.visual.load(allocator, bytes);
+    defer model.deinit();
+    var harness = try CanonicalHarness.load(allocator, io);
+    defer harness.deinit();
+    var members: [6]battle.Member = undefined;
+    var state = try harness.newState(&members);
+    state.dice_model = &model.value;
+    state.combat.progress.money = 5000;
+    state.field_state.progress.money = 5000;
+    state.field_state.enterRoom(state.package.roomIndex("vb2_room_8").?, .{ .x = 176, .y = 120 });
+    for (0..20) |_| {
+        if (state.dice_game != null) break;
+        _ = try state.advanceSimulation(.{});
+    }
+    try std.testing.expect(state.dice_game != null);
+    const entry_music = state.preTickDiceMusic(.{}).?;
+    try std.testing.expectEqual(.entry, entry_music);
+    const random = state.combat.random;
+    _ = try state.advanceSimulation(.{});
+    try std.testing.expect(!state.dice_game.?.entry_audio_ready);
+    const waiting_tick = state.elapsed_ticks;
+    try std.testing.expectError(error.UnexpectedDiceMusicAcknowledgment, state.advanceSimulation(.{ .dice_music_ready = .exit }));
+    try std.testing.expectEqual(waiting_tick, state.elapsed_ticks);
+    _ = try state.advanceSimulation(.{ .dice_music_ready = entry_music });
+    try std.testing.expectEqual(waiting_tick + 1, state.elapsed_ticks);
+    try std.testing.expect(state.dice_game.?.entry_audio_ready);
+    try std.testing.expect(state.preTickDiceMusic(.{}) == null);
+    try std.testing.expectEqual(.allocate, state.dice_game.?.dialogue.phase);
+    const step = try state.advanceSimulation(.{});
+    try std.testing.expectEqual(.opening, state.dice_game.?.dialogue.phase);
+    try std.testing.expect(step.dice_audio.box_opened);
+    try std.testing.expectEqualDeep(random, state.combat.random);
+
+    for (0..8000) |_| {
+        const active = state.dice_game orelse break;
+        if (state.preTickDiceMusic(.{}) != null) break;
+        const dice = state.dice_host.?.session.?.dice;
+        const aim = if (dice.phase == .player_roll) dice.throw_control else null;
+        const pressed: journey.dice.Entry.Buttons = if (active.result != null or dice.phase == .proposal)
+            .{ .confirm = true }
+        else if (dice.phase == .fixed_prompt)
+            .{ .cancel = true }
+        else if (aim) |control|
+            .{ .up = control.strength < 96, .confirm = control.strength >= 96 and @abs(control.horizontal_pixels - 160) < 5 }
+        else
+            .{};
+        _ = try state.advanceSimulation(.{ .dice = .{ .pressed = pressed } });
+    }
+    try std.testing.expectEqual(.exit, state.preTickDiceMusic(.{}).?);
+    _ = try state.advanceSimulation(.{ .dice_music_ready = .exit });
+    try std.testing.expect(state.dice_game.?.exit_ready);
+    try std.testing.expectEqual(.restore_area_b, state.preTickDiceMusic(.{}).?);
+    try std.testing.expectError(error.UnexpectedDiceMusicAcknowledgment, state.advanceSimulation(.{ .dice_music_ready = .exit }));
+    _ = try state.advanceSimulation(.{});
+    try std.testing.expect(state.dice_game != null);
+    _ = try state.advanceSimulation(.{ .dice_music_ready = .restore_area_b });
+    try std.testing.expect(state.dice_game == null);
+    _ = try drainFieldEvent(&state, &.{});
+    try std.testing.expectEqualStrings("vb2_room_6", currentRoomName(&state));
+    const money = state.combat.progress.money;
+    const won = scenarioBitSet(&state, 12, 1);
+    const final_random = state.combat.random;
+
+    var plain_members: [6]battle.Member = undefined;
+    var plain = try harness.newState(&plain_members);
+    plain.dice_model = null;
+    plain.combat.progress.money = 5000;
+    plain.field_state.progress.money = 5000;
+    plain.field_state.enterRoom(plain.package.roomIndex("vb2_room_8").?, .{ .x = 176, .y = 120 });
+    const plain_result = try playFixedDiceWithInput(&plain);
+    try std.testing.expectEqual(plain_result.money, money);
+    try std.testing.expectEqual(plain_result.won, won);
+    try std.testing.expectEqualDeep(plain.combat.random, final_random);
+    try std.testing.expectEqualStrings(currentRoomName(&plain), currentRoomName(&state));
+}
+
 test "packaged Kaku dice settles the story wager and offers the follow-up game" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();

@@ -89,9 +89,10 @@ pub fn load(allocator: std.mem.Allocator, bytes: []const u8, package: field.Pack
 }
 pub const Mode = enum { field, battle, duel, war, ending, defeat, game_over };
 pub const TickSounds = struct {
-    field: ?u16,
-    party_window_count: u8,
-    battle: []const battle.unite_playback.Sound,
+    field: ?u16 = null,
+    party_window_count: u8 = 0,
+    /// Borrowed from the simulation state until the next tick.
+    battle: []const battle.unite_playback.Sound = &.{},
 };
 
 pub const ModalOwner = dispatch.ModalOwner;
@@ -577,10 +578,11 @@ pub const State = struct {
     }
 
     pub const advanceSimulation = dispatch.advanceSimulation;
+    pub const preTickDiceMusic = dispatch.preTickDiceMusic;
 
     pub noinline fn tickWithFieldEvents(self: *State, input: pause.Input, combat_input: battle.Input) !pause.Effect {
-        // Headless field replays provide neither a modeled dice audio host nor a party sample.
-        return (try self.advanceSimulation(.{ .menu = input, .battle = combat_input }, null)).effect;
+        // Field-only callers can still read their queued cues directly.
+        return (try dispatch.advanceMode(self, .{ .menu = input, .battle = combat_input })).effect;
     }
 
     pub fn tickPartySelection(self: *State, controls: party_selection.selector.Controls) !void {
@@ -600,7 +602,7 @@ pub const State = struct {
     }
 
     pub fn tick(self: *State, input: pause.Input, combat_input: battle.Input) pause.Effect {
-        const step = self.advanceSimulation(.{ .menu = input, .battle = combat_input, .room_events = .disabled }, null) catch |err| {
+        const step = dispatch.advanceMode(self, .{ .menu = input, .battle = combat_input, .room_events = .disabled }) catch |err| {
             std.log.warn("Room setup failed: {s}", .{@errorName(err)});
             self.menu.notify("Room setup failed.");
             return .none;

@@ -58,28 +58,42 @@ pub const AudioEvents = struct {
     won: bool = false,
 };
 
-pub fn advanceFrame(state: *State, menu_input: pause.Input, controls: Entry.Controls, audio: anytype) !AudioEvents {
+pub const MusicRequest = enum { entry, exit, restore_area_b };
+
+pub fn pendingMusic(state: *const State) ?MusicRequest {
+    const active = state.dice_game orelse return null;
+    if (!usesModel(state)) return null;
+    return modelMusicRequest(active);
+}
+
+fn modelMusicRequest(active: Active) ?MusicRequest {
+    if (!active.entry_audio_ready) return .entry;
+    if (active.pending_exit) return if (active.exit_ready) .restore_area_b else .exit;
+    return null;
+}
+
+pub fn advanceFrame(state: *State, menu_input: pause.Input, controls: Entry.Controls, music_ready: ?MusicRequest) !AudioEvents {
     var cues: AudioEvents = .{};
-    if (!usesModel(state)) {
+    const model = usesModel(state);
+    const request = if (model) modelMusicRequest(state.dice_game.?) else null;
+    if (music_ready != null and music_ready != request) return error.UnexpectedDiceMusicAcknowledgment;
+    if (model) {
+        if (request == null or music_ready != null) cues = try advanceModel(state, controls, request);
+    } else {
         try tickPlain(state, menu_input);
-    } else if (comptime @TypeOf(audio) != @TypeOf(null)) {
-        cues = try advanceModel(state, controls, audio);
     }
     state.elapsed_ticks +|= 1;
     return cues;
 }
 
-fn advanceModel(state: *State, controls: Entry.Controls, audio: anytype) !AudioEvents {
+fn advanceModel(state: *State, controls: Entry.Controls, request: ?MusicRequest) !AudioEvents {
     const active = state.dice_game.?;
     var cues: AudioEvents = .{};
-    if (!active.entry_audio_ready) {
-        try audio.requestDiceMusic(.dice);
+    if (request == .entry) {
         try tick(state, .entry_audio_ready);
-    } else if (active.pending_exit and !active.exit_ready) {
-        try audio.requestDiceMusic(.dice);
+    } else if (request == .exit) {
         try tick(state, .exit_ready);
     } else {
-        if (active.pending_exit and active.exit_ready) try audio.requestDiceMusic(.area_b);
         try tickFrame(state, controls);
         if (active.animation != null) {
             const frame = state.dice_game.?.frame.?;

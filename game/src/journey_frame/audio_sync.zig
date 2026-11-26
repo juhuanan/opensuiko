@@ -4,8 +4,9 @@ const field = @import("field");
 const audio = @import("../audio.zig");
 const audio_route = @import("audio_route");
 const journey = @import("journey");
+const FieldMusic = field.game_state.event_runtime.FieldMusic;
 
-pub fn fieldMusicToTrack(music: field.game_state.event_runtime.FieldMusic) audio_route.Track {
+fn fieldMusicToTrack(music: FieldMusic) audio_route.Track {
     return switch (music) {
         .stop, .fade => .none,
         .ruins => .ruins,
@@ -19,19 +20,23 @@ pub fn fieldMusicToTrack(music: field.game_state.event_runtime.FieldMusic) audio
     };
 }
 
-pub fn syncPendingFieldMusic(state: *journey.State, audio_player: anytype) !void {
-    const requested = state.pendingFieldMusic() orelse return;
-    const target = fieldMusicToTrack(requested);
-    if (requested == .fade) {
-        audio_player.requestFieldFade();
-        try state.completeFieldMusic(requested);
-    } else {
-        const duplicate = requested != .stop and state.field_state.music == requested;
-        if (duplicate or try audio_player.pollFieldMusic(target)) try state.completeFieldMusic(requested);
-    }
+pub fn diceMusicToTrack(requested: journey.dice.MusicRequest) audio_route.Track {
+    return switch (requested) {
+        .entry, .exit => .dice,
+        .restore_area_b => .area_b,
+    };
 }
 
-pub fn syncTickAudio(state: *journey.State, package: field.Package, audio_player: *audio.Player, dice: journey.dice.AudioEvents) !void {
+pub fn pollFieldMusic(audio_player: anytype, requested: FieldMusic, current: ?FieldMusic) !bool {
+    if (requested == .fade) {
+        audio_player.requestFieldFade();
+        return true;
+    }
+    if (requested != .stop and current == requested) return true;
+    return audio_player.pollFieldMusic(fieldMusicToTrack(requested));
+}
+
+pub fn syncTickAudio(state: *journey.State, package: field.Package, audio_player: *audio.Player, dice: journey.dice.AudioEvents, sounds: journey.TickSounds) !void {
     if (state.dice_game == null and audio_player.field_stop_level == null and audio_player.queued_stop_level == null) {
         audio_player.field_music = if (state.field_state.music) |music| fieldMusicToTrack(music) else null;
     }
@@ -44,7 +49,6 @@ pub fn syncTickAudio(state: *journey.State, package: field.Package, audio_player
     };
     audio_player.menu_theme = if (state.field_state.progress.story.scenario) |story| story.sound_theme else .standard;
     if (dice.won) audio_player.playSounds(&[_]struct { id: u16 }{.{ .id = audio_route.SoundContent.dice_win }});
-    const sounds = state.takeTickSounds();
     const field_sound = sounds.field;
     const restores_stream = field_sound == audio_route.SoundContent.stream_restore_cue;
     if (restores_stream) audio_player.playSounds(&[_]struct { id: u16 }{.{ .id = field_sound.? }});

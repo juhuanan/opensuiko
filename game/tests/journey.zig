@@ -48,7 +48,7 @@ test "scripted crossing owns Journey input and arrives before its final movement
     try std.testing.expectError(error.UnsupportedCrossingCaller, journey.travel.Active.begin(state.package, state.field_state, origin, wrong_caller));
     state.auto_travel = try journey.travel.Active.begin(state.package, state.field_state, origin, program);
     try std.testing.expectError(error.GameBusy, journey.Snapshot.capture(state));
-    const scripted = try state.advanceSimulation(.{ .menu = .{ .menu = true, .field = .{ .direction = .right } } }, null);
+    const scripted = try state.advanceSimulation(.{ .menu = .{ .menu = true, .field = .{ .direction = .right } } });
     try expect(scripted.crossing == .scripted);
     try equal(@as(f32, 951.5), state.field_state.position(state.package).x);
     for (0..304) |_| _ = try state.tickWithFieldEvents(.{ .menu = true, .field = .{ .direction = .right, .action = true } }, .{});
@@ -74,10 +74,10 @@ test "scripted crossing owns Journey input and arrives before its final movement
     state.field_state.facing = .right;
     state.boat_travel = try journey.travel.Boat.begin(state.package, state.field_state, .left);
     const boat_rng = state.combat.random;
-    const idle = try state.advanceSimulation(.{}, null);
+    const idle = try state.advanceSimulation(.{});
     try expect(idle.crossing == .steered and idle.crossing.steered == null);
     const paused_boat = state.boat_travel.?;
-    const pause_open = try state.advanceSimulation(.{ .menu = .{ .menu = true } }, null);
+    const pause_open = try state.advanceSimulation(.{ .menu = .{ .menu = true } });
     try expect(pause_open.crossing == .none);
     try equal(pause.Phase.root, state.menu.phase);
     _ = try state.tickWithFieldEvents(.{ .field = .{ .direction = .right } }, .{});
@@ -85,7 +85,7 @@ test "scripted crossing owns Journey input and arrives before its final movement
     _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
     try equal(pause.Phase.closed, state.menu.phase);
     for (0..18 * 16) |_| {
-        const steered = try state.advanceSimulation(.{ .menu = .{ .field = .{ .direction = .right } } }, null);
+        const steered = try state.advanceSimulation(.{ .menu = .{ .field = .{ .direction = .right } } });
         try expect(steered.crossing == .steered and steered.crossing.steered == .east);
     }
     try equal(field.Point{ .x = 944, .y = 600 }, state.field_state.destination);
@@ -3999,7 +3999,7 @@ test "Journey dice and party selection refuse input without a source request" {
     try equal(field_ticks, state.field_state.scene_ticks);
     try equal(.closed, state.menu.phase);
     const ticks = state.elapsed_ticks;
-    try std.testing.expectError(error.MissingFieldPartySelectRequest, state.advanceSimulation(.{ .party = .{} }, null));
+    try std.testing.expectError(error.MissingFieldPartySelectRequest, state.advanceSimulation(.{ .party = .{} }));
     try equal(ticks, state.elapsed_ticks);
 }
 
@@ -4125,7 +4125,7 @@ test "journey simulation cancels teleport ahead of a pending party selector" {
     const input = pause.Input{ .field = .{ .cancel = true } };
     const owner = state.modalOwner(input);
     try equal(.teleport, owner);
-    try equal(.none, (try state.advanceSimulation(.{ .menu = input }, null)).effect);
+    try equal(.none, (try state.advanceSimulation(.{ .menu = input })).effect);
     try expect(state.teleport_session == null);
     try expect(state.party_selection != null);
 }

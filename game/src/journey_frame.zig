@@ -39,11 +39,18 @@ fn inspectTitleSaves(init: std.process.Init, save_path: ?[]const u8, state: *jou
 
 pub const SimulationInput = journey.SimulationInput;
 
-pub fn advanceSimulation(state: *journey.State, input: SimulationInput, audio_player: anytype) !journey.SimulationStep {
+pub fn stepWithAudio(state: *journey.State, input: SimulationInput, audio_player: anytype) !journey.SimulationStep {
     var frame = input;
     frame.party = input.party orelse .{};
-    const step = try state.advanceSimulation(frame, audio_player);
-    if (step.poll_field_music) try audio_sync.syncPendingFieldMusic(state, audio_player);
+    if (state.preTickDiceMusic(frame.menu)) |request| {
+        try audio_player.requestDiceMusic(audio_sync.diceMusicToTrack(request));
+        frame.dice_music_ready = request;
+    }
+    const step = try state.advanceSimulation(frame);
+    if (step.field_music) |request| {
+        if (try audio_sync.pollFieldMusic(audio_player, request, state.field_state.music))
+            try state.completeFieldMusic(request);
+    }
     return step;
 }
 
@@ -165,7 +172,7 @@ const App = struct {
     fn stepSimulationTick(self: *App, held_direction: ?field.Direction) !bool {
         const package = self.boot_state.bundle.package;
         const crossing_before = render_mod.crossingState(&self.state);
-        const step = try advanceSimulation(&self.state, .{
+        const step = try stepWithAudio(&self.state, .{
             .menu = self.input.menu_input,
             .battle = self.input.battle_input,
             .dice = self.input.dice_input,
@@ -195,7 +202,7 @@ const App = struct {
             return false;
         }
 
-        try audio_sync.syncTickAudio(&self.state, package, &self.resources.audio_player, step.dice_audio);
+        try audio_sync.syncTickAudio(&self.state, package, &self.resources.audio_player, step.dice_audio, step.sounds);
         try self.applyMenuEffect(step.effect);
         self.input.clearStepEdges(held_direction);
         return true;

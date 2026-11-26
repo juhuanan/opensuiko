@@ -2275,13 +2275,13 @@ test "production simulation frame hands dialogue to party selection and acknowle
     state.field_state.auxiliary_party = @splat(0xff);
     var audio: SimulationAudio = .{};
 
-    for (0..state.package.step_ticks) |_| _ = try frame.advanceSimulation(&state, .{ .menu = .{ .field = .{ .direction = .right } } }, &audio);
+    for (0..state.package.step_ticks) |_| _ = try frame.stepWithAudio(&state, .{ .menu = .{ .field = .{ .direction = .right } } }, &audio);
     const event = state.field_event orelse return error.MissingFieldEvent;
     const session = event.session;
     var saw_dialogue = false;
     for (0..128) |_| {
         saw_dialogue = saw_dialogue or session.boxes[0].phase != .closed;
-        _ = try frame.advanceSimulation(&state, .{
+        _ = try frame.stepWithAudio(&state, .{
             .menu = .{ .field = .{ .action = true } },
             .party = .{ .repeated = .{ .cancel = true } },
         }, &audio);
@@ -2296,9 +2296,9 @@ test "production simulation frame hands dialogue to party selection and acknowle
 
     for (0..128) |_| {
         if (state.party_selection.?.menu.phase == .main) break;
-        _ = try frame.advanceSimulation(&state, .{}, &audio);
+        _ = try frame.stepWithAudio(&state, .{}, &audio);
     } else return error.PartySelectionDidNotOpen;
-    _ = try frame.advanceSimulation(&state, .{
+    _ = try frame.stepWithAudio(&state, .{
         .menu = .{ .field = .{ .action = true, .direction = .right } },
         .party = .{ .repeated = .{ .cancel = true } },
     }, &audio);
@@ -2307,7 +2307,7 @@ test "production simulation frame hands dialogue to party selection and acknowle
     try std.testing.expectEqual(party_pc, session.instance.?.execution.pc);
     for (0..128) |_| {
         if (state.party_selection == null) break;
-        _ = try frame.advanceSimulation(&state, .{}, &audio);
+        _ = try frame.stepWithAudio(&state, .{}, &audio);
     } else return error.PartySelectionDidNotClose;
     try std.testing.expectEqualDeep(party_receipt, session.receipt.?);
     try std.testing.expectEqual(party_resume_pc, session.instance.?.execution.pc);
@@ -2315,7 +2315,10 @@ test "production simulation frame hands dialogue to party selection and acknowle
     try std.testing.expect(session.queuedPartySelect() == null and state.pendingFieldMusic() == null);
     try std.testing.expectError(error.InvalidFieldPartySelectReceipt, session.resumePartySelect(event.binding.*, &state.field_state, party_receipt));
 
-    _ = try frame.advanceSimulation(&state, .{}, &audio);
+    state.menu.pending_sound = 0x501;
+    const issuing = try frame.stepWithAudio(&state, .{}, &audio);
+    try std.testing.expect(issuing.field_music == null);
+    try std.testing.expectEqual(@as(?u16, 0x501), issuing.sounds.field);
     try std.testing.expectEqual(.area_b, state.pendingFieldMusic().?);
     try std.testing.expectEqual(@as(usize, 0), audio.polls);
     const music_pc = session.instance.?.execution.pc;
@@ -2329,26 +2332,29 @@ test "production simulation frame hands dialogue to party selection and acknowle
     teleport.settled = 0;
     state.teleport_session = teleport;
     audio.ready = true;
-    _ = try frame.advanceSimulation(&state, .{ .menu = .{ .field = .{ .cancel = true } } }, &audio);
+    const teleport_step = try frame.stepWithAudio(&state, .{ .menu = .{ .field = .{ .cancel = true } } }, &audio);
+    try std.testing.expect(teleport_step.field_music == null);
     try std.testing.expect(state.teleport_session == null);
     try std.testing.expectEqual(@as(usize, 0), audio.polls);
     try std.testing.expectEqual(music_pc, session.instance.?.execution.pc);
     try std.testing.expectEqual(music_batch, session.instance.?.pending.?.batch.id);
 
     audio.ready = false;
-    _ = try frame.advanceSimulation(&state, .{}, &audio);
+    const waiting = try frame.stepWithAudio(&state, .{}, &audio);
+    try std.testing.expectEqual(.area_b, waiting.field_music.?);
+    try std.testing.expect(waiting.sounds.field == null);
     try std.testing.expectEqual(@as(usize, 1), audio.polls);
     try std.testing.expectEqual(music_pc, session.instance.?.execution.pc);
     try std.testing.expectEqual(music_batch, session.instance.?.pending.?.batch.id);
     audio.ready = true;
-    _ = try frame.advanceSimulation(&state, .{}, &audio);
+    _ = try frame.stepWithAudio(&state, .{}, &audio);
     try std.testing.expectEqual(@as(usize, 2), audio.polls);
     try std.testing.expectEqual(music_batch, session.receipt.?.batch);
     try std.testing.expectEqual(music_resume_pc, session.instance.?.execution.pc);
     try std.testing.expectEqual(.area_b, state.field_state.music.?);
     try std.testing.expectEqual(@as(u8, 4), state.progress().story.scenario.?.scenario[1]);
     try std.testing.expectError(error.InvalidFieldMusicReceipt, state.completeFieldMusic(.area_b));
-    _ = try frame.advanceSimulation(&state, .{}, &audio);
+    _ = try frame.stepWithAudio(&state, .{}, &audio);
     try std.testing.expectEqual(@as(usize, 2), audio.polls);
     try std.testing.expectEqual(@as(u8, 0x24), state.progress().story.scenario.?.scenario[1]);
 }
@@ -2544,11 +2550,11 @@ test "production field inventory and battle handoff survives saving and continui
     const original_rng = state.combat.random;
     const slot = members[0].inventory.count();
     const expected_item = field.items.Stack{ .id = .antitoxin, .uses = field.items.Id.antitoxin.maxUses() };
-    for (0..state.package.step_ticks) |_| _ = try frame.advanceSimulation(&state, .{ .menu = .{ .field = .{ .direction = .right } } }, &audio);
+    for (0..state.package.step_ticks) |_| _ = try frame.stepWithAudio(&state, .{ .menu = .{ .field = .{ .direction = .right } } }, &audio);
     const session = (state.field_event orelse return error.MissingFieldEvent).session;
     for (0..32) |_| {
         if (state.mode == .battle) break;
-        _ = try frame.advanceSimulation(&state, .{}, &audio);
+        _ = try frame.stepWithAudio(&state, .{}, &audio);
     } else return error.FieldBattleDidNotStart;
     try std.testing.expect(state.progress() == original_progress);
     try std.testing.expectEqualDeep(expected_item, members[0].inventory.slots[slot].?);
@@ -2568,17 +2574,17 @@ test "production field inventory and battle handoff survives saving and continui
         if (state.combat.phase == .victory and state.combat.rewardReady()) break;
         switch (state.combat.phase) {
             .battle_menu => {
-                for (0..3) |_| _ = try frame.advanceSimulation(&state, .{ .battle = .{ .down = true } }, &audio);
-                _ = try frame.advanceSimulation(&state, .{ .battle = .{ .confirm = true } }, &audio);
+                for (0..3) |_| _ = try frame.stepWithAudio(&state, .{ .battle = .{ .down = true } }, &audio);
+                _ = try frame.stepWithAudio(&state, .{ .battle = .{ .confirm = true } }, &audio);
             },
-            .victory => _ = try frame.advanceSimulation(&state, .{ .battle = .{ .confirm = true } }, &audio),
+            .victory => _ = try frame.stepWithAudio(&state, .{ .battle = .{ .confirm = true } }, &audio),
             .defeat, .escaped => return error.UnexpectedBattleOutcome,
-            else => _ = try frame.advanceSimulation(&state, .{}, &audio),
+            else => _ = try frame.stepWithAudio(&state, .{}, &audio),
         }
     } else return error.BattleDidNotFinish;
     try std.testing.expect(!std.meta.eql(original_rng, state.combat.random));
     const battle_rng = state.combat.random;
-    _ = try frame.advanceSimulation(&state, .{ .battle = .{ .confirm = true } }, &audio);
+    _ = try frame.stepWithAudio(&state, .{ .battle = .{ .confirm = true } }, &audio);
     try std.testing.expectEqual(.field, state.mode);
     try std.testing.expectEqualDeep(request.receipt, session.receipt.?);
     try std.testing.expectEqual(resume_pc, session.instance.?.execution.pc);
@@ -2589,7 +2595,7 @@ test "production field inventory and battle handoff survives saving and continui
 
     for (0..8) |_| {
         if (state.field_event == null) break;
-        _ = try frame.advanceSimulation(&state, .{}, &audio);
+        _ = try frame.stepWithAudio(&state, .{}, &audio);
     } else return error.FieldEventDidNotFinish;
     try std.testing.expect(!session.busy());
     try std.testing.expectEqual(@as(u8, 0x26), state.progress().story.scenario.?.scenario[1]);
@@ -2610,7 +2616,7 @@ test "production field inventory and battle handoff survives saving and continui
     try std.testing.expectEqualDeep(saved, try journey.Snapshot.capture(restored));
     try std.testing.expectEqualDeep(expected_item, restored_members[0].inventory.slots[slot].?);
 
-    for (0..restored.package.step_ticks) |_| _ = try frame.advanceSimulation(&restored, .{ .menu = .{ .field = .{ .direction = .right } } }, &audio);
+    for (0..restored.package.step_ticks) |_| _ = try frame.stepWithAudio(&restored, .{ .menu = .{ .field = .{ .direction = .right } } }, &audio);
     try std.testing.expectEqual(field.Point{ .x = position.x + 8, .y = position.y }, restored.field_state.destination);
     try std.testing.expect(restored.field_event == null and restored.scripted_battle == null);
     try std.testing.expectEqual(@as(u8, 0x26), restored.progress().story.scenario.?.scenario[1]);

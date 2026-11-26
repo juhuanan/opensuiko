@@ -1,5 +1,6 @@
 //! Explicit modal-priority policy and mode dispatch for journey simulation ticks.
 const battle = @import("battle");
+const field = @import("field");
 const pause = @import("pause_menu");
 const journey = @import("../journey.zig");
 const exploration = @import("exploration.zig");
@@ -45,6 +46,7 @@ pub const SimulationInput = struct {
     menu: pause.Input = .{},
     battle: battle.Input = .{},
     dice: journey.dice.Entry.Controls = .{},
+    dice_music_ready: ?journey.dice.MusicRequest = null,
     party: ?journey.party_selection.selector.Sampler.Sample = null,
     room_events: journey.RoomEventMode = .enabled,
 };
@@ -52,14 +54,28 @@ pub const SimulationInput = struct {
 pub const SimulationStep = struct {
     crossing: exploration.CrossingUpdate = .none,
     effect: pause.Effect = .none,
-    poll_field_music: bool = false,
+    field_music: ?field.game_state.event_runtime.FieldMusic = null,
     dice_audio: journey.dice.AudioEvents = .{},
+    sounds: journey.TickSounds = .{},
 };
 
-pub noinline fn advanceSimulation(state: *journey.State, frame: SimulationInput, audio: anytype) !SimulationStep {
+/// Dice consumes a matching load acknowledgment on the owning tick.
+pub fn preTickDiceMusic(state: *const journey.State, input: pause.Input) ?journey.dice.MusicRequest {
+    if (state.dice_game == null or modalOwner(state, input) != .dice) return null;
+    return journey.dice.pendingMusic(state);
+}
+
+pub noinline fn advanceSimulation(state: *journey.State, frame: SimulationInput) !SimulationStep {
+    var step = try advanceMode(state, frame);
+    if (state.mode != .game_over) step.sounds = state.takeTickSounds();
+    return step;
+}
+
+pub fn advanceMode(state: *journey.State, frame: SimulationInput) !SimulationStep {
     const input = frame.menu;
     const combat_input = frame.battle;
     const owner = modalOwner(state, input);
+    if (owner != .dice and frame.dice_music_ready != null) return error.UnexpectedDiceMusicAcknowledgment;
     if (frame.room_events == .disabled and (owner == .world_or_event or owner == .boat_travel) and
         exploration.handleReadyFieldEncounter(state)) return .{};
     switch (owner) {
@@ -77,10 +93,10 @@ pub noinline fn advanceSimulation(state: *journey.State, frame: SimulationInput,
             state.elapsed_ticks +|= 1;
             return .{};
         },
-        .pending_field_music => return .{ .poll_field_music = true },
+        .pending_field_music => return .{ .field_music = state.pendingFieldMusic() },
         .auto_travel => return .{ .crossing = try exploration.tickAutomaticTravel(state) },
         .boat_travel => return .{ .crossing = try exploration.tickBoat(state, input.field.direction) },
-        .dice => return .{ .dice_audio = try journey.dice.advanceFrame(state, input, frame.dice, audio) },
+        .dice => return .{ .dice_audio = try journey.dice.advanceFrame(state, input, frame.dice, frame.dice_music_ready) },
         .party_selection => {
             try journey.party_selection.advanceFrame(state, frame.party);
             return .{};
