@@ -88,7 +88,8 @@ pub fn startEncounter(self: *State) void {
     self.dropped_item = null;
     self.loot_declined = false;
     self.award_exp = @splat(0);
-    self.reward_levels = self.levels;
+    self.reward_levels = @splat(1);
+    for (self.progress.party, 0..) |member, i| self.reward_levels[i] = member.level;
     self.released_enemies = false;
     self.bribed_enemies = false;
     self.acted = @splat(false);

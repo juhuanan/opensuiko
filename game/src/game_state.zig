@@ -1,4 +1,5 @@
 const std = @import("std");
+const character_rules = @import("battle_rules");
 pub const event_runtime = @import("event_runtime");
 pub const items = @import("items.zig");
 pub const storage = @import("storage.zig");
@@ -57,7 +58,16 @@ pub const Story = struct {
         }
     }
 };
-pub const Member = struct {
+pub const Stats = struct {
+    attack: u16,
+    defense: u16,
+    skill: u16,
+    speed: u16,
+    magic: u16 = 0,
+    luck: u16 = 0,
+};
+
+pub const Character = struct {
     id: []const u8,
     name: []const u8,
     hp: u16,
@@ -68,6 +78,92 @@ pub const Member = struct {
     rune_charges: [4]u16,
     max_rune_charges: [4]u16,
     inventory: items.Inventory = .{},
+    level: u8 = 1,
+    experience: u32 = 0,
+    base_stats: Stats = .{ .attack = 0, .defense = 0, .skill = 0, .speed = 0 },
+    weapon_level: u8 = 1,
+    loadout: character_rules.Loadout = .{},
+    rune: ?usize = null,
+    weapon_augment: character_rules.WeaponAugment = .{},
+
+    pub fn runeCapacity(self: *const Character, rules: character_rules.Systems) [4]u16 {
+        var equipment_magic: i16 = 0;
+        for (std.enums.values(character_rules.EquipmentSlot)) |slot| {
+            if (self.loadout.get(slot)) |id| equipment_magic += rules.equipment[id].bonuses[4];
+        }
+        const magic: u16 = @intCast(std.math.clamp(@as(i32, self.base_stats.magic) + equipment_magic, 0, 9999));
+        return rules.magicCapacity(magic);
+    }
+
+    pub fn refreshRuneCapacity(self: *Character, rules: character_rules.Systems) void {
+        self.max_rune_charges = self.runeCapacity(rules);
+        for (&self.rune_charges, self.max_rune_charges) |*current, cap| current.* = @min(current.*, cap);
+    }
+
+    pub fn refillRuneCharges(self: *Character, rules: character_rules.Systems) void {
+        self.max_rune_charges = self.runeCapacity(rules);
+        self.rune_charges = self.max_rune_charges;
+    }
+
+    pub fn levelUp(self: *Character, rules: character_rules.Systems, growth: [6]u4, rolls: [7]u15) void {
+        if (self.level == 99) return;
+        self.level += 1;
+        const stats = &self.base_stats;
+        const columns = [_]*u16{ &stats.attack, &stats.skill, &stats.defense, &stats.speed, &stats.magic, &stats.luck };
+        for (columns, growth, 0..) |column, rate, i| {
+            const gain = (rules.stat_growth[character_rules.statIndex(self.level, rate)] + (rolls[i] & 255)) >> 8;
+            column.* = @intCast(@min(255, column.* + gain));
+        }
+        const band: usize = if (self.level < 20) 0 else if (self.level < 60) 1 else 2;
+        const hp_gain = (rules.hp_growth[@as(usize, growth[0]) * 3 + band] + (rolls[6] & 511)) >> 8;
+        self.max_hp = @intCast(@min(9999, @as(u32, self.max_hp) + hp_gain));
+        self.hp = @intCast(@min(self.max_hp, @as(u32, self.hp) + hp_gain));
+        self.refreshRuneCapacity(rules);
+    }
+
+    pub fn record(self: Character) CharacterRecord {
+        return .{
+            .id = self.id,
+            .name = self.name,
+            .hp = self.hp,
+            .max_hp = self.max_hp,
+            .status = self.status,
+            .balloons = self.balloons,
+            .rune_charges = self.rune_charges,
+            .max_rune_charges = self.max_rune_charges,
+            .inventory = self.inventory,
+        };
+    }
+};
+
+pub const Member = Character;
+
+// Member fields in the existing opening packet and save formats.
+pub const CharacterRecord = struct {
+    id: []const u8,
+    name: []const u8,
+    hp: u16,
+    max_hp: u16,
+    status: Status,
+    balloons: u8 = 0,
+    // Numeric arrays stay readable in JSON instead of becoming byte strings.
+    rune_charges: [4]u16,
+    max_rune_charges: [4]u16,
+    inventory: items.Inventory = .{},
+
+    pub fn character(self: CharacterRecord) Character {
+        return .{
+            .id = self.id,
+            .name = self.name,
+            .hp = self.hp,
+            .max_hp = self.max_hp,
+            .status = self.status,
+            .balloons = self.balloons,
+            .rune_charges = self.rune_charges,
+            .max_rune_charges = self.max_rune_charges,
+            .inventory = self.inventory,
+        };
+    }
 };
 
 // The caller owns the members; changes survive scene transitions for this session.

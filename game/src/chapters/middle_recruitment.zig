@@ -134,7 +134,7 @@ pub const State = struct {
         var result = std.mem.zeroes([108]u8);
         for (self.roster.snapshot.members, 0..) |maybe, index| {
             if (maybe == null or !self.roster.snapshot.eligible[index]) continue;
-            const member = maybe.?.member;
+            const member = maybe.?;
             for (packet.profiles) |profile| {
                 if (std.mem.eql(u8, profile.id, member.id)) {
                     if (profile.source_character_id < result.len) result[profile.source_character_id] |= 1;

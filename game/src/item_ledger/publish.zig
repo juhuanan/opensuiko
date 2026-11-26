@@ -148,8 +148,8 @@ fn give(snapshot: *party.Snapshot, catalogue: owners.Catalogue, from_id: []const
     const from = try owners.activeIndex(snapshot.*, from_id);
     const to = try owners.activeIndex(snapshot.*, to_id);
     if (from == to) return error.InvalidRecipient;
-    const source = &memberAt(snapshot, from).member.inventory;
-    const destination = &memberAt(snapshot, to).member.inventory;
+    const source = &memberAt(snapshot, from).inventory;
+    const destination = &memberAt(snapshot, to).inventory;
     if (slot >= source.count()) return error.InvalidItem;
     if (owners.wearsItem(catalogue, memberAt(snapshot, from).*, slot)) return error.EquippedItem;
     const count = destination.count();
@@ -162,8 +162,8 @@ fn swapItems(snapshot: *party.Snapshot, catalogue: owners.Catalogue, first_id: [
     const first = try owners.activeIndex(snapshot.*, first_id);
     const second = try owners.activeIndex(snapshot.*, second_id);
     if (first == second) return error.InvalidRecipient;
-    const source = &memberAt(snapshot, first).member.inventory;
-    const destination = &memberAt(snapshot, second).member.inventory;
+    const source = &memberAt(snapshot, first).inventory;
+    const destination = &memberAt(snapshot, second).inventory;
     if (first_slot >= source.count() or second_slot >= destination.count()) return error.InvalidItem;
     if (owners.wearsItem(catalogue, memberAt(snapshot, first).*, first_slot) or
         owners.wearsItem(catalogue, memberAt(snapshot, second).*, second_slot)) return error.EquippedItem;
@@ -172,7 +172,7 @@ fn swapItems(snapshot: *party.Snapshot, catalogue: owners.Catalogue, first_id: [
 
 fn discard(snapshot: *party.Snapshot, catalogue: owners.Catalogue, member_id: []const u8, slot: u8) !void {
     const index = try owners.activeIndex(snapshot.*, member_id);
-    const bag = &memberAt(snapshot, index).member.inventory;
+    const bag = &memberAt(snapshot, index).inventory;
     if (slot >= bag.count()) return error.InvalidItem;
     if (owners.wearsItem(catalogue, memberAt(snapshot, index).*, slot)) return error.EquippedItem;
     bag.remove(slot);
@@ -180,7 +180,7 @@ fn discard(snapshot: *party.Snapshot, catalogue: owners.Catalogue, member_id: []
 
 fn deposit(p: packet.Packet, snapshot: *party.Snapshot, catalogue: owners.Catalogue, member_id: []const u8, slot: u8) !void {
     const index = try owners.activeIndex(snapshot.*, member_id);
-    const bag = &memberAt(snapshot, index).member.inventory;
+    const bag = &memberAt(snapshot, index).inventory;
     if (slot >= bag.count()) return error.InvalidItem;
     if (owners.wearsItem(catalogue, memberAt(snapshot, index).*, slot)) return error.EquippedItem;
     const stack = bag.slots[slot].?;
@@ -194,7 +194,7 @@ fn withdraw(p: packet.Packet, snapshot: *party.Snapshot, member_id: []const u8, 
     const index = try owners.activeIndex(snapshot.*, member_id);
     const item = packet.findById(p, item_id) orelse return error.UnknownIdentity;
     const identity = try owners.controllerIdentity(item);
-    try snapshot.storage.withdraw(&memberAt(snapshot, index).member.inventory, identity);
+    try snapshot.storage.withdraw(&memberAt(snapshot, index).inventory, identity);
 }
 
 fn equip(p: packet.Packet, snapshot: *party.Snapshot, catalogue: owners.Catalogue, member_id: []const u8, slot_value: u8, item_id: []const u8, character_type: u8) !void {
@@ -214,7 +214,7 @@ fn equip(p: packet.Packet, snapshot: *party.Snapshot, catalogue: owners.Catalogu
     if ((item.equipment_type_mask & character_type) == 0) return error.EquipmentIneligible;
     const equipment_index = try owners.equipmentIndex(catalogue, item);
     const member = memberAt(snapshot, index);
-    if (!catalogue[equipment_index].allows(member.member.id, slot)) return error.EquipmentIneligible;
+    if (!catalogue[equipment_index].allows(member.id, slot)) return error.EquipmentIneligible;
     if (snapshot.extras[index].?.locked_equipment[slotIndex(slot)] and
         member.loadout.get(slot) != equipment_index) return error.EquipmentLocked;
     member.loadout.set(slot, equipment_index);
@@ -253,7 +253,7 @@ fn sharedRemove(p: packet.Packet, snapshot: *party.Snapshot, sources: Sources, r
 fn applyFragment(p: packet.Packet, snapshot: *party.Snapshot, owner_id: []const u8, slot: u8, target_id: []const u8, replace: bool) !void {
     const owner = try owners.activeIndex(snapshot.*, owner_id);
     const target = try owners.activeIndex(snapshot.*, target_id);
-    const bag = &memberAt(snapshot, owner).member.inventory;
+    const bag = &memberAt(snapshot, owner).inventory;
     if (slot >= bag.count()) return error.InvalidItem;
     const stack = bag.slots[slot].?;
     const item = packet.findById(p, @tagName(stack.id)) orelse return error.FragmentUnbound;
@@ -277,7 +277,7 @@ fn applyFragment(p: packet.Packet, snapshot: *party.Snapshot, owner_id: []const 
 
 fn consume(p: packet.Packet, snapshot: *party.Snapshot, member_id: []const u8, slot: u8) !void {
     const index = try owners.activeIndex(snapshot.*, member_id);
-    const bag = &memberAt(snapshot, index).member.inventory;
+    const bag = &memberAt(snapshot, index).inventory;
     if (slot >= bag.count()) return error.InvalidItem;
     var stack = bag.slots[slot].?;
     if (stack.uses > std.math.maxInt(u8)) return error.UsesExceedMaximum;

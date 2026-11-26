@@ -81,7 +81,7 @@ pub const Roster = struct {
             .revision = snapshot.baseline_revision,
         };
         for (snapshot.members, 0..) |maybe, i| if (maybe) |member| {
-            const active = contains(snapshot.active, member.member.id);
+            const active = contains(snapshot.active, member.id);
             const eligible = snapshot.eligible[i];
             result.states[i] = .{
                 .presence = if (active) .active else if (eligible) .reserve else .unrecruited,
@@ -106,7 +106,7 @@ pub const Roster = struct {
 
     pub fn memberIndex(self: *const Roster, id: []const u8) ?usize {
         for (self.snapshot.members, 0..) |maybe, i| if (maybe) |member| {
-            if (std.mem.eql(u8, member.member.id, id)) return i;
+            if (std.mem.eql(u8, member.id, id)) return i;
         };
         return null;
     }
@@ -154,12 +154,12 @@ pub const Roster = struct {
         for (self.snapshot.members, 0..) |maybe, i| {
             if (maybe) |member| {
                 if (ended) return error.InvalidRoster;
-                const profile = packet.profile(member.member.id) orelse return error.UnknownMember;
-                if (!std.mem.eql(u8, profile.name, member.member.name)) return error.InvalidRoster;
+                const profile = packet.profile(member.id) orelse return error.UnknownMember;
+                if (!std.mem.eql(u8, profile.name, member.name)) return error.InvalidRoster;
                 const extra = self.snapshot.extras[i] orelse return error.MissingCharacterExtra;
-                if (!std.mem.eql(u8, extra.member_id, member.member.id)) return error.InvalidCharacterExtra;
+                if (!std.mem.eql(u8, extra.member_id, member.id)) return error.InvalidCharacterExtra;
                 member_count += 1;
-                const active = contains(self.snapshot.active, member.member.id);
+                const active = contains(self.snapshot.active, member.id);
                 const state = self.states[i];
                 if (state.presence == .active and !active) return error.InvalidPresence;
                 if (state.presence != .active and active) return error.InvalidPresence;
@@ -189,7 +189,7 @@ pub const Roster = struct {
                     if (departure.return_order >= max_active or departure.source.len == 0) return error.InvalidPresence;
                 }
                 if (state.revive_hp) |hp| {
-                    if (member.member.status != .unconscious or member.member.hp != 0 or hp == 0 or hp > member.member.max_hp) return error.InvalidPresence;
+                    if (member.status != .unconscious or member.hp != 0 or hp == 0 or hp > member.max_hp) return error.InvalidPresence;
                 }
             } else {
                 ended = true;
@@ -242,8 +242,8 @@ pub const Roster = struct {
         }
         // Noncombatants are a ledger; no member may be one.
         for (self.snapshot.members) |maybe| if (maybe) |member| {
-            if (!packet.isCombat(member.member.id)) return error.UnknownMember;
-            if (packet.identityOfCombat(member.member.id)) |identity| {
+            if (!packet.isCombat(member.id)) return error.UnknownMember;
+            if (packet.identityOfCombat(member.id)) |identity| {
                 if (packet.noncombatant(identity) != null) return error.Noncombatant;
             }
         };
@@ -378,7 +378,7 @@ pub const Roster = struct {
         // Recompute the retained Hero's state because the loop above only touched removed entries.
         for (0..max_members) |i| {
             const member = self.snapshot.members[i] orelse continue;
-            if (self.states[i].presence == .active and !contains(self.snapshot.active, member.member.id)) return error.InternalPresence;
+            if (self.states[i].presence == .active and !contains(self.snapshot.active, member.id)) return error.InternalPresence;
         }
     }
 
@@ -482,11 +482,11 @@ pub const Roster = struct {
         const index = self.memberIndex(id) orelse return error.UnknownMember;
         if (!self.isActive(id)) return error.MemberNotActive;
         var member = &self.snapshot.members[index].?;
-        if (member.member.status == .unconscious) return;
-        if (member.member.hp == 0) return error.MissingRecoveryHp;
-        self.states[index].revive_hp = member.member.hp;
-        member.member.hp = 0;
-        member.member.status = .unconscious;
+        if (member.status == .unconscious) return;
+        if (member.hp == 0) return error.MissingRecoveryHp;
+        self.states[index].revive_hp = member.hp;
+        member.hp = 0;
+        member.status = .unconscious;
     }
 
     pub fn revive(self: *Roster, packet: source.Packet, id: []const u8, source_text: []const u8) !void {
@@ -495,11 +495,11 @@ pub const Roster = struct {
         const index = self.memberIndex(id) orelse return error.UnknownMember;
         if (!self.isActive(id)) return error.MemberNotActive;
         const member = &self.snapshot.members[index].?;
-        if (member.member.status != .unconscious) return error.NotUnconscious;
+        if (member.status != .unconscious) return error.NotUnconscious;
         const hp = self.states[index].revive_hp orelse return error.MissingRecoveryHp;
-        if (hp == 0 or hp > member.member.max_hp) return error.InvalidRecoveryHp;
-        member.member.hp = hp;
-        member.member.status = .healthy;
+        if (hp == 0 or hp > member.max_hp) return error.InvalidRecoveryHp;
+        member.hp = hp;
+        member.status = .healthy;
         self.states[index].revive_hp = null;
     }
 

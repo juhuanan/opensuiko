@@ -34,7 +34,7 @@ test "all nine Area A formations complete source enemy rounds with poison and Tu
             for (combat.progress.party, 0..) |*member, index| {
                 member.max_hp = 5000;
                 member.hp = 5000;
-                combat.runes[index] = if (variant == 2) combat.content.systems.?.runeIndex("turtle").? else null;
+                combat.progress.party[index].rune = if (variant == 2) combat.content.systems.?.runeIndex("turtle").? else null;
                 combat.actions[index] = .defend;
             }
             combat.phase = .resolving;

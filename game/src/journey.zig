@@ -199,7 +199,7 @@ pub const State = struct {
         combat.progress.party[0].inventory.slots[2] = .{ .id = .bandanna, .uses = 0 };
         combat.progress.party[3].inventory.slots[2] = .{ .id = .headband, .uses = 0 };
         try combat.equipOwned(0, 0);
-        combat.experience[0] = 900;
+        combat.progress.party[0].experience = 900;
         var world = field.State.init(package, &combat.progress);
         if (package.roomIndex(inn.room) != null) try world.configureInn(package, inn);
         world.item_rules = rules;
@@ -217,12 +217,12 @@ pub const State = struct {
         canonical.party_positions = canonical.party_positions[0..1];
         var starting_party: [1]battle.Member = undefined;
         var combat = try battle.State.init(canonical, rules, &starting_party, battle.trial_seed);
-        combat.progress.party[0] = hero.member;
-        combat.runes[0] = null;
+        combat.progress.party[0] = hero.member.character();
+        combat.progress.party[0].rune = null;
         combat.progress.money = money;
-        combat.levels[0] = hero.level;
-        combat.experience[0] = hero.experience;
-        combat.base_stats[0] = .{
+        combat.progress.party[0].level = hero.level;
+        combat.progress.party[0].experience = hero.experience;
+        combat.progress.party[0].base_stats = .{
             .attack = hero.base_stats.power,
             .defense = hero.base_stats.defense,
             .skill = hero.base_stats.skill,
@@ -230,7 +230,7 @@ pub const State = struct {
             .magic = hero.base_stats.magic,
             .luck = hero.base_stats.luck,
         };
-        combat.weapon_levels[0] = hero.weapon_level;
+        combat.progress.party[0].weapon_level = hero.weapon_level;
         inline for (comptime std.enums.values(battle.systems.EquipmentSlot)) |slot| {
             if (@field(hero.equipped, @tagName(slot))) |item| {
                 const systems = combat.content.systems orelse return error.InvalidEquipment;
@@ -333,7 +333,8 @@ pub const State = struct {
         try data.validate(package, content);
         try rules.validate();
         if (members.len < snapshot.party_count or snapshot.party_count == 0 or snapshot.party_count > 6) return error.InvalidParty;
-        var owned = snapshot.party;
+        var owned: [6]battle.Member = undefined;
+        for (&owned, snapshot.party) |*member, record| member.* = record.character();
         var combat: battle.State = .{
             .content = content,
             .rules = rules,
@@ -448,7 +449,7 @@ pub const State = struct {
                 if (std.mem.eql(u8, member.id, id)) continue :required_members;
             }
             for (self.reserves) |entry| if (entry) |member| {
-                if (std.mem.eql(u8, member.member.id, id)) continue :required_members;
+                if (std.mem.eql(u8, member.id, id)) continue :required_members;
             };
             return;
         }

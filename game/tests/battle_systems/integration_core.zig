@@ -37,11 +37,11 @@ fn sourceDoubleBeat(combat: *battle.State, data: world_battle.Data, art: battle.
     combat.acted[actor] = false;
     combat.actions = @splat(.defend);
     combat.actions[actor] = .{ .attack = target };
-    combat.runes = @splat(null);
-    combat.runes[actor] = combat.content.systems.?.runeIndex("double-beat").?;
-    combat.base_stats[actor].attack = 100;
-    combat.base_stats[actor].skill = 9999;
-    combat.base_stats[actor].luck = 0;
+    for (combat.progress.party) |*member| member.rune = null;
+    combat.progress.party[actor].rune = combat.content.systems.?.runeIndex("double-beat").?;
+    combat.progress.party[actor].base_stats.attack = 100;
+    combat.progress.party[actor].base_stats.skill = 9999;
+    combat.progress.party[actor].base_stats.luck = 0;
     for (0..combat.enemyCount()) |enemy| combat.enemy_hp[enemy] = 20000;
 }
 
@@ -299,7 +299,7 @@ test "Dodge B C misses follow source signals and integer geometry without critic
             var members: [6]battle.Member = undefined;
             var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
             sourceDoubleBeat(&combat, pair[0], pair[1], case.actor, case.target);
-            combat.runes[case.actor] = null;
+            combat.progress.party[case.actor].rune = null;
             combat.roc_idle_at = 0;
             combat.roc_home_restored = case.restored;
             try combat.attachSpellScenes(&packet.value);
@@ -451,7 +451,7 @@ test "Dodge Spark latch and failed launch or follow-up restore both reaction lif
     try std.testing.expect(combat.double_beat_pending[0]);
     try std.testing.expect(combat.party_strikes[0].?.missed);
     try std.testing.expect(combat.party_strikes[6] == null);
-    combat.runes[0] = combat.content.systems.?.runeIndex("spark").?;
+    combat.progress.party[0].rune = combat.content.systems.?.runeIndex("spark").?;
     combat.party_strikes = @splat(null);
     combat.actions[0] = .{ .attack = 0 };
     combat.acted[0] = false;
@@ -478,7 +478,7 @@ test "Dodge complete queued party rounds return to the menu and can repeat with 
         var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
         sourceDoubleBeat(&combat, pair[0], pair[1], 0, 0);
         combat.content.round_start = pair[0].round_start;
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         combat.roc_idle_at = 0;
         const values: [4096]u15 = @splat(99);
         var draws = rules.Draws{ .values = &values };
@@ -574,7 +574,7 @@ test "Critical and ordinary B C hits retain source impact births damage and came
             var members: [6]battle.Member = undefined;
             var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
             sourceDoubleBeat(&combat, pair[0], pair[1], case.actor, case.target);
-            combat.runes[case.actor] = null;
+            combat.progress.party[case.actor].rune = null;
             combat.roc_idle_at = 0;
             combat.camera_ticks = 300;
             try combat.attachSpellScenes(&packet.value);
@@ -714,7 +714,7 @@ test "Critical Killer threshold and lethal Pahn impacts preserve KO locks and ro
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
         sourceDoubleBeat(&combat, data.value, art.value, 0, 0);
-        combat.runes[0] = if (killer) combat.content.systems.?.runeIndex("killer").? else null;
+        combat.progress.party[0].rune = if (killer) combat.content.systems.?.runeIndex("killer").? else null;
         try combat.attachSpellScenes(&packet.value);
         const values = [_]u15{ 51, 25 };
         var draws = rules.Draws{ .values = &values };
@@ -724,7 +724,7 @@ test "Critical Killer threshold and lethal Pahn impacts preserve KO locks and ro
     var members: [6]battle.Member = undefined;
     var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
     sourceDoubleBeat(&combat, data.value, art.value, 2, 0);
-    combat.runes[2] = null;
+    combat.progress.party[2].rune = null;
     combat.enemy_hp[0] = 1;
     try combat.attachSpellScenes(&packet.value);
     const timing = combat.partyAttackTiming(2).?;
@@ -1568,7 +1568,7 @@ test "integrated Drops cures live ailments even at full HP and preserves protect
         combat.integration = .{ .host = host };
         var draws = rules.Draws{};
         combat.replay_draws = &draws;
-        combat.runes[0] = system.runeIndex("water");
+        combat.progress.party[0].rune = system.runeIndex("water");
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         const target: usize = 1;
         combat.progress.party[target].status = .poisoned;
@@ -1639,7 +1639,7 @@ test "integrated spell adapter transfers resistance and immunity or refuses unkn
         combat.integration = .{ .host = host };
         var draws = rules.Draws{};
         combat.replay_draws = &draws;
-        combat.runes[0] = 0;
+        combat.progress.party[0].rune = 0;
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         var effect = battle.Effect{ .actor = 0, .target = combat.partyCount(), .kind = .cast, .spell = spell_index };
         combat.applySpell(&effect);
@@ -1666,7 +1666,7 @@ test "physical rune techniques use the technique numerator and spend no charge" 
         var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 0x5355494b);
         combat.integration = .{ .host = host };
         // Pahn is the third owned member in the fixture.
-        combat.runes[2] = rune_index;
+        combat.progress.party[2].rune = rune_index;
         entry.charges = combat.progress.party[2].rune_charges;
         var tape = Tape{};
         var draws = tape.init();
@@ -1688,7 +1688,7 @@ test "physical rune techniques use the technique numerator and spend no charge" 
     var members: [6]battle.Member = undefined;
     var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 0x5355494b);
     combat.integration = .{ .host = host };
-    combat.runes[2] = 9; // Hate Rune catalogue index -> source byte 11
+    combat.progress.party[2].rune = 9; // Hate Rune catalogue index -> source byte 11
     try std.testing.expect(!combat.canPhysicalRune(2));
 }
 
@@ -1702,7 +1702,7 @@ test "queued physical rune retargets a defeated enemy and skips an empty formati
     combat.integration = .{ .host = host };
     combat.encounter = 1;
     combat.startEncounter();
-    combat.runes[2] = 7; // Shrike Rune, source byte 9.
+    combat.progress.party[2].rune = 7; // Shrike Rune, source byte 9.
     combat.enemy_hp[0] = 0;
     combat.enemy_hp[1] = 5000;
     combat.enemy_hp[2] = 5000;
@@ -1758,7 +1758,7 @@ test "queued spells reject invalid spell indices and target slots before effects
         .{ .rune = 1, .spell = 2, .invalid_target = combat.partyCount() },
         .{ .rune = 0, .spell = std.math.maxInt(usize), .invalid_target = 0 },
     }) |case| {
-        combat.runes[0] = case.rune;
+        combat.progress.party[0].rune = case.rune;
         combat.progress.party[0].rune_charges[0] = 1;
         if (case.spell != std.math.maxInt(usize)) try std.testing.expect(combat.canCast(0, case.spell));
         const command = battle.Action{ .spell = .{ .index = case.spell, .target = case.invalid_target } };
@@ -1789,8 +1789,8 @@ test "queued offensive spells skip empty enemies without blocking ally spells" {
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
         combat.integration = .{ .host = host };
-        combat.runes[0] = case.rune;
-        combat.base_stats[0].magic = 200;
+        combat.progress.party[0].rune = case.rune;
+        combat.progress.party[0].base_stats.magic = 200;
         combat.refillMagic(0);
         try std.testing.expect(combat.canCast(0, case.spell));
         combat.enemy_hp = @splat(0);
@@ -2027,7 +2027,7 @@ test "imported Unite tracks preserve member clocks for either command owner" {
         combat.integration = .{ .host = host };
         const initial_hp: u16 = if (case.lethal) 1 else 5000;
         combat.enemy_hp[0] = initial_hp;
-        combat.base_stats[initiator].speed = 999;
+        combat.progress.party[initiator].base_stats.speed = 999;
         var tape = Tape{};
         var draws = tape.init();
         combat.enterRoundMenu();
@@ -2279,7 +2279,7 @@ test "reward money saturates at the shared cap and experience levels are bounded
     var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 0x5355494b);
     combat.integration = .{ .host = host };
     combat.progress.money = field.game_state.max_money - 1;
-    combat.experience[0] = std.math.maxInt(u32) - 5;
+    combat.progress.party[0].experience = std.math.maxInt(u32) - 5;
     var tape = Tape{};
     var draws = tape.init();
     try queueRound(&combat, .ordinary);
@@ -2287,7 +2287,7 @@ test "reward money saturates at the shared cap and experience levels are bounded
     try tickToVictory(&combat, &draws, 4000);
     try std.testing.expectEqual(field.game_state.max_money, combat.progress.money);
     try std.testing.expectEqual(@as(u32, 1), combat.reward_received);
-    try std.testing.expect(combat.experience[0] < 1000 or combat.levels[0] == 99);
+    try std.testing.expect(combat.progress.party[0].experience < 1000 or combat.progress.party[0].level == 99);
 }
 
 test "the spell plan and bridge expose the same reviewed catalogue the spell path uses" {
@@ -2343,13 +2343,13 @@ test "rune source identity survives a compacted and reordered catalogue" {
     var members: [6]battle.Member = undefined;
     var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 1);
     combat.content.systems = systems;
-    combat.runes[0] = 1;
+    combat.progress.party[0].rune = 1;
     try std.testing.expectEqual(@as(?u8, 2), combat.runeByteFor(0));
-    combat.runes[0] = 0;
+    combat.progress.party[0].rune = 0;
     try std.testing.expectEqual(@as(?u8, 9), combat.runeByteFor(0));
-    combat.runes[0] = 2;
+    combat.progress.party[0].rune = 2;
     try std.testing.expectEqual(@as(?u8, 32), combat.runeByteFor(0));
-    combat.runes[0] = 3;
+    combat.progress.party[0].rune = 3;
     try std.testing.expectEqual(@as(?u8, 1), combat.runeByteFor(0));
 }
 
@@ -2373,12 +2373,12 @@ test "all exported source-rule spells reach their reviewed effects through the n
         // Soul Eater rules are testable before its story attachment is recovered.
         var single_rune = [_]rules.Rune{.{ .id = "soul_eater", .name = "Soul Eater", .spell_names = .{ spell.name, "-", "-", "-" }, .spells = .{ spell_index, null, null, null } }};
         if (rune_index) |index| {
-            combat.runes[0] = index;
+            combat.progress.party[0].rune = index;
         } else {
             var rule_view = systems;
             rule_view.runes = &single_rune;
             combat.content.systems = rule_view;
-            combat.runes[0] = 0;
+            combat.progress.party[0].rune = 0;
         }
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         combat.progress.party[0].hp = 1;
@@ -2506,7 +2506,7 @@ test "Sleep source round continuation applies poison protection and balloons wit
     combat.progress.party[3].hp = 6;
     combat.progress.party[3].status = .poisoned;
     combat.actor_conditions[3].protection_rounds = 1;
-    combat.runes[4] = combat.content.systems.?.runeIndex("sunbeam").?;
+    combat.progress.party[4].rune = combat.content.systems.?.runeIndex("sunbeam").?;
     combat.progress.party[4].hp = 50;
     combat.progress.party[4].status = .poisoned;
     combat.progress.party[5].hp = 100;
@@ -2621,7 +2621,7 @@ test "Queued rune actions wait for target release and retire on rune block or re
         combat.integration = .{ .host = host };
         combat.encounter = 1;
         combat.startEncounter();
-        combat.runes[case.actor] = case.rune;
+        combat.progress.party[case.actor].rune = case.rune;
         combat.progress.party[case.actor].rune_charges[0] = 1;
         switch (case.command) {
             .spell => |cast| try std.testing.expect(combat.canCast(case.actor, cast.index)),
@@ -3005,8 +3005,8 @@ test "late coordinator spells keep their action clock and serialize a faster ass
     combat.queue(.{ .spell = .{ .index = 0, .target = 0 } });
     combat.queue(.{ .unite = 0 });
     while (combat.phase == .command) combat.queue(.defend);
-    combat.base_stats[1].speed = 1;
-    combat.base_stats[2].speed = 9999;
+    combat.progress.party[1].base_stats.speed = 1;
+    combat.progress.party[2].base_stats.speed = 9999;
     combat.acted = @splat(true);
     for (0..3) |i| combat.acted[i] = false;
     combat.phase = .resolving;
@@ -3047,7 +3047,7 @@ test "Turtle skips only its own Unite recovery and its status RNG draw" {
     var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 1);
     combat.integration = .{ .host = host };
     combat.unbalanced[1] = 1;
-    combat.runes[4] = combat.content.systems.?.runeIndex("turtle").?;
+    combat.progress.party[4].rune = combat.content.systems.?.runeIndex("turtle").?;
     try queueRound(&combat, .unite);
     combat.active = .{ .actor = 4, .target = combat.partyCount(), .kind = .unite, .unite_boundary = true };
     const values = [_]u15{100};
@@ -3086,10 +3086,10 @@ test "integrated Phero uses source character types and agrees with all retained 
             combat.progress.party[index].max_hp = 100;
             combat.progress.party[index].hp = if (index == row.target) row.hp else if (row.dead_mask & (@as(u8, 1) << @intCast(index)) != 0) 0 else 100;
             combat.departed[index] = row.dead_mask & (@as(u8, 1) << @intCast(index)) != 0;
-            combat.runes[index] = null;
+            combat.progress.party[index].rune = null;
         }
         if (row.phero) for (view.systems.?.runes, 0..) |rune, index| if (std.mem.eql(u8, rune.id, "phero")) {
-            combat.runes[row.target] = index;
+            combat.progress.party[row.target].rune = index;
             break;
         };
         if (row.phero) try std.testing.expect(std.mem.indexOf(u8, combat.runeHint(row.target), "protect") != null);
@@ -3477,7 +3477,7 @@ test "Roc source contact accepts sleep and protection without curing a surviving
         const owner = combat.partyCount();
         combat.acted[owner] = false;
         combat.coordinator = .{ .stage = .dispatch, .current_actor = owner };
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         combat.actions = @splat(null);
         for (1..combat.partyCount()) |member| {
             combat.progress.party[member].hp = 0;

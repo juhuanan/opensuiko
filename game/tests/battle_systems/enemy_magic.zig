@@ -786,7 +786,7 @@ test "Enemy magic status rounds retain all six recipients through protected cont
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         const owner = combat.partyCount() + 3;
         try std.testing.expectEqualStrings("kobold_type_3", combat.enemy(3).id);
         combat.acted[owner] = false;

@@ -75,7 +75,7 @@ pub fn beginReadyFieldEncounter(state: *State) !bool {
     const entry = (state.data.field_encounters orelse return false).forRoom(state.package.rooms[world.room].id) orelse return false;
     var traits: encounter_policy.Party = .{};
     for (0..state.combat.partyCount()) |slot| {
-        traits.level_sum += state.combat.levels[slot];
+        traits.level_sum += state.combat.progress.party[slot].level;
         traits.suppression_rune = traits.suppression_rune or state.combat.hasRune(slot, "champion's");
     }
     const outcome = try encounter_policy.attempt(.{
@@ -157,7 +157,7 @@ pub fn retryCombat(state: *State) !void {
 
 fn startCombat(state: *State, encounter: usize) void {
     for (0..state.combat.partyCount()) |member| {
-        state.combat.weapon_augments[member] = party.weaponAugment(state.extras[member]);
+        state.combat.progress.party[member].weapon_augment = party.weaponAugment(state.extras[member]);
     }
     state.combat.encounter = encounter;
     state.combat.startEncounter();

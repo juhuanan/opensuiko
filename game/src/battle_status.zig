@@ -100,7 +100,7 @@ fn setStatus(state: *battle.State, target: usize, ailment: battle.Ailment) bool 
         } else member.status = .poisoned;
         if (state.party_knockouts[target].revival) |*revival| revival.original_status = .poisoned;
     } else {
-        if (state.gearIndex(.pointed_hat)) |hat| if (state.loadouts[target].head == hat) return false;
+        if (state.gearIndex(.pointed_hat)) |hat| if (member.loadout.head == hat) return false;
         if (member.balloons == 3) return false;
         member.balloons += 1;
     }

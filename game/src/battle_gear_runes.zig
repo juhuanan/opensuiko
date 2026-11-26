@@ -13,7 +13,7 @@ const Input = types_mod.Input;
 
 pub fn headEquipment(self: State) [6]?usize {
     var result: [6]?usize = @splat(null);
-    for (self.loadouts, 0..) |loadout, i| result[i] = loadout.head;
+    for (self.progress.party, 0..) |member, i| result[i] = member.loadout.head;
     return result;
 }
 pub fn equip(self: *State, member: usize, item: ?usize) !void {
@@ -23,18 +23,16 @@ pub fn equipSlot(self: *State, member: usize, slot: systems.EquipmentSlot, item:
     const rules = self.content.systems orelse return error.InvalidEquipment;
     if (member >= self.partyCount()) return error.InvalidMember;
     if (item) |id| if (id >= rules.equipment.len or !rules.equipment[id].allows(self.partyProfile(member).id, slot)) return error.InvalidEquipment;
-    self.loadouts[member].set(slot, item);
+    self.progress.party[member].loadout.set(slot, item);
     refreshMagicCapacity(self, member);
 }
 
 pub fn refreshMagicCapacity(self: *State, member: usize) void {
-    const maximum = self.content.systems.?.magicCapacity(self.stats(member).magic);
-    self.progress.party[member].max_rune_charges = maximum;
-    for (&self.progress.party[member].rune_charges, maximum) |*current, cap| current.* = @min(current.*, cap);
+    self.progress.party[member].refreshRuneCapacity(self.content.systems.?);
 }
 pub fn rune(self: *const State, member: usize) ?systems.Rune {
     const rules = self.content.systems orelse return null;
-    var result = if (self.runes[member]) |i| rules.runes[i] else return null;
+    var result = if (self.progress.party[member].rune) |i| rules.runes[i] else return null;
     if (std.mem.eql(u8, result.id, "soul_eater")) if (self.progress.story.scenario) |story| {
         for (&result.spells, 0..) |*spell, tier| if (tier >= story.soul_eater_spell_slots) {
             spell.* = null;
@@ -46,7 +44,7 @@ pub fn rune(self: *const State, member: usize) ?systems.Rune {
 pub fn checkRuneAttachment(self: State, member: usize, owner: usize, slot: usize) !usize {
     if (member >= self.partyCount() or owner >= self.partyCount() or self.content.systems == null) return error.InvalidRune;
     if (self.partyProfile(member).rune_locked) return error.RuneLocked;
-    if (self.runes[member] != null) return error.RuneOccupied;
+    if (self.progress.party[member].rune != null) return error.RuneOccupied;
     try self.progress.validate();
     const inventory = self.progress.party[owner].inventory;
     if (slot >= inventory.count()) return error.InvalidItem;
@@ -60,7 +58,7 @@ pub fn checkRuneAttachment(self: State, member: usize, owner: usize, slot: usize
 }
 pub fn attachRune(self: *State, member: usize, owner: usize, slot: usize) !void {
     const index = try self.checkRuneAttachment(member, owner, slot);
-    self.runes[member] = index;
+    self.progress.party[member].rune = index;
     self.progress.party[owner].inventory.remove(slot);
 }
 pub fn detachRune(self: *State, member: usize) !void {
@@ -73,7 +71,7 @@ pub fn detachRune(self: *State, member: usize) !void {
     const count = inventory.count();
     if (count == inventory.slots.len) return error.InventoryFull;
     inventory.slots[count] = .{ .id = id, .uses = 0 };
-    self.runes[member] = null;
+    self.progress.party[member].rune = null;
 }
 pub fn hasRune(self: *const State, member: usize, id: []const u8) bool {
     const owned = self.rune(member) orelse return false;
@@ -142,9 +140,7 @@ pub fn hasMagic(self: *const State, member: usize) bool {
     return false;
 }
 pub fn refillMagic(self: *State, member: usize) void {
-    const capacity = self.content.systems.?.magicCapacity(self.stats(member).magic);
-    self.progress.party[member].max_rune_charges = capacity;
-    self.progress.party[member].rune_charges = capacity;
+    self.progress.party[member].refillRuneCharges(self.content.systems.?);
 }
 pub fn uniteDefinition(self: *const State, actor: usize) ?systems.Unite {
     const rules = self.content.systems orelse return null;

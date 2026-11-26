@@ -49,7 +49,7 @@ test "Cover integrated source formation resolves relationship and Phero intercep
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         for (combat.progress.party) |*member| {
             member.max_hp = 5000;
             member.hp = 5000;
@@ -58,7 +58,7 @@ test "Cover integrated source formation resolves relationship and Phero intercep
         const ward: usize = if (scenario == 0) 0 else 2;
         const guard: usize = 1;
         combat.progress.party[ward].hp = 1;
-        if (scenario == 1) combat.runes[ward] = combat.content.systems.?.runeIndex("phero").?;
+        if (scenario == 1) combat.progress.party[ward].rune = combat.content.systems.?.runeIndex("phero").?;
         const attacker = combat.partyCount();
         combat.acted[attacker] = false;
         var values: [128]u15 = @splat(12345);

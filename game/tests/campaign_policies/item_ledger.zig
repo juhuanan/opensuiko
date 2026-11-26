@@ -44,24 +44,22 @@ fn stack(id: field.items.Id, uses: u16) field.items.Stack {
 
 fn memberRecord(id: []const u8, bag: []const field.items.Stack) battle.OwnedMember {
     var owned: battle.OwnedMember = .{
-        .member = .{
-            .id = id,
-            .name = id,
-            .hp = 10,
-            .max_hp = 10,
-            .status = .healthy,
-            .rune_charges = @splat(0),
-            .max_rune_charges = @splat(0),
-            .inventory = .{},
-        },
+        .id = id,
+        .name = id,
+        .hp = 10,
+        .max_hp = 10,
+        .status = .healthy,
+        .rune_charges = @splat(0),
+        .max_rune_charges = @splat(0),
+        .inventory = .{},
         .level = 1,
         .experience = 0,
-        .stats = .{ .attack = 1, .defense = 1, .skill = 1, .speed = 1 },
+        .base_stats = .{ .attack = 1, .defense = 1, .skill = 1, .speed = 1 },
         .weapon_level = 1,
         .loadout = .{},
         .rune = null,
     };
-    for (bag, 0..) |entry, index| owned.member.inventory.slots[index] = entry;
+    for (bag, 0..) |entry, index| owned.inventory.slots[index] = entry;
     return owned;
 }
 
@@ -111,7 +109,7 @@ fn sameSnapshot(a: party.Snapshot, b: party.Snapshot) bool {
 }
 
 fn bagTag(snapshot: party.Snapshot, member_index: usize, slot: usize) []const u8 {
-    return @tagName(snapshot.members[member_index].?.member.inventory.slots[slot].?.id);
+    return @tagName(snapshot.members[member_index].?.inventory.slots[slot].?.id);
 }
 
 test "packet pins all 179 reviewed identities and the runtime controller split" {
@@ -271,12 +269,12 @@ test "ordinary item operations and shared acquisition publish atomically" {
 
     // The medicine moved hero -> gremio, was deposited into the warehouse and
     // withdrawn as a fresh normal-use entry.
-    try std.testing.expectEqual(@as(usize, 2), state.snapshot.members[0].?.member.inventory.count());
+    try std.testing.expectEqual(@as(usize, 2), state.snapshot.members[0].?.inventory.count());
     try std.testing.expectEqualStrings("bandanna", bagTag(state.snapshot, 0, 0));
     try std.testing.expectEqualStrings("water_rune_piece", bagTag(state.snapshot, 0, 1));
-    try std.testing.expectEqual(@as(usize, 1), state.snapshot.members[1].?.member.inventory.count());
+    try std.testing.expectEqual(@as(usize, 1), state.snapshot.members[1].?.inventory.count());
     try std.testing.expectEqualStrings("medicine", bagTag(state.snapshot, 1, 0));
-    try std.testing.expectEqual(@as(u16, 5), state.snapshot.members[1].?.member.inventory.slots[0].?.uses);
+    try std.testing.expectEqual(@as(u16, 5), state.snapshot.members[1].?.inventory.slots[0].?.uses);
     try std.testing.expectEqual(@as(u16, 0), state.snapshot.storage.quantity(.medicine));
     // The equipment owner kept the bag entry; the loadout points at the
     // catalogue entry, exactly like the existing controller.
@@ -294,7 +292,7 @@ test "ordinary item operations and shared acquisition publish atomically" {
     try std.testing.expectEqual(baseline.followers, state.snapshot.followers);
     try std.testing.expectEqual(baseline.scene_order, state.snapshot.scene_order);
     try std.testing.expectEqual(baseline.eligible, state.snapshot.eligible);
-    try std.testing.expectEqual(baseline.members[0].?.member.hp, state.snapshot.members[0].?.member.hp);
+    try std.testing.expectEqual(baseline.members[0].?.hp, state.snapshot.members[0].?.hp);
     try std.testing.expectEqualStrings(baseline.extras[0].?.member_id, state.snapshot.extras[0].?.member_id);
 }
 
@@ -322,7 +320,7 @@ test "a failure anywhere in the journal publishes nothing" {
     try std.testing.expect(sameSnapshot(before, state.snapshot));
     try std.testing.expectEqual(before_revision, state.revision);
     try std.testing.expectEqual(@as(u8, 0), state.receipts.len);
-    try std.testing.expectEqual(@as(usize, 1), state.snapshot.members[0].?.member.inventory.count());
+    try std.testing.expectEqual(@as(usize, 1), state.snapshot.members[0].?.inventory.count());
     try std.testing.expectEqualStrings("medicine", bagTag(state.snapshot, 1, 0));
 }
 
@@ -342,7 +340,7 @@ test "full, locked and unbound cases fail with typed errors and no mutation" {
     var state = try owners.State.init(try (Fixture{ .ids = &ids, .bags = &bags }).build(1));
     // An unconverted urn is identified=false, and the runtime allows that only
     // for decorations; the transfer predicate then demands identification.
-    state.snapshot.members[0].?.member.inventory.slots[1].?.identified = false;
+    state.snapshot.members[0].?.inventory.slots[1].?.identified = false;
     const before = state.snapshot;
 
     const cases = [_]struct { expected: anyerror, command: journal.Command }{
@@ -561,7 +559,7 @@ test "one-member restart replays the journal and keeps future operations working
     try std.testing.expectEqual(owners.stateDigest(published), owners.stateDigest(restored.snapshot));
     try std.testing.expectEqualStrings(published.receipt, restored.snapshot.receipt);
     try std.testing.expectEqual(@as(u8, 1), restored.receipts.len);
-    try std.testing.expectEqual(@as(usize, 2), restored.snapshot.members[0].?.member.inventory.count());
+    try std.testing.expectEqual(@as(usize, 2), restored.snapshot.members[0].?.inventory.count());
     try std.testing.expectEqualStrings("bandanna", bagTag(restored.snapshot, 0, 0));
     try std.testing.expectEqual(@as(u16, 1), restored.snapshot.storage.quantity(.medicine));
     try std.testing.expectEqual(@as(?usize, 0), restored.snapshot.members[0].?.loadout.head);
@@ -620,13 +618,13 @@ test "full-party restart preserves duplicate-label identities and later operatio
     try std.testing.expectEqual(owners.stateDigest(published), owners.stateDigest(restored.snapshot));
     try std.testing.expectEqualStrings("mathiu_s_letter__source_90", restored.snapshot.shared[0].?);
     try std.testing.expectEqualStrings("mathiu_s_letter__source_179", restored.snapshot.shared[1].?);
-    try std.testing.expectEqual(@as(usize, 2), restored.snapshot.members[5].?.member.inventory.count());
+    try std.testing.expectEqual(@as(usize, 2), restored.snapshot.members[5].?.inventory.count());
     try std.testing.expectEqualStrings("bandanna", bagTag(restored.snapshot, 5, 0));
     try std.testing.expectEqualStrings("medicine", bagTag(restored.snapshot, 5, 1));
     try std.testing.expectEqual(@as(?usize, 0), restored.snapshot.members[5].?.loadout.head);
     // Every roster slot keeps its identity and its own bag.
     for (ids, 0..) |id, index| {
-        try std.testing.expectEqualStrings(id, restored.snapshot.members[index].?.member.id);
+        try std.testing.expectEqualStrings(id, restored.snapshot.members[index].?.id);
         try std.testing.expectEqualStrings(id, restored.snapshot.extras[index].?.member_id);
     }
 
@@ -639,7 +637,7 @@ test "full-party restart preserves duplicate-label identities and later operatio
     try std.testing.expectEqualStrings("mathiu_s_letter__source_179", restored.snapshot.shared[0].?);
     try std.testing.expectEqual(@as(?[]const u8, null), restored.snapshot.shared[1]);
     try std.testing.expectEqualStrings("medicine", bagTag(restored.snapshot, 1, 0));
-    try std.testing.expectEqual(@as(u16, 6), restored.snapshot.members[1].?.member.inventory.slots[0].?.uses);
+    try std.testing.expectEqual(@as(u16, 6), restored.snapshot.members[1].?.inventory.slots[0].?.uses);
     try std.testing.expectEqual(@as(u16, 0), restored.snapshot.storage.quantity(.medicine));
 }
 
@@ -661,7 +659,7 @@ test "equipment locks and weapon fragments stay distinct sidecar owners" {
     _ = try publish.publish(p, &state, .{}, catalogue_slice, document(&apply_water, "receipt-fragment-water", 1));
     try std.testing.expectEqual(.water, state.snapshot.extras[1].?.weapon_element);
     try std.testing.expectEqual(@as(u8, 1), state.snapshot.extras[1].?.weapon_fragments[1]);
-    try std.testing.expectEqual(@as(usize, 1), state.snapshot.members[0].?.member.inventory.count());
+    try std.testing.expectEqual(@as(usize, 1), state.snapshot.members[0].?.inventory.count());
     try std.testing.expectEqualStrings("earth_rune_piece", bagTag(state.snapshot, 0, 0));
 
     // A different element needs an explicit confirmation.
@@ -682,13 +680,13 @@ test "equipment locks and weapon fragments stay distinct sidecar owners" {
     // Nine is the source cap for one element.
     state.snapshot.extras[1].?.weapon_fragments[4] = 9;
     const hero_bag_again = [_]field.items.Stack{stack(.earth_rune_piece, 0)};
-    state.snapshot.members[0].?.member.inventory.slots[0] = hero_bag_again[0];
+    state.snapshot.members[0].?.inventory.slots[0] = hero_bag_again[0];
     const limit = [_]journal.Command{
         .{ .kind = .apply_fragment, .member = "hero", .slot = 0, .other = "gremio" },
     };
     try std.testing.expectError(error.WeaponPieceLimit, publish.publish(p, &state, .{}, catalogue_slice, document(&limit, "receipt-fragment-limit", 3)));
 
-    state.snapshot.members[0].?.member.inventory.slots[0] = stack(.fire_rune_piece, 0);
+    state.snapshot.members[0].?.inventory.slots[0] = stack(.fire_rune_piece, 0);
     const replace_fire = [_]journal.Command{
         .{ .kind = .apply_fragment, .member = "hero", .slot = 0, .other = "gremio", .replace = true },
     };

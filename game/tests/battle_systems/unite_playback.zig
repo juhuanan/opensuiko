@@ -239,7 +239,7 @@ test "Blacksmith delayed members and early returns retain all five source clock 
             var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
             combat.integration = .{ .host = host };
             try combat.attachSpellScenes(&packet.value);
-            combat.base_stats[owner].speed = 999;
+            combat.progress.party[owner].base_stats.speed = 999;
             combat.enterRoundMenu();
             combat.choose(owner);
             combat.queue(.{ .unite = 0 });

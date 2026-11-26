@@ -148,7 +148,7 @@ pub fn applySpellBridge(self: *State, effect: *Effect) void {
     while (target_index < count) : (target_index += 1) targets[target_index] = self.spellTarget(target_index);
     const actor: spell_systems.plan.Actor = .{
         .id = @intCast(effect.actor + 1),
-        .rune_index = self.runes[effect.actor] orelse 0,
+        .rune_index = self.progress.party[effect.actor].rune orelse 0,
         .charges = self.progress.party[effect.actor].rune_charges,
         .magic = self.stats(effect.actor).magic,
     };
@@ -326,47 +326,34 @@ pub fn applyExperience(self: *State, index: usize) void {
     // Bounded: a legitimate award can cross several levels, but a corrupt
     // counter must not spin the reward commit.  99 is the source cap.
     var levels: u8 = 0;
-    while (self.experience[index] >= 1000 and self.levels[index] < 99 and levels < 99) : (levels += 1) {
-        self.experience[index] -= 1000;
+    while (self.progress.party[index].experience >= 1000 and self.progress.party[index].level < 99 and levels < 99) : (levels += 1) {
+        self.progress.party[index].experience -= 1000;
         var randoms: [7]u15 = undefined;
         for (&randoms) |*value| value.* = self.roll();
         self.levelUp(index, randoms);
     }
-    if (self.levels[index] == 99) self.experience[index] = 0 else if (self.experience[index] >= 1000) self.experience[index] = 999;
+    if (self.progress.party[index].level == 99) self.progress.party[index].experience = 0 else if (self.progress.party[index].experience >= 1000) self.progress.party[index].experience = 999;
 }
 pub fn sceneExperience(self: *State, gain: bool) !void {
     if (self.content.systems == null) return error.MissingGrowthRules;
-    for (0..self.partyCount()) |index| if (self.experience[index] >= 1000) return error.InvalidExperience;
+    for (0..self.partyCount()) |index| if (self.progress.party[index].experience >= 1000) return error.InvalidExperience;
     for (0..self.partyCount()) |index| {
         if (!gain) {
-            self.experience[index] -|= 10;
+            self.progress.party[index].experience -|= 10;
             continue;
         }
-        self.experience[index] += 10;
-        if (self.experience[index] < 1000) continue;
-        self.experience[index] %= 1000;
+        self.progress.party[index].experience += 10;
+        if (self.progress.party[index].experience < 1000) continue;
+        self.progress.party[index].experience %= 1000;
         // The event wraps EXP at the cap without consuming growth draws.
-        if (self.levels[index] == 99) continue;
+        if (self.progress.party[index].level == 99) continue;
         var randoms: [7]u15 = undefined;
         for (&randoms) |*value| value.* = self.roll();
         self.levelUp(index, randoms);
     }
 }
 pub fn levelUp(self: *State, index: usize, randoms: [7]u15) void {
-    if (self.levels[index] == 99) return;
-    const rules = self.content.systems.?;
-    self.levels[index] += 1;
-    const growth = self.partyProfile(index).growth;
-    var stats_ptr = &self.base_stats[index];
-    const columns = [_]*u16{ &stats_ptr.attack, &stats_ptr.skill, &stats_ptr.defense, &stats_ptr.speed, &stats_ptr.magic, &stats_ptr.luck };
-    for (columns, growth, 0..) |column, rate, i| {
-        const gain = (rules.stat_growth[systems.statIndex(self.levels[index], rate)] + (randoms[i] & 255)) >> 8;
-        column.* = @intCast(@min(255, column.* + gain));
-    }
-    const band: usize = if (self.levels[index] < 20) 0 else if (self.levels[index] < 60) 1 else 2;
-    const gain = (rules.hp_growth[@as(usize, growth[0]) * 3 + band] + (randoms[6] & 511)) >> 8;
     const member = &self.progress.party[index];
-    member.max_hp = @intCast(@min(9999, @as(u32, member.max_hp) + gain));
-    member.hp = @intCast(@min(member.max_hp, @as(u32, member.hp) + gain));
-    @import("battle_gear_runes.zig").refreshMagicCapacity(self, index);
+    if (member.level == 99) return;
+    member.levelUp(self.content.systems.?, self.partyProfile(index).growth, randoms);
 }

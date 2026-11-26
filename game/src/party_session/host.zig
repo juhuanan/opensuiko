@@ -41,12 +41,12 @@ pub fn legacyLedger(combat: battle.State, reserves: journey.Reserves, catalogue:
 
 pub fn legacyExtra(owned: battle.OwnedMember, catalogue: party.catalogue.Catalogue) !party.CharacterExtra {
     const character = for (catalogue.characters) |candidate| {
-        if (std.mem.eql(u8, candidate.id, owned.member.id)) break candidate;
+        if (std.mem.eql(u8, candidate.id, owned.id)) break candidate;
     } else return error.UnknownCharacter;
     if (character.seed.weapon_element != .none) return error.UnsupportedLegacyCharacterExtra;
     for (character.seed.weapon_fragments) |count| if (count != 0) return error.UnsupportedLegacyCharacterExtra;
     for (character.seed.inventory) |item| if (item.locked) return error.UnsupportedLegacyCharacterExtra;
-    return .{ .member_id = owned.member.id };
+    return .{ .member_id = owned.id };
 }
 
 // IDs and receipts are host-owned; the journal is never an authority for them.
@@ -61,8 +61,8 @@ pub fn baseline(combat: battle.State, reserves: journey.Reserves, ledger: Ledger
     for (0..combat.partyCount()) |index| {
         const owned = combat.ownedMember(index);
         result.members[count] = owned;
-        result.active[index] = owned.member.id;
-        result.forced[index] = owned.member.id;
+        result.active[index] = owned.id;
+        result.forced[index] = owned.id;
         result.eligible[count] = true;
         count += 1;
     }
@@ -74,7 +74,7 @@ pub fn baseline(combat: battle.State, reserves: journey.Reserves, ledger: Ledger
     for (result.members[0..count], 0..) |maybe, index| {
         const owned = maybe.?;
         const extra = for (ledger.extras) |candidate| {
-            if (candidate) |value| if (std.mem.eql(u8, value.member_id, owned.member.id)) break value;
+            if (candidate) |value| if (std.mem.eql(u8, value.member_id, owned.id)) break value;
         } else return error.MissingCharacterExtra;
         result.extras[index] = extra;
     }
@@ -83,7 +83,7 @@ pub fn baseline(combat: battle.State, reserves: journey.Reserves, ledger: Ledger
             if (std.mem.eql(u8, value.member_id, extra.member_id)) return error.InvalidCharacterExtra;
         };
         var matches: usize = 0;
-        for (result.members[0..count]) |member| if (std.mem.eql(u8, member.?.member.id, extra.member_id)) {
+        for (result.members[0..count]) |member| if (std.mem.eql(u8, member.?.id, extra.member_id)) {
             matches += 1;
         };
         if (matches != 1) return error.InvalidCharacterExtra;

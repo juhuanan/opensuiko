@@ -732,9 +732,9 @@ pub fn draw(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, groun
                 for (0..state.partyCount()) |i| {
                     const y = 157 + @as(i32, @intCast(i)) * 20;
                     text(state.name(i), 94, y, 16, if (!state.participates(i)) .gray else .ray_white);
-                    if (state.reward_levels[i] != state.levels[i]) number("{d} -> {d}", .{ state.reward_levels[i], state.levels[i] }, 215, y, 16, .gold) else number("{d}", .{state.levels[i]}, 215, y, 16, .ray_white);
+                    if (state.reward_levels[i] != state.progress.party[i].level) number("{d} -> {d}", .{ state.reward_levels[i], state.progress.party[i].level }, 215, y, 16, .gold) else number("{d}", .{state.progress.party[i].level}, 215, y, 16, .ray_white);
                     number("+{d}{s}", .{ state.award_exp[i], if (state.departed[i]) " (departed)" else if (state.hp(i) == 0) " (KO)" else "" }, 331, y, 16, if (!state.participates(i)) .gray else .green);
-                    if (state.levels[i] == 99) text("MAX", 447, y, 16, .gold) else number("{d}/1000", .{state.experience[i]}, 447, y, 16, .ray_white);
+                    if (state.progress.party[i].level == 99) text("MAX", 447, y, 16, .gold) else number("{d}/1000", .{state.progress.party[i].experience}, 447, y, 16, .ray_white);
                 }
                 if (state.dropped_item) |item| number("{s}: {s}", .{ item.name(), if (state.drop_received) (if (state.loot_recipient) |member| state.name(member) else "added to inventory") else if (state.loot_declined) "left behind" else "choose recipient on Continue" }, 94, 282, 16, if (state.drop_received) .green else .gold);
                 text("Z/Enter: continue", 94, 308, 18, .gold);
@@ -742,7 +742,8 @@ pub fn draw(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, groun
                 text("No rewards. Close the window to leave.", 94, 145, 18, .ray_white);
             } else {
                 number("Balance: {d} bits", .{state.progress.money}, 118, 145, 20, .ray_white);
-                number("Earned EXP: Hero {d} / Gremio {d}", .{ state.experience[0], state.experience[1] }, 118, 185, 17, .ray_white);
+                const companion_exp = if (state.partyCount() > 1) state.progress.party[1].experience else 0;
+                number("Earned EXP: Hero {d} / Gremio {d}", .{ state.progress.party[0].experience, companion_exp }, 118, 185, 17, .ray_white);
                 text("Z/Enter/R: restart    X/Esc: leave", 118, 264, 18, .gold);
             }
         },

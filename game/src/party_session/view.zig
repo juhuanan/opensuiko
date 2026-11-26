@@ -34,7 +34,7 @@ pub const View = struct {
         return session.max_owned;
     }
     fn memberId(self: View, s: session.Session) []const u8 {
-        return s.current.members[self.member].?.member.id;
+        return s.current.members[self.member].?.id;
     }
     pub fn title(self: View) []const u8 {
         return switch (self.screen) {
@@ -54,8 +54,8 @@ pub const View = struct {
     pub fn count(self: View, s: session.Session) usize {
         return switch (self.screen) {
             .party, .member, .recipient => ownedCount(s),
-            .bag => s.current.members[self.member].?.member.inventory.count(),
-            .swap_slot => s.current.members[self.target].?.member.inventory.count(),
+            .bag => s.current.members[self.member].?.inventory.count(),
+            .swap_slot => s.current.members[self.target].?.inventory.count(),
             .action => 10,
             .replace, .discard_confirm => 2,
             .equipment_slot => 5,
@@ -68,9 +68,9 @@ pub const View = struct {
     pub fn row(self: View, s: session.Session, i: usize) ?[]const u8 {
         if (i >= self.count(s)) return null;
         return switch (self.screen) {
-            .party, .member, .recipient => s.current.members[i].?.member.name,
-            .bag => s.current.members[self.member].?.member.inventory.slots[i].?.name(),
-            .swap_slot => s.current.members[self.target].?.member.inventory.slots[i].?.name(),
+            .party, .member, .recipient => s.current.members[i].?.name,
+            .bag => s.current.members[self.member].?.inventory.slots[i].?.name(),
+            .swap_slot => s.current.members[self.target].?.inventory.slots[i].?.name(),
             .storage => s.current.storage.itemAt(i).?.name(),
             .shared => s.current.shared[i].?,
             .action => (&[_][]const u8{ "Give", "Store", "Discard", "Equip", "Attach rune", "Unequip", "Detach rune", "Apply weapon piece", "Swap", "Transfer rune" })[i],
@@ -97,7 +97,7 @@ pub const View = struct {
                 detail = std.fmt.bufPrint(&details[i], "x{d}", .{s.current.storage.quantity(id)}) catch null;
             }
             if (self.screen == .bag) {
-                const item = s.current.members[self.member].?.member.inventory.slots[i].?;
+                const item = s.current.members[self.member].?.inventory.slots[i].?;
                 if (item.id.maxUses() > 0) detail = std.fmt.bufPrint(&details[i], "{d} uses", .{item.uses}) catch null;
             }
             rows[i] = .{ .id = self.row(s, i).?, .label = self.row(s, i).?, .detail = detail };
@@ -116,9 +116,9 @@ pub const View = struct {
             .title = self.title(),
         }, sink);
         if (self.screen == .bag or self.screen == .storage or self.screen == .action)
-            sink.text(300, 24, s.current.members[self.member].?.member.name, false);
+            sink.text(300, 24, s.current.members[self.member].?.name, false);
         if (self.screen == .party) for (rendered.first..rendered.last) |i| {
-            if (roster.Controller.active(s, s.current.members[i].?.member.id)) {
+            if (roster.Controller.active(s, s.current.members[i].?.id)) {
                 sink.text(300, 31 + @as(i32, @intCast(i - rendered.first + 1)) * 24, "Active", false);
             }
         };
@@ -277,7 +277,7 @@ pub const View = struct {
                         else => unreachable,
                     },
                     .recipient => {
-                        const recipient = s.current.members[self.cursor].?.member.id;
+                        const recipient = s.current.members[self.cursor].?.id;
                         if (self.rune_transfer) {
                             if (self.issue(s, .{ .transfer_rune = .{ .from = self.memberId(s.*), .to = recipient } })) self.choose(s.*, .bag);
                         } else if (self.swapping) {
@@ -294,7 +294,7 @@ pub const View = struct {
                         } else if (self.issue(s, .{ .give = .{ .from = self.memberId(s.*), .slot = self.item, .to = recipient } })) self.choose(s.*, .bag);
                     },
                     .swap_slot => {
-                        const recipient = s.current.members[self.target].?.member.id;
+                        const recipient = s.current.members[self.target].?.id;
                         if (self.issue(s, .{ .swap = .{ .first = self.memberId(s.*), .first_slot = self.item, .second = recipient, .second_slot = self.cursor } })) self.choose(s.*, .bag);
                     },
                     .discard_confirm => {
@@ -309,14 +309,14 @@ pub const View = struct {
                             self.choose(s.*, .recipient);
                             return;
                         }
-                        const recipient = s.current.members[self.target].?.member.id;
+                        const recipient = s.current.members[self.target].?.id;
                         if (self.issue(s, .{ .weapon_piece = .{ .owner = self.memberId(s.*), .slot = self.item, .target = recipient, .replace = true } })) self.choose(s.*, .bag);
                     },
                     .equipment_slot => {
                         const slots = [_]battle.systems.EquipmentSlot{ .head, .body, .shield, .accessory_one, .accessory_two };
                         var found: ?usize = null;
                         if (!self.unequip) {
-                            const bag = s.current.members[self.member].?.member.inventory;
+                            const bag = s.current.members[self.member].?.inventory;
                             if (self.item >= bag.count()) {
                                 self.last_error = "InvalidItem";
                                 return;

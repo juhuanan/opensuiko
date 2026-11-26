@@ -222,13 +222,13 @@ pub fn load(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Parsed(Da
 /// from the profile; a rune/weapon/member substitution is still refused.
 pub fn loadoutOf(host: *const battle_host.Host, state: *const battle.State, index: usize) !techniques_mod.carry.Loadout {
     const owned = state.ownedMember(index);
-    const character = host.characterId(owned.member.id) orelse return error.MissingCharacterIdentity;
+    const character = host.characterId(owned.id) orelse return error.MissingCharacterIdentity;
     const rune_byte: u8 = state.runeByteFor(index) orelse 0;
     if (!techniques_mod.carry.validRuneByte(rune_byte)) return error.InvalidRuneByte;
     return .{
         .member = character,
         .weapon_level = owned.weapon_level,
-        .rune = .{ .byte = rune_byte, .charges = owned.member.rune_charges, .locked = state.partyProfile(index).rune_locked },
+        .rune = .{ .byte = rune_byte, .charges = owned.rune_charges, .locked = state.partyProfile(index).rune_locked },
         .fragments = .{},
     };
 }
@@ -366,9 +366,9 @@ pub const Adapter = struct {
             next.progress.party = members[0..result.member_count];
             for (0..result.member_count) |i| {
                 const current = tx.original.ownedMember(i);
-                if (!std.meta.eql(current, tx.admitted[i]) or !std.mem.eql(u8, current.member.id, result.members[i].member.id)) return error.StaleCombatParty;
+                if (!std.meta.eql(current, tx.admitted[i]) or !std.mem.eql(u8, current.id, result.members[i].id)) return error.StaleCombatParty;
                 try tx.original.validateOwnedMember(result.members[i]);
-                members[i] = current.member;
+                members[i] = current;
                 next.setOwnedMember(i, result.members[i]);
             }
             if (next.integrationHost()) |host| for (0..result.member_count) |i| {

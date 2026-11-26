@@ -119,7 +119,7 @@ pub fn load(allocator: std.mem.Allocator, scene_bytes: []const u8) !Loaded {
     errdefer allocator.destroy(opened);
     opened.* = try destination.open(allocator, destination_data.json, destination_data.ground_json);
     errdefer opened.deinit();
-    var members = [_]field.game_state.Member{content.value.hero.member};
+    var members = [_]field.game_state.Member{content.value.hero.member.character()};
     const owned = try field_events.Owned.load(allocator, &members);
     return .{ .allocator = allocator, .asset = asset, .opening = content, .events = event_content, .script = script, .scene = scene, .rules = rules, .dungeon = dungeon_asset, .battles = battle_asset, .party = party_asset, .opened = opened, .owned = owned };
 }

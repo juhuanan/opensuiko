@@ -15,19 +15,17 @@ const roster = roster_mod.roster;
 
 fn member(profile: packet.Profile, index: usize) battle.OwnedMember {
     var owned: battle.OwnedMember = .{
-        .member = .{
-            .id = profile.id,
-            .name = profile.name,
-            .hp = 40 + @as(u16, @intCast(index % 20)),
-            .max_hp = 99,
-            .status = .healthy,
-            .rune_charges = .{ 1, 2, 3, 4 },
-            .max_rune_charges = .{ 4, 4, 4, 4 },
-            .inventory = .{},
-        },
+        .id = profile.id,
+        .name = profile.name,
+        .hp = 40 + @as(u16, @intCast(index % 20)),
+        .max_hp = 99,
+        .status = .healthy,
+        .rune_charges = .{ 1, 2, 3, 4 },
+        .max_rune_charges = .{ 4, 4, 4, 4 },
+        .inventory = .{},
         .level = 1 + @as(u8, @intCast(index % 40)),
         .experience = @as(u32, @intCast((index * 17) % 1000)),
-        .stats = .{
+        .base_stats = .{
             .attack = 10 + @as(u16, @intCast(index)),
             .defense = 9,
             .skill = 8,
@@ -39,8 +37,8 @@ fn member(profile: packet.Profile, index: usize) battle.OwnedMember {
         .loadout = .{ .head = 0 },
         .rune = null,
     };
-    owned.member.inventory.slots[0] = .{ .id = .medicine, .uses = 1 };
-    owned.member.inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
+    owned.inventory.slots[0] = .{ .id = .medicine, .uses = 1 };
+    owned.inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
     return owned;
 }
 
@@ -175,7 +173,7 @@ test "temporary departure preserves every member field and survives save/load/re
     try std.testing.expectEqual(roster.Presence.temporary_absent, restored.stateOf(id).?.presence);
     try std.testing.expectEqualDeep(before, canonicalMember(&restored, id));
     try std.testing.expectEqualDeep(before_extra, canonicalExtra(&restored, id));
-    try std.testing.expectEqual(@as(u16, 0), canonicalMember(&restored, p.profiles[5].id).member.hp);
+    try std.testing.expectEqual(@as(u16, 0), canonicalMember(&restored, p.profiles[5].id).hp);
     var copy = restored;
     try copy.rejoin(p, id, false, "event-0x3c");
     try std.testing.expectEqual(@as(usize, 6), copy.activeCount());
@@ -221,12 +219,12 @@ test "forced strip keeps Hero and every removed record; reload restores five" {
     // The strip releases the removed members' locks but keeps the Hero lock.
     try std.testing.expect(value.isForced("hero"));
     for (1..6) |i| {
-        try std.testing.expectEqual(roster.Presence.detached, value.stateOf(before[i].member.id).?.presence);
-        try std.testing.expectEqualDeep(before[i], canonicalMember(&value, before[i].member.id));
+        try std.testing.expectEqual(roster.Presence.detached, value.stateOf(before[i].id).?.presence);
+        try std.testing.expectEqualDeep(before[i], canonicalMember(&value, before[i].id));
     }
-    for (1..6) |i| try value.loadJoin(p, before[i].member.id, false, "event-0x1f");
+    for (1..6) |i| try value.loadJoin(p, before[i].id, false, "event-0x1f");
     try std.testing.expectEqual(@as(usize, 6), value.activeCount());
-    for (1..6) |i| try std.testing.expectEqualDeep(before[i], canonicalMember(&value, before[i].member.id));
+    for (1..6) |i| try std.testing.expectEqualDeep(before[i], canonicalMember(&value, before[i].id));
 }
 
 test "followers and scene order are scene-only and never create roster entries" {
@@ -282,11 +280,11 @@ test "knockout is a condition; gear, XP, rune and sidecar survive save/load" {
     const before_extra = canonicalExtra(&value, id);
     try value.knockout(p, id, "battle-0x800e2c90");
     const down = canonicalMember(&value, id);
-    try std.testing.expectEqual(@as(u16, 0), down.member.hp);
-    try std.testing.expectEqual(field.game_state.Status.unconscious, down.member.status);
+    try std.testing.expectEqual(@as(u16, 0), down.hp);
+    try std.testing.expectEqual(field.game_state.Status.unconscious, down.status);
     try std.testing.expectEqual(before.experience, down.experience);
     try std.testing.expectEqual(before.weapon_level, down.weapon_level);
-    try std.testing.expectEqualDeep(before.member.inventory, down.member.inventory);
+    try std.testing.expectEqualDeep(before.inventory, down.inventory);
     try std.testing.expectEqualDeep(before.loadout, down.loadout);
     try std.testing.expectEqualDeep(before_extra, canonicalExtra(&value, id));
     const bytes = try value.save(arena.allocator());
@@ -295,8 +293,8 @@ test "knockout is a condition; gear, XP, rune and sidecar survive save/load" {
     try std.testing.expectEqualDeep(before_extra, canonicalExtra(&restored, id));
     var copy = restored;
     try copy.revive(p, id, "battle-0x800de1ec");
-    try std.testing.expectEqual(before.member.hp, canonicalMember(&copy, id).member.hp);
-    try std.testing.expectEqual(before.member.status, canonicalMember(&copy, id).member.status);
+    try std.testing.expectEqual(before.hp, canonicalMember(&copy, id).hp);
+    try std.testing.expectEqual(before.status, canonicalMember(&copy, id).status);
     try std.testing.expectEqual(before.experience, canonicalMember(&copy, id).experience);
 }
 

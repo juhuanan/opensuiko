@@ -80,14 +80,14 @@ pub fn validateSnapshot(p: packet.Packet, snapshot: party.Snapshot, catalogue: C
     for (snapshot.members, 0..) |maybe, index| {
         if (maybe) |member| {
             if (ended) return error.InvalidRoster;
-            if (member.member.id.len == 0) return error.InvalidRoster;
+            if (member.id.len == 0) return error.InvalidRoster;
             for (snapshot.members[0..index]) |prior| {
-                if (prior != null and std.mem.eql(u8, prior.?.member.id, member.member.id))
+                if (prior != null and std.mem.eql(u8, prior.?.id, member.id))
                     return error.DuplicateMember;
             }
-            try member.member.inventory.validate();
+            try member.inventory.validate();
             const extra = snapshot.extras[index] orelse return error.MissingCharacterExtra;
-            if (!std.mem.eql(u8, extra.member_id, member.member.id)) return error.InvalidCharacterExtra;
+            if (!std.mem.eql(u8, extra.member_id, member.id)) return error.InvalidCharacterExtra;
             const slots = [_]systems.EquipmentSlot{ .head, .body, .shield, .accessory_one, .accessory_two };
             for (slots, 0..) |slot, slot_index| {
                 if (member.loadout.get(slot)) |equipment| {
@@ -129,7 +129,7 @@ pub fn memberIndex(snapshot: party.Snapshot, id: []const u8) !usize {
     if (id.len == 0) return error.UnknownMember;
     for (snapshot.members, 0..) |maybe, index| {
         if (maybe) |member| {
-            if (std.mem.eql(u8, member.member.id, id)) return index;
+            if (std.mem.eql(u8, member.id, id)) return index;
         }
     }
     return error.UnknownMember;
@@ -149,7 +149,7 @@ pub fn activeIndex(snapshot: party.Snapshot, id: []const u8) !usize {
 /// The existing `party_session.itemEquipped` rule, expressed against the host
 /// catalogue instead of a whole battle state.
 pub fn wearsItem(catalogue: Catalogue, member: battle.OwnedMember, bag_slot: usize) bool {
-    const stack = member.member.inventory.slots[bag_slot] orelse return false;
+    const stack = member.inventory.slots[bag_slot] orelse return false;
     var worn: usize = 0;
     for (std.enums.values(systems.EquipmentSlot)) |slot| {
         if (member.loadout.get(slot)) |equipment| {
@@ -158,7 +158,7 @@ pub fn wearsItem(catalogue: Catalogue, member: battle.OwnedMember, bag_slot: usi
             }
         }
     }
-    for (member.member.inventory.slots[0..bag_slot]) |other| {
+    for (member.inventory.slots[0..bag_slot]) |other| {
         if (other != null and other.?.id == stack.id) worn -|= 1;
     }
     return worn > 0;
@@ -189,7 +189,7 @@ pub fn stateDigest(snapshot: party.Snapshot) u64 {
     for (snapshot.members) |maybe| {
         if (maybe) |member| {
             hasher.update(&.{1});
-            for (member.member.inventory.slots) |stack| {
+            for (member.inventory.slots) |stack| {
                 if (stack) |value| {
                     hasher.update(&.{1});
                     const tag = @tagName(value.id);

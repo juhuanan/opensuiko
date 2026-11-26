@@ -239,7 +239,7 @@ pub const CombatCaller = struct {
         next.encounter = self.source.encounter;
         next.progress.party = members[0..result.member_count];
         for (0..result.member_count) |index| {
-            members[index] = self.admitted[index].member;
+            members[index] = self.admitted[index];
             next.setOwnedMember(index, result.members[index]);
         }
         next.progress.money = result.money;

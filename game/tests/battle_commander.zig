@@ -116,7 +116,7 @@ test "Commander live bridge completes its original three Squirrel formation thro
     for (&members, 0..) |*member, index| {
         member.hp = 9999;
         member.max_hp = 9999;
-        state.base_stats[index].speed = 1;
+        state.progress.party[index].base_stats.speed = 1;
         state.actions[index] = .defend;
     }
     state.phase = .resolving;
@@ -167,7 +167,7 @@ test "Commander live bridge retains protected defended Turtle and lethal recipie
         }
         state.actor_conditions[0].protection_rounds = 2;
         state.actions[1] = .defend;
-        state.runes[2] = state.content.systems.?.runeIndex("turtle").?;
+        state.progress.party[2].rune = state.content.systems.?.runeIndex("turtle").?;
         const damage = state.resolvePhysicalDamage(state.partyCount() + 1, 1, 0, true);
         try state.beginSourceCommander(state.partyCount() + 3, null);
         const values: [8]u15 = @splat(0);

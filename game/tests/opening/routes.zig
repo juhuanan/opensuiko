@@ -1,3 +1,4 @@
+const characterFields = @import("../character_fields.zig").capture;
 const std = @import("std");
 const route = @import("route");
 const field_events = @import("field_events");
@@ -260,7 +261,7 @@ test "scripted battle retries defeat and resumes the field event through the Jou
     state.progress.story.scenario = try runtime.StoryState.init(&.{binding.content});
     try std.testing.expect(try session.beginOrdinary(binding, state.*, 13, null));
     const escape_money = state.progress.money;
-    const escape_experience = journey_state.combat.experience;
+    const escape_experience = characterFields("experience", journey_state.combat.progress.party);
     try journey_state.attachFieldEvent(&session, &binding);
     _ = try journey_state.tickWithFieldEvents(.{}, .{});
     try std.testing.expectEqual(.field, journey_state.mode);
@@ -277,7 +278,7 @@ test "scripted battle retries defeat and resumes the field event through the Jou
     try std.testing.expectEqual(@as(u32, 0), journey_state.combat.reward_received);
     try std.testing.expectEqual(.field, journey_state.mode);
     try std.testing.expectEqual(escape_money, state.progress.money);
-    try std.testing.expectEqual(escape_experience, journey_state.combat.experience);
+    try std.testing.expectEqual(escape_experience, characterFields("experience", journey_state.combat.progress.party));
     try std.testing.expect(!state.progress.story.forest_battle_one_won);
     try std.testing.expectError(error.MissingScriptedBattleRequest, journey_state.resumeScriptedBattle(&session, binding));
     _ = try journey_state.tickWithFieldEvents(.{}, .{});

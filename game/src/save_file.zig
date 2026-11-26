@@ -14,6 +14,49 @@ pub const Snapshot = struct {
     party: []field.game_state.Member,
     story: ?field.game_state.Story = null,
 
+    const Wire = struct {
+        schema: []const u8,
+        room: []const u8,
+        x: i32,
+        y: i32,
+        facing: field.Direction,
+        money: u32,
+        party: []const field.game_state.CharacterRecord,
+        story: ?field.game_state.Story = null,
+    };
+
+    pub fn jsonStringify(self: Snapshot, writer: *std.json.Stringify) !void {
+        var party: [6]field.game_state.CharacterRecord = undefined;
+        if (self.party.len > party.len) return error.WriteFailed;
+        for (self.party, 0..) |member, i| party[i] = member.record();
+        try writer.write(Wire{
+            .schema = self.schema,
+            .room = self.room,
+            .x = self.x,
+            .y = self.y,
+            .facing = self.facing,
+            .money = self.money,
+            .party = party[0..self.party.len],
+            .story = self.story,
+        });
+    }
+
+    pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !Snapshot {
+        const wire = try std.json.innerParse(Wire, allocator, source, options);
+        const party = try allocator.alloc(field.game_state.Member, wire.party.len);
+        for (party, wire.party) |*member, record| member.* = record.character();
+        return .{
+            .schema = wire.schema,
+            .room = wire.room,
+            .x = wire.x,
+            .y = wire.y,
+            .facing = wire.facing,
+            .money = wire.money,
+            .party = party,
+            .story = wire.story,
+        };
+    }
+
     pub fn validate(self: Snapshot, package: field.Package) !void {
         if (std.mem.eql(u8, self.schema, "suikoden-save/1")) {
             if (self.story != null) return error.InvalidLegacySave;

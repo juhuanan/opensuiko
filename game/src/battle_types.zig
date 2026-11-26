@@ -22,7 +22,7 @@ pub fn supportedBattleSchema(schema: []const u8) bool {
 pub const Rect = field.Rect;
 pub const trial_seed: u64 = 0x5355494B;
 pub const Member = field.game_state.Member;
-pub const Stats = struct { attack: u16, defense: u16, skill: u16, speed: u16, magic: u16 = 0, luck: u16 = 0 };
+pub const Stats = field.game_state.Stats;
 pub const Ailment = enum { poison, balloon, sleep, accuracy_reduced, rune_blocked };
 pub const systems = @import("battle_rules");
 pub const Pose = struct { rect: Rect, anchor_x: i16, anchor_y: i16 };
@@ -294,14 +294,38 @@ pub const Encounter = struct {
         try writer.endObject();
     }
 };
-pub const OwnedMember = struct {
-    member: Member,
+// The existing reserve-save and recruitment-seed layout.
+pub const OwnedMemberRecord = struct {
+    member: field.game_state.CharacterRecord,
     level: u8,
     experience: u32,
     stats: Stats,
     weapon_level: u8,
     loadout: systems.Loadout,
     rune: ?usize,
+
+    pub fn fromCharacter(value: Member) OwnedMemberRecord {
+        return .{
+            .member = value.record(),
+            .level = value.level,
+            .experience = value.experience,
+            .stats = value.base_stats,
+            .weapon_level = value.weapon_level,
+            .loadout = value.loadout,
+            .rune = value.rune,
+        };
+    }
+
+    pub fn character(self: OwnedMemberRecord) Member {
+        var value = self.member.character();
+        value.level = self.level;
+        value.experience = self.experience;
+        value.base_stats = self.stats;
+        value.weapon_level = self.weapon_level;
+        value.loadout = self.loadout;
+        value.rune = self.rune;
+        return value;
+    }
 };
 pub const Protection = struct {
     hurt_duration: u16,

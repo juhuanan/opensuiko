@@ -157,8 +157,7 @@ pub const Session = struct {
         if (checkpoint.state.encounter >= self.state.content.encounters.len or !std.mem.eql(u8, self.state.content.encounters[checkpoint.state.encounter].id, self.entry.encounter_id)) return error.CombatIdentityMismatch;
         // Validate all members before mutating the live session.
         for (0..checkpoint.member_count) |i| {
-            const owned: battle.OwnedMember = .{ .member = checkpoint.members[i], .level = checkpoint.state.levels[i], .experience = checkpoint.state.experience[i], .stats = checkpoint.state.base_stats[i], .weapon_level = checkpoint.state.weapon_levels[i], .loadout = checkpoint.state.loadouts[i], .rune = checkpoint.state.runes[i] };
-            try self.state.validateOwnedMember(owned);
+            try self.state.validateOwnedMember(checkpoint.members[i]);
         }
         var playback = checkpoint.state.unite_vm;
         if (self.state.unite_actors) |bundle| try playback.rebind(bundle);

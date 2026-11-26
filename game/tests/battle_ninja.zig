@@ -227,7 +227,7 @@ test "Ninja actor special uses contact damage and its separate return for every 
         }
         if (mode == 1) state.actions[target] = .defend;
         if (mode == 2) state.actor_conditions[target].protection_rounds = 2;
-        if (mode == 3) state.runes[target] = data.systems.?.runeIndex("turtle").?;
+        if (mode == 3) state.progress.party[target].rune = data.systems.?.runeIndex("turtle").?;
         if (mode == 5) {
             members[target].hp = 1;
             members[target].inventory.slots = @splat(null);

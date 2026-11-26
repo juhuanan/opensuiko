@@ -32,24 +32,22 @@ const sonya_story_mask: u8 = 0x40;
 
 fn ownedMember(profile: roster_mod.source.Profile, index: usize) battle.OwnedMember {
     var owned: battle.OwnedMember = .{
-        .member = .{
-            .id = profile.id,
-            .name = profile.name,
-            .hp = 40 + @as(u16, @intCast(index)),
-            .max_hp = 60,
-            .status = .healthy,
-            .rune_charges = .{ 1, 2, 3, 4 },
-            .max_rune_charges = .{ 4, 4, 4, 4 },
-            .inventory = .{},
-        },
+        .id = profile.id,
+        .name = profile.name,
+        .hp = 40 + @as(u16, @intCast(index)),
+        .max_hp = 60,
+        .status = .healthy,
+        .rune_charges = .{ 1, 2, 3, 4 },
+        .max_rune_charges = .{ 4, 4, 4, 4 },
+        .inventory = .{},
         .level = 9,
         .experience = 100,
-        .stats = .{ .attack = 20, .defense = 12, .skill = 10, .speed = 9, .magic = 8, .luck = 7 },
+        .base_stats = .{ .attack = 20, .defense = 12, .skill = 10, .speed = 9, .magic = 8, .luck = 7 },
         .weapon_level = 3,
         .loadout = .{},
         .rune = null,
     };
-    owned.member.inventory.slots[0] = .{ .id = .medicine, .uses = 1 };
+    owned.inventory.slots[0] = .{ .id = .medicine, .uses = 1 };
     return owned;
 }
 

@@ -47,19 +47,17 @@ const catalogue = [_]battle.systems.Equipment{
 
 fn memberRecord(id: []const u8) battle.OwnedMember {
     return .{
-        .member = .{
-            .id = id,
-            .name = id,
-            .hp = 40,
-            .max_hp = 40,
-            .status = .healthy,
-            .rune_charges = @splat(0),
-            .max_rune_charges = @splat(0),
-            .inventory = .{},
-        },
+        .id = id,
+        .name = id,
+        .hp = 40,
+        .max_hp = 40,
+        .status = .healthy,
+        .rune_charges = @splat(0),
+        .max_rune_charges = @splat(0),
+        .inventory = .{},
         .level = 1,
         .experience = 0,
-        .stats = .{ .attack = 10, .defense = 9, .skill = 8, .speed = 7 },
+        .base_stats = .{ .attack = 10, .defense = 9, .skill = 8, .speed = 7 },
         .weapon_level = 1,
         .loadout = .{},
         .rune = null,
@@ -78,9 +76,9 @@ fn depositSnapshot() party.Snapshot {
     snapshot.eligible[0] = true;
     snapshot.active[0] = "hero";
     var pahn = memberRecord("pahn");
-    pahn.member.inventory.slots[0] = .{ .id = .bandanna, .uses = 0 };
-    pahn.member.inventory.slots[1] = .{ .id = .medicine, .uses = 2 };
-    pahn.member.inventory.slots[2] = .{ .id = .bandanna, .uses = 0 };
+    pahn.inventory.slots[0] = .{ .id = .bandanna, .uses = 0 };
+    pahn.inventory.slots[1] = .{ .id = .medicine, .uses = 2 };
+    pahn.inventory.slots[2] = .{ .id = .bandanna, .uses = 0 };
     pahn.loadout.head = 0;
     snapshot.members[1] = pahn;
     snapshot.extras[1] = .{ .member_id = "pahn" };
@@ -217,9 +215,9 @@ test "Pahn deposits eligible entries backward while his equipped bandanna remain
     var snapshot = depositSnapshot();
     const proposal = try progression.planDeposit(loaded.asset.value, loaded.packet.value, id, facts(&story), snapshot, &catalogue);
     try std.testing.expectEqual(@as(u8, 2), proposal.transferred);
-    try std.testing.expectEqual(@as(usize, 3), snapshot.members[1].?.member.inventory.count());
+    try std.testing.expectEqual(@as(usize, 3), snapshot.members[1].?.inventory.count());
     try progression.commitDeposit(loaded.asset.value, loaded.packet.value, &snapshot, &catalogue, proposal);
-    const bag = snapshot.members[1].?.member.inventory;
+    const bag = snapshot.members[1].?.inventory;
     try std.testing.expectEqual(@as(usize, 1), bag.count());
     try std.testing.expectEqual(@as(u16, 1), snapshot.storage.quantity(.bandanna));
     try std.testing.expectEqual(@as(u16, 1), snapshot.storage.quantity(.medicine));

@@ -53,9 +53,9 @@ pub fn beginEnemyMagic(self: *State, owner: usize, recipient: usize) !void {
             };
         }
         if (!binding.group) {
-            if (self.runes[recipient] != null and self.runeByteFor(recipient) == null) return error.MissingBattleRuneData;
+            if (self.progress.party[recipient].rune != null and self.runeByteFor(recipient) == null) return error.MissingBattleRuneData;
         } else for (0..self.partyCount()) |slot| if (!battle.revival.committedPartyInactive(self.*, slot)) {
-            if (self.runes[slot] != null and self.runeByteFor(slot) == null) return error.MissingBattleRuneData;
+            if (self.progress.party[slot].rune != null and self.runeByteFor(slot) == null) return error.MissingBattleRuneData;
         };
         self.unite_vm.auxiliary_capacity = @intCast(19 - self.partyCount() - self.enemyCount());
         self.unite_vm.enemy_magic_actions[owner] = .{
@@ -73,7 +73,7 @@ pub fn beginEnemyMagic(self: *State, owner: usize, recipient: usize) !void {
             try physical_art.checkProgramArt(self.*, bundle.library(), resource, binding.owner_program, 0, 0, false);
             try physical_art.checkProgramArt(self.*, bundle.library(), target_resource, binding.recipient_program, 0, 0, false);
         }
-        if (self.runes[recipient] != null and self.runeByteFor(recipient) == null) return error.MissingBattleRuneData;
+        if (self.progress.party[recipient].rune != null and self.runeByteFor(recipient) == null) return error.MissingBattleRuneData;
         self.unite_vm.auxiliary_capacity = @intCast(19 - self.partyCount() - self.enemyCount());
         self.unite_vm.enemy_magic_actions[owner] = .{ .owner = @intCast(owner), .recipient = @intCast(recipient), .start_at = self.camera_ticks +% 1 };
     }
@@ -149,7 +149,7 @@ pub fn advanceEnemyMagicActor(self: *State, owner: usize, runtime: *host.Runtime
                 const recipient = playback.recipient;
                 const inactive = battle.revival.committedPartyInactive(self.*, recipient);
                 if (playback.amount != null) return error.DuplicateEnemyMagicDamage;
-                const rune = if (self.runes[recipient] == null) 0 else self.runeByteFor(recipient) orelse return error.MissingBattleRuneData;
+                const rune = if (self.progress.party[recipient].rune == null) 0 else self.runeByteFor(recipient) orelse return error.MissingBattleRuneData;
                 const draw = try battle.enemy_magic.nextBattleDraw(self);
                 const computed = binding.damage(self.stats(owner).magic, self.stats(recipient).magic, rune, draw, recipient);
                 playback.amount = if (self.actor_conditions[recipient].protection_rounds == 0) computed else 0;
@@ -165,7 +165,7 @@ pub fn advanceEnemyMagicActor(self: *State, owner: usize, runtime: *host.Runtime
                 var total: u32 = 0;
                 for (0..self.partyCount()) |slot| if (party_active[slot]) {
                     if (playback.group_amounts[slot] != null) return error.DuplicateEnemyMagicDamage;
-                    const rune = if (self.runes[slot] == null) 0 else self.runeByteFor(slot) orelse return error.MissingBattleRuneData;
+                    const rune = if (self.progress.party[slot].rune == null) 0 else self.runeByteFor(slot) orelse return error.MissingBattleRuneData;
                     const draw = try battle.enemy_magic.nextBattleDraw(self);
                     const computed = binding.damage(self.stats(owner).magic, self.stats(slot).magic, rune, draw, slot);
                     const amount = if (self.actor_conditions[slot].protection_rounds == 0) computed else 0;
@@ -207,7 +207,7 @@ pub fn advanceEnemyMagicActor(self: *State, owner: usize, runtime: *host.Runtime
     if (event.damage) {
         const inactive = battle.revival.committedPartyInactive(self.*, recipient);
         if (playback.amount != null) return error.DuplicateEnemyMagicDamage;
-        const rune = if (self.runes[recipient] == null) 0 else self.runeByteFor(recipient) orelse return error.MissingBattleRuneData;
+        const rune = if (self.progress.party[recipient].rune == null) 0 else self.runeByteFor(recipient) orelse return error.MissingBattleRuneData;
         const draw = self.roll();
         if (self.replay_exhausted) return error.RandomInputExhausted;
         const computed = binding.damage(self.stats(owner).magic, self.stats(recipient).magic, rune, draw);

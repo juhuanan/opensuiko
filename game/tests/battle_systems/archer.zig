@@ -187,14 +187,14 @@ test "source archer knockout and Buddha retain reaction ownership through the ne
         combat.integration = .{ .host = rules_host };
         try combat.attachUniteActors(&actors.value);
         try combat.attachSpellScenes(&spells.value);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         for (combat.progress.party, 0..) |*member, index| {
             member.max_hp = 100;
             member.hp = if (index == 1) 50 else 100;
             member.inventory.slots = @splat(null);
-            combat.base_stats[index].defense = 40;
-            combat.base_stats[index].skill = 0;
-            combat.loadouts[index] = .{};
+            combat.progress.party[index].base_stats.defense = 40;
+            combat.progress.party[index].base_stats.skill = 0;
+            combat.progress.party[index].loadout = .{};
         }
         if (buddha) members[1].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
         combat.phase = .resolving;
@@ -305,7 +305,7 @@ test "source and legacy archer rounds retain sleep and suppress protected HP los
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         const owner = combat.partyCount();
         combat.acted[owner] = false;
         combat.coordinator = .{ .stage = .dispatch, .current_actor = owner, .cached = .{ .actor = owner } };

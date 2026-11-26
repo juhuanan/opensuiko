@@ -590,8 +590,8 @@ test "C archer knockout and Buddha survive the world battle transaction" {
         try adapter.beginTransactional(&session, &combat, data.value, draws, receipt);
         const retained = &adapter.transaction.?.session.state;
         for (retained.progress.party, 0..) |_, index| {
-            retained.base_stats[index].defense = 40;
-            retained.base_stats[index].skill = 0;
+            retained.progress.party[index].base_stats.defense = 40;
+            retained.progress.party[index].base_stats.skill = 0;
         }
         const owner = retained.partyCount();
         try std.testing.expectEqualStrings("kobold_type_2", retained.enemy(0).id);
@@ -771,7 +771,7 @@ test "world battle entry carries live roster rune pieces with identity and rollb
     for ([_]bool{ false, true }) |transactional| {
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
-        combat.base_stats[0].attack = 500;
+        combat.progress.party[0].base_stats.attack = 500;
         const field_state = field.State.init(fixture.rooms.value, &combat.progress);
         var state = try @import("world_travel").State.open(allocator, fixture.map.value, art.value, fixture.overlay.value, fixture.rooms.value, &combat, field_state);
         defer state.deinit();
@@ -818,10 +818,14 @@ test "world battle entry carries live roster rune pieces with identity and rollb
         std.mem.swap(?[]const u8, &roster.active[0], &roster.active[1]);
         roster.extras[5].?.weapon_fragments[0] = 4;
         try std.testing.expect((try state.advance(.{}, &draws)) == .battle_started);
-        try std.testing.expectEqual(battle.systems.WeaponRune.fire, state.combat.weapon_augments[0].rune);
-        try std.testing.expectEqual(@as(u8, 4), state.combat.weapon_augments[0].fragments);
+        try std.testing.expectEqual(battle.systems.WeaponRune.fire, state.combat.progress.party[0].weapon_augment.rune);
+        try std.testing.expectEqual(@as(u8, 4), state.combat.progress.party[0].weapon_augment.fragments);
         var neutral = state.combat.*;
-        neutral.weapon_augments[0] = .{};
+        var neutral_members: [6]battle.Member = undefined;
+        const neutral_party = neutral_members[0..neutral.partyCount()];
+        @memcpy(neutral_party, neutral.progress.party);
+        neutral.progress.party = neutral_party;
+        neutral.progress.party[0].weapon_augment = .{};
         try std.testing.expect(state.combat.resolvePhysicalDamage(0, state.combat.partyCount(), 0, false) > neutral.resolvePhysicalDamage(0, neutral.partyCount(), 0, false));
         try std.testing.expectError(error.WorldBattleNotReady, state.attachPartySnapshot(&roster));
         _ = try state.advance(.{ .combat = .{ .down = true } }, &draws);
@@ -840,8 +844,8 @@ test "world battle entry carries live roster rune pieces with identity and rollb
         state.link.travel.mode = .battle_pending;
         state.link.travel.selected = fixture.map.value.encounters[1].id;
         try std.testing.expect((try state.advance(.{}, &draws)) == .battle_started);
-        try std.testing.expectEqual(battle.systems.WeaponRune.wind, state.combat.weapon_augments[0].rune);
-        try std.testing.expectEqual(@as(u8, 5), state.combat.weapon_augments[0].fragments);
+        try std.testing.expectEqual(battle.systems.WeaponRune.wind, state.combat.progress.party[0].weapon_augment.rune);
+        try std.testing.expectEqual(@as(u8, 5), state.combat.progress.party[0].weapon_augment.fragments);
     }
 }
 
@@ -898,7 +902,7 @@ test "all eight B rosters allow verified Run and Let go without executing unsupp
     for (0..8) |index| for ([_]bool{ false, true }) |release| {
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
-        combat.levels = @splat(if (release) 99 else 1);
+        for (combat.progress.party) |*member| member.level = if (release) 99 else 1;
         members[0].hp -= 7;
         const original = members;
         var session_progress = combat.progress;
@@ -1037,7 +1041,9 @@ test "world battle Run and Let go resolve through combat while defeat never heal
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
         combat.progress.money = 1500;
-        if (scenario == 1) combat.levels = @splat(20);
+        if (scenario == 1) {
+            for (combat.progress.party) |*member| member.level = 20;
+        }
         if (scenario == 2) for (&members) |*member| {
             member.hp = 1;
         };

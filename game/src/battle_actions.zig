@@ -739,7 +739,7 @@ pub fn gearCount(self: State, member: usize, item: usize) usize {
 pub fn itemEquipped(self: State, member: usize, slot: usize) bool {
     const item = self.progress.party[member].inventory.slots[slot] orelse return false;
     var worn: usize = 0;
-    for (std.enums.values(systems.EquipmentSlot)) |place| if (self.loadouts[member].get(place)) |gear| {
+    for (std.enums.values(systems.EquipmentSlot)) |place| if (self.progress.party[member].loadout.get(place)) |gear| {
         if (std.mem.eql(u8, @tagName(item.id), self.content.systems.?.equipment[gear].id)) worn += 1;
     };
     for (self.progress.party[member].inventory.slots[0..slot]) |other| if (other != null and other.?.id == item.id) {
@@ -759,7 +759,7 @@ pub fn checkEquipment(self: State, member: usize, slot: systems.EquipmentSlot, i
     if (item) |id| {
         if (id >= self.content.systems.?.equipment.len or !self.content.systems.?.equipment[id].allows(self.partyProfile(member).id, slot)) return error.InvalidEquipment;
         var needed: usize = 1;
-        for (std.enums.values(systems.EquipmentSlot)) |other| if (other != slot and self.loadouts[member].get(other) == item) {
+        for (std.enums.values(systems.EquipmentSlot)) |other| if (other != slot and self.progress.party[member].loadout.get(other) == item) {
             needed += 1;
         };
         if (self.gearCount(member, id) < needed) return error.ItemUnavailable;

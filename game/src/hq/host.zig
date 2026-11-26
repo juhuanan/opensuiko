@@ -326,7 +326,7 @@ pub const Host = struct {
     pub fn levels(self: *Host) [256]u8 {
         var out: [256]u8 = @splat(0);
         for (self.roster.snapshot.members) |maybe| if (maybe) |member| {
-            const record = self.recordIdOf(member.member.id) orelse continue;
+            const record = self.recordIdOf(member.id) orelse continue;
             if (record < out.len) out[record] = member.level;
         };
         return out;

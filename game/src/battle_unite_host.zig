@@ -18,7 +18,7 @@ pub fn characterId(self: *const State, member: usize) ?u8 {
 const rune_keys = [_][]const u8{ "fire", "water", "wind", "lightning", "earth", "resurrection", "boar", "shrike", "falcon", "hate", "trick", "clone", "double-beat", "killer", "counter", "spark", "hazy", "gale", "sunbeam", "holy", "true_holy", "fortune", "prosperity", "champion's", "turtle", "phero", "rage", "flowing", "cyclone", "mother_earth", "thunder" };
 
 pub fn runeByteFor(self: *const State, member: usize) ?u8 {
-    const index = self.runes[member] orelse return null;
+    const index = self.progress.party[member].rune orelse return null;
     const owned = self.content.systems.?.runes[index];
     if (std.mem.eql(u8, owned.id, "masked_rune_32")) return 32;
     if (std.mem.eql(u8, owned.id, "soul_eater")) return 1;

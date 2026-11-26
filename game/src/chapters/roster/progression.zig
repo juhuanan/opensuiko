@@ -157,7 +157,7 @@ pub const Ledger = struct {
     }
     pub fn find(self: *const Ledger, id: []const u8) ?usize {
         for (self.base.snapshot.members, 0..) |maybe, i| if (maybe) |member| {
-            if (std.mem.eql(u8, member.member.id, id)) return i;
+            if (std.mem.eql(u8, member.id, id)) return i;
         };
         return null;
     }
@@ -398,16 +398,16 @@ pub const Ledger = struct {
         for (self.base.snapshot.members, 0..) |maybe, i| {
             if (maybe) |member| {
                 if (ended) return error.InvalidRoster;
-                const profile = catalogue.profile(roster_asset, member.member.id) orelse return error.UnknownProfile;
-                const source_profile = roster_source.profile(member.member.id) orelse return error.UnknownProfile;
-                if (!std.mem.eql(u8, profile.name, member.member.name) or
+                const profile = catalogue.profile(roster_asset, member.id) orelse return error.UnknownProfile;
+                const source_profile = roster_source.profile(member.id) orelse return error.UnknownProfile;
+                if (!std.mem.eql(u8, profile.name, member.name) or
                     profile.source_character_id != source_profile.source_character_id or
                     profile.identity != source_profile.identity) return error.ProfileMismatch;
                 const progress = self.progress[i] orelse return error.MissingProgress;
-                if (!std.mem.eql(u8, progress.profile, member.member.id)) return error.AliasedMember;
+                if (!std.mem.eql(u8, progress.profile, member.id)) return error.AliasedMember;
                 if (progress.source_character_id != profile.source_character_id) return error.ProfileMismatch;
                 const sidecar = self.base.snapshot.extras[i] orelse return error.MissingCharacterExtra;
-                if (!std.mem.eql(u8, sidecar.member_id, member.member.id)) return error.AliasedSidecar;
+                if (!std.mem.eql(u8, sidecar.member_id, member.id)) return error.AliasedSidecar;
                 try validateMember(roster_asset, bindings, profile, member, sidecar, progress);
                 count += 1;
             } else {
@@ -445,27 +445,27 @@ pub const Ledger = struct {
             total -= @as(u32, roster_asset.rules.exp_per_level);
             record.level += 1;
             const power = profile.seed.weapon.powers[@as(usize, record.weapon_level - 1)];
-            var attack_base = std.math.sub(u16, record.stats.attack, power) catch return error.InvalidStats;
+            var attack_base = std.math.sub(u16, record.base_stats.attack, power) catch return error.InvalidStats;
             for (0..6) |i| {
                 const index = statIndex(roster_asset, record.level, profile.growth[i]);
                 const gain: u16 = @intCast((roster_asset.rules.stat_table[index] + (rolls[cursor] & 0xFF)) >> 8);
                 cursor += 1;
                 switch (i) {
                     0 => attack_base = clampStat(attack_base, gain),
-                    1 => record.stats.skill = clampStat(record.stats.skill, gain),
-                    2 => record.stats.defense = clampStat(record.stats.defense, gain),
-                    3 => record.stats.speed = clampStat(record.stats.speed, gain),
-                    4 => record.stats.magic = clampStat(record.stats.magic, gain),
-                    5 => record.stats.luck = clampStat(record.stats.luck, gain),
+                    1 => record.base_stats.skill = clampStat(record.base_stats.skill, gain),
+                    2 => record.base_stats.defense = clampStat(record.base_stats.defense, gain),
+                    3 => record.base_stats.speed = clampStat(record.base_stats.speed, gain),
+                    4 => record.base_stats.magic = clampStat(record.base_stats.magic, gain),
+                    5 => record.base_stats.luck = clampStat(record.base_stats.luck, gain),
                     else => unreachable,
                 }
             }
-            record.stats.attack = std.math.add(u16, attack_base, power) catch return error.StatOverflow;
+            record.base_stats.attack = std.math.add(u16, attack_base, power) catch return error.StatOverflow;
             const hp_gain: u16 = @intCast((roster_asset.rules.hp_table[hpIndex(roster_asset, record.level, profile.growth[0])] + (rolls[cursor] & 0x1FF)) >> 8);
             cursor += 1;
-            record.member.max_hp = std.math.add(u16, record.member.max_hp, hp_gain) catch return error.HpOverflow;
-            record.member.hp = std.math.add(u16, record.member.hp, hp_gain) catch return error.HpOverflow;
-            record.member.max_rune_charges = catalogue.magicCapacity(roster_asset, record.stats.magic);
+            record.max_hp = std.math.add(u16, record.max_hp, hp_gain) catch return error.HpOverflow;
+            record.hp = std.math.add(u16, record.hp, hp_gain) catch return error.HpOverflow;
+            record.max_rune_charges = catalogue.magicCapacity(roster_asset, record.base_stats.magic);
         }
         record.experience = total;
     }
@@ -477,10 +477,10 @@ pub const Ledger = struct {
         const record = &self.base.snapshot.members[slot].?;
         if (record.weapon_level >= roster_asset.rules.weapon_max_level) return error.WeaponMaxed;
         const old_power = profile.seed.weapon.powers[@as(usize, record.weapon_level - 1)];
-        const base_attack = std.math.sub(u16, record.stats.attack, old_power) catch return error.InvalidStats;
+        const base_attack = std.math.sub(u16, record.base_stats.attack, old_power) catch return error.InvalidStats;
         record.weapon_level += 1;
         const new_power = profile.seed.weapon.powers[@as(usize, record.weapon_level - 1)];
-        record.stats.attack = std.math.add(u16, base_attack, new_power) catch return error.StatOverflow;
+        record.base_stats.attack = std.math.add(u16, base_attack, new_power) catch return error.StatOverflow;
     }
 
     fn applyWeaponPieceInner(self: *Ledger, roster_asset: catalogue.Asset, id: []const u8, piece: WeaponPiece, replace: bool) !void {
@@ -548,7 +548,7 @@ pub const Ledger = struct {
         _ = roster_asset;
         const index = self.find(id) orelse return error.UnknownMember;
         if (!self.base.isActive(id)) return error.MemberNotActive;
-        const member = &self.base.snapshot.members[index].?.member;
+        const member = &self.base.snapshot.members[index].?;
         member.hp = member.max_hp;
         member.status = .healthy;
         member.balloons = 0;
@@ -613,19 +613,17 @@ fn seedMember(roster_asset: catalogue.Asset, bindings: Bindings, profile: *const
     if (weapon_level == 0 or weapon_level > roster_asset.rules.weapon_max_level) return error.InvalidSeed;
     const attack = std.math.add(u16, profile.seed.stats[0], profile.seed.weapon.powers[@as(usize, weapon_level - 1)]) catch return error.InvalidSeed;
     var owned: battle.OwnedMember = .{
-        .member = .{
-            .id = profile.id,
-            .name = profile.name,
-            .hp = profile.seed.hp,
-            .max_hp = profile.seed.max_hp,
-            .status = .healthy,
-            .rune_charges = profile.seed.charges,
-            .max_rune_charges = catalogue.magicCapacity(roster_asset, profile.seed.stats[4]),
-            .inventory = .{},
-        },
+        .id = profile.id,
+        .name = profile.name,
+        .hp = profile.seed.hp,
+        .max_hp = profile.seed.max_hp,
+        .status = .healthy,
+        .rune_charges = profile.seed.charges,
+        .max_rune_charges = catalogue.magicCapacity(roster_asset, profile.seed.stats[4]),
+        .inventory = .{},
         .level = level,
         .experience = profile.seed.experience,
-        .stats = .{
+        .base_stats = .{
             .attack = attack,
             .skill = profile.seed.stats[1],
             .defense = profile.seed.stats[2],
@@ -644,7 +642,7 @@ fn seedMember(roster_asset: catalogue.Asset, bindings: Bindings, profile: *const
         };
         const uses = seedUses(item_id, item.uses);
         if (uses > item_id.maxUses()) return error.InvalidSeed;
-        owned.member.inventory.slots[i] = .{ .id = item_id, .uses = uses, .identified = item.identified };
+        owned.inventory.slots[i] = .{ .id = item_id, .uses = uses, .identified = item.identified };
         const slot_name = item.slot orelse {
             if (item.locked) return error.InvalidSeed;
             continue;
@@ -665,20 +663,20 @@ fn seedMember(roster_asset: catalogue.Asset, bindings: Bindings, profile: *const
 }
 
 fn validateMember(roster_asset: catalogue.Asset, bindings: Bindings, profile: *const catalogue.Profile, owned: battle.OwnedMember, sidecar: party.CharacterExtra, progress: Progress) !void {
-    var members = [_]field.game_state.Member{owned.member};
+    var members = [_]field.game_state.Member{owned};
     try (field.game_state.Progress{ .money = 0, .party = &members }).validate();
     if (owned.level == 0 or owned.level > roster_asset.rules.max_level or owned.experience >= 1000) return error.InvalidMember;
     if (owned.weapon_level == 0 or owned.weapon_level > roster_asset.rules.weapon_max_level) return error.InvalidWeapon;
-    if (owned.member.max_hp > 9999) return error.InvalidMember;
-    for ([_]u16{ owned.stats.attack, owned.stats.defense, owned.stats.skill, owned.stats.speed, owned.stats.magic, owned.stats.luck }) |value| {
+    if (owned.max_hp > 9999) return error.InvalidMember;
+    for ([_]u16{ owned.base_stats.attack, owned.base_stats.defense, owned.base_stats.skill, owned.base_stats.speed, owned.base_stats.magic, owned.base_stats.luck }) |value| {
         if (value > 9999) return error.InvalidMember;
     }
     const power = profile.seed.weapon.powers[@as(usize, owned.weapon_level - 1)];
-    const base_attack = std.math.sub(u16, owned.stats.attack, power) catch return error.InvalidStats;
+    const base_attack = std.math.sub(u16, owned.base_stats.attack, power) catch return error.InvalidStats;
     if (base_attack > 9999) return error.InvalidStats;
-    const capacity = catalogue.magicCapacity(roster_asset, owned.stats.magic);
-    if (!std.mem.eql(u16, &capacity, &owned.member.max_rune_charges)) return error.InvalidMagicCapacity;
-    for (owned.member.rune_charges, capacity) |charge, maximum| if (charge > maximum) return error.InvalidMagicCapacity;
+    const capacity = catalogue.magicCapacity(roster_asset, owned.base_stats.magic);
+    if (!std.mem.eql(u16, &capacity, &owned.max_rune_charges)) return error.InvalidMagicCapacity;
+    for (owned.rune_charges, capacity) |charge, maximum| if (charge > maximum) return error.InvalidMagicCapacity;
     const slots = [_]battle.systems.EquipmentSlot{ .head, .body, .shield, .accessory_one, .accessory_two };
     for (slots) |slot| if (owned.loadout.get(slot)) |equipment_index| {
         if (equipment_index >= bindings.equipment.len) return error.UnknownResource;
@@ -691,25 +689,25 @@ fn validateMember(roster_asset: catalogue.Asset, bindings: Bindings, profile: *c
             if (index == equipment_index) worn += 1;
         };
         var stacks: usize = 0;
-        for (owned.member.inventory.slots) |maybe| if (maybe) |stack| {
+        for (owned.inventory.slots) |maybe| if (maybe) |stack| {
             if (std.mem.eql(u8, @tagName(stack.id), item_id)) stacks += 1;
         };
         if (worn > stacks) return error.EquipmentNotOwned;
     };
     for (profile.seed.inventory, 0..) |item, i| {
         if (std.meta.stringToEnum(field.items.Id, item.id)) |item_id| {
-            const stack = owned.member.inventory.slots[i] orelse return error.ItemNotOwned;
+            const stack = owned.inventory.slots[i] orelse return error.ItemNotOwned;
             if (stack.id != item_id or stack.uses != seedUses(item_id, item.uses) or stack.identified != item.identified) return error.ItemMismatch;
             if (progress.retained[i] != null) return error.ItemMismatch;
         } else {
             _ = catalogue.unmapped(roster_asset, item.id) orelse return error.UnknownResource;
             const retained = progress.retained[i] orelse return error.ItemNotOwned;
             if (!std.mem.eql(u8, retained.id, item.id) or retained.uses != item.uses or retained.identified != item.identified) return error.ItemMismatch;
-            if (owned.member.inventory.slots[i] != null) return error.ItemMismatch;
+            if (owned.inventory.slots[i] != null) return error.ItemMismatch;
         }
     }
-    for (profile.seed.inventory.len..owned.member.inventory.slots.len) |i| {
-        if (owned.member.inventory.slots[i] != null) return error.ItemMismatch;
+    for (profile.seed.inventory.len..owned.inventory.slots.len) |i| {
+        if (owned.inventory.slots[i] != null) return error.ItemMismatch;
         if (progress.retained[i] != null) return error.ItemMismatch;
     }
     if (progress.rune_id) |rune_id| {
@@ -743,7 +741,7 @@ fn seedEquipped(profile: *const catalogue.Profile, item_id: []const u8, slot: ba
 }
 
 fn inventoryHas(owned: battle.OwnedMember, item_id: []const u8) bool {
-    for (owned.member.inventory.slots) |maybe| if (maybe) |stack| {
+    for (owned.inventory.slots) |maybe| if (maybe) |stack| {
         if (std.mem.eql(u8, @tagName(stack.id), item_id)) return true;
     };
     return false;

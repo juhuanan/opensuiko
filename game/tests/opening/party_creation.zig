@@ -66,7 +66,7 @@ test "Pahn's NewGame template materializes from the source fixture without roste
     var participants: [6]battle.Member = undefined;
     const combat = try battle.State.init(content.value, rules.value, &participants, 17);
     const pahn_source = try creation.initialTemplate(combat, catalogue.value, 6);
-    try std.testing.expectEqualStrings("pahn", pahn_source.materialized.owned.member.id);
+    try std.testing.expectEqualStrings("pahn", pahn_source.materialized.owned.id);
     try std.testing.expectEqualStrings("pahn", pahn_source.materialized.extra.member_id);
     try std.testing.expectEqual(@as(u32, 6), pahn_source.source.source_character_id);
     try std.testing.expectEqualStrings("PAN.BIN", pahn_source.source.resource);
@@ -110,7 +110,7 @@ test "party owner replays source additions and rejects forged or stale proposals
     roster.members[0] = hero.owned;
     roster.extras[0] = hero.extra;
     roster.eligible[0] = true;
-    roster.active[0] = hero.owned.member.id;
+    roster.active[0] = hero.owned.id;
     var owner = try creation.Owner.init(combat, roster, .{});
     const context: creation.Context = .{ .combat = combat, .catalogue = catalogue.value, .sources = .{}, .template = template.value };
     const guarded = try creation.Entry.init(.{ 8, 0xff, 0xff, 0xff, 0xff, 0xff }, .{ 0, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe }, 1, 0x80);
@@ -183,7 +183,7 @@ test "party owner replays source additions and rejects forged or stale proposals
     forged.after.recruit_flags[0] = 1;
     try std.testing.expectError(error.InvalidProposal, owner.commit(context, forged));
     forged = proposal;
-    forged.after.roster.members[0].?.member.hp -= 1;
+    forged.after.roster.members[0].?.hp -= 1;
     _ = try party.Session.init(combat, forged.after.roster, .{});
     try std.testing.expectError(error.InvalidProposal, owner.commit(context, forged));
     try owner.commit(context, proposal);

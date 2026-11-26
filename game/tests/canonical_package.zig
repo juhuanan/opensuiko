@@ -627,7 +627,7 @@ test "packaged floating orb saves and restores field progress" {
     try std.testing.expectEqualStrings("vc5_room_0", currentRoomName(&reloaded));
     try std.testing.expectEqual(checkpoint.money, reloaded.field_state.progress.money);
     try std.testing.expectEqualDeep(checkpoint.story, reloaded.field_state.progress.story);
-    try std.testing.expectEqualDeep(checkpoint.party[0..checkpoint.party_count], reloaded.combat.progress.party);
+    for (checkpoint.party[0..checkpoint.party_count], reloaded.combat.progress.party) |saved, member| try std.testing.expectEqualDeep(saved, member.record());
     try std.testing.expectEqualDeep(checkpoint.storage.?, reloaded.field_state.progress.storage);
     try std.testing.expectEqualDeep(checkpoint.shared_items.?, reloaded.shared_items);
 }
@@ -1179,7 +1179,7 @@ test "real initialization opens the canonical palace start" {
     try std.testing.expectEqual(@as(usize, 1), state.combat.progress.party.len);
     try std.testing.expectEqual(@as(u32, 1500), state.combat.progress.money);
     try std.testing.expectEqual(@as(u16, 17), state.combat.progress.party[0].max_hp);
-    try std.testing.expectEqual(@as(u8, 1), state.combat.levels[0]);
+    try std.testing.expectEqual(@as(u8, 1), state.combat.progress.party[0].level);
     for (0..4) |slot| try std.testing.expect(state.combat.itemEquipped(0, slot));
     try std.testing.expect(!state.combat.itemEquipped(0, 4));
     try std.testing.expectEqual(@as(u16, 26), state.combat.stats(0).defense);
@@ -1205,7 +1205,7 @@ test "real initialization opens the canonical palace start" {
     var restored_backing: battle.State = undefined;
     var restored = try journey.State.fromSnapshot(bound.package, data.value, content.value, rules.value, field.inn.embedded(), saved, battle.trial_seed, &fresh_members, &restored_backing);
     try std.testing.expectEqual(@as(usize, 1), restored.combat.progress.party.len);
-    try std.testing.expectEqual(state.combat.loadouts[0], restored.combat.loadouts[0]);
+    try std.testing.expectEqual(state.combat.progress.party[0].loadout, restored.combat.progress.party[0].loadout);
     try std.testing.expect(journey.usesOpeningSeed("vaa_room_2"));
     try std.testing.expect(journey.usesOpeningSeed("vaa_room_1"));
     try std.testing.expect(!journey.usesOpeningSeed("vb6_inn"));
@@ -1447,7 +1447,7 @@ test "real initialization opens the canonical palace start" {
     try state.joinPartyMember(&members, catalog.value, bindings.value, "ted");
     try std.testing.expectEqual(@as(usize, 3), state.combat.progress.party.len);
     try std.testing.expect(state.combat.progress.party[2].inventory.count() > 0);
-    try std.testing.expect(state.combat.runes[2] != null);
+    try std.testing.expect(state.combat.progress.party[2].rune != null);
     try std.testing.expectError(error.DuplicateMember, state.joinPartyMember(&members, catalog.value, bindings.value, "ted"));
     try std.testing.expectEqual(@as(usize, 3), state.combat.progress.party.len);
     state.extras[1].weapon_element = .fire;
@@ -2790,7 +2790,7 @@ fn finishBattleWithInput(state: *journey.State, strategy: enum { free_will, defe
     });
     for (state.combat.progress.party, 0..) |member, slot| {
         std.debug.print("  {s}: level {d}, HP {d}/{d}, {s}; entered with {d} HP and rune charges {any}\n", .{
-            member.id, state.combat.levels[slot], member.hp, member.max_hp, @tagName(member.status), entry_hp[slot], entry_charges[slot],
+            member.id, state.combat.progress.party[slot].level, member.hp, member.max_hp, @tagName(member.status), entry_hp[slot], entry_charges[slot],
         });
     }
     for (state.combat.enemy_hp[0..state.combat.enemyCount()], 0..) |hp, slot| {
@@ -2979,7 +2979,7 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
         var state = try harness.newState(&members);
 
         try expectPartyOrder(&state, &.{"hero"});
-        try std.testing.expect(state.combat.runes[0] == null);
+        try std.testing.expect(state.combat.progress.party[0].rune == null);
 
         // Talk to Emperor & Kraze -> home cutscene lands in va1_room_1.
         try walkTo(allocator, &state, null, 464, 632, &.{});
@@ -3068,12 +3068,12 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
         try walkTo(allocator, &state, null, 504, 200, &.{});
         try interactFacing(&state, .up, &.{1});
         try expectPartyOrder(&state, &.{ "hero", "gremio", "cleo", "viktor" });
-        try std.testing.expectEqual(@as(u8, 7), state.combat.levels[3]);
+        try std.testing.expectEqual(@as(u8, 7), state.combat.progress.party[3].level);
 
         // Also verify character stats and Soul Eater persist across room transition into Marie's Inn before saving.
         try walkTo(allocator, &state, "va1_room_3", 576, 632, &.{});
         try expectPartyOrder(&state, &.{ "hero", "gremio", "cleo", "viktor" });
-        try std.testing.expectEqual(@as(u8, 7), state.combat.levels[3]);
+        try std.testing.expectEqual(@as(u8, 7), state.combat.progress.party[3].level);
         try std.testing.expectEqualStrings("soul_eater", state.combat.rune(0).?.id);
 
         expected_story_before_save = state.combat.progress.story.scenario.?;
@@ -3093,7 +3093,7 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
 
         try std.testing.expectEqualStrings("va1_room_3", currentRoomName(&reloaded));
         try expectPartyOrder(&reloaded, &.{ "hero", "gremio", "cleo", "viktor" });
-        try std.testing.expectEqual(@as(u8, 7), reloaded.combat.levels[3]);
+        try std.testing.expectEqual(@as(u8, 7), reloaded.combat.progress.party[3].level);
         try std.testing.expectEqualStrings("soul_eater", reloaded.combat.rune(0).?.id);
         try std.testing.expectEqual(@as(?u8, 1), reloaded.combat.runeByteFor(0));
         try std.testing.expectEqualSlices(u16, &expected_charges, &reloaded.combat.progress.party[0].rune_charges);
@@ -3236,7 +3236,7 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
             if (entry != null and std.mem.eql(u8, entry.?, "blueprint")) break true;
         } else false;
         try std.testing.expect(blueprint_found);
-        try std.testing.expectEqual(@as(u8, 6), reloaded.combat.levels[4]);
+        try std.testing.expectEqual(@as(u8, 6), reloaded.combat.progress.party[4].level);
         try std.testing.expectEqualStrings("wind", reloaded.combat.rune(4).?.id);
         try journey.save(io, allocator, temp.dir, reloaded);
         try journey.restore(io, allocator, temp.dir, &reloaded);
@@ -3547,7 +3547,7 @@ test "canonical Soul Eater spell slots persist without changing charges or the c
     const rules = state.combat.content.systems.?;
     const index = rules.runeIndex("soul_eater").?;
     // Supplied attachment isolates spell visibility from the story grant event.
-    state.combat.runes[0] = index;
+    state.combat.progress.party[0].rune = index;
     const charges = state.combat.progress.party[0].rune_charges;
     for (1..5) |slots| {
         state.combat.progress.story.scenario.?.soul_eater_spell_slots = @intCast(slots);
@@ -3591,7 +3591,7 @@ test "canonical Odessa scene preserves a full shared inventory and still continu
     var state = try harness.newState(&members);
     // Supplied raid checkpoint isolates the source append-failure boundary.
     for ([_][]const u8{ "gremio", "cleo", "viktor" }) |id| try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, id);
-    state.combat.runes[0] = state.combat.content.systems.?.runeIndex("soul_eater").?;
+    state.combat.progress.party[0].rune = state.combat.content.systems.?.runeIndex("soul_eater").?;
     setScenarioBit(&state, 9, 32 | 128);
     setScenarioBit(&state, 10, 1);
     setScenarioBit(&state, 47, 3);
@@ -4314,14 +4314,14 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try interactService(&state, .up);
     try std.testing.expectEqual(.blacksmith, state.menu.phase);
     while (state.menu.member != 2) _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
-    while (state.combat.weapon_levels[2] < 4) {
+    while (state.combat.progress.party[2].weapon_level < 4) {
         const price = try state.combat.sharpenPrice(2, state.menu.service_limit);
         if (state.combat.progress.money < price + 500) break;
-        const level = state.combat.weapon_levels[2];
+        const level = state.combat.progress.party[2].weapon_level;
         _ = try state.tickWithFieldEvents(confirm, .{});
         _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
-        try std.testing.expectEqual(level + 1, state.combat.weapon_levels[2]);
+        try std.testing.expectEqual(level + 1, state.combat.progress.party[2].weapon_level);
         _ = try state.tickWithFieldEvents(confirm, .{});
     }
     _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
@@ -4625,9 +4625,9 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     for ([_][]const u8{ "gremio", "cleo", "viktor", "camille", "tai_ho", "yam_koo", "luc" }) |id| {
         const reserve = for (state.reserves) |entry| {
             const owned = entry orelse break null;
-            if (std.mem.eql(u8, owned.member.id, id)) break owned;
+            if (std.mem.eql(u8, owned.id, id)) break owned;
         } else null;
-        const member = (reserve orelse return error.MissingFoundingReserve).member;
+        const member = reserve orelse return error.MissingFoundingReserve;
         try std.testing.expectEqual(member.max_hp, member.hp);
         try std.testing.expectEqual(member.max_rune_charges, member.rune_charges);
     }
@@ -5192,7 +5192,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     const rules = state.field_state.item_rules.?;
     var sharpening_budget: u32 = 0;
     const upgrade_costs = state.combat.partyProfile(0).weapon.?.upgrade_costs;
-    for (upgrade_costs[@min(state.combat.weapon_levels[0], 8)..8]) |price| sharpening_budget += price;
+    for (upgrade_costs[@min(state.combat.progress.party[0].weapon_level, 8)..8]) |price| sharpening_budget += price;
     for (duel_gear, 0..) |gear, index| {
         const price = rules.offerGood(gear.item).?.price;
         const money = state.combat.progress.money;
@@ -5215,7 +5215,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
         _ = try state.tickWithFieldEvents(confirm, .{});
         for (0..index) |_| _ = try state.tickWithFieldEvents(.{ .field = .{ .menu_direction = .down } }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
-        try std.testing.expectEqual(state.combat.gearIndex(gear.item), state.combat.loadouts[0].get(gear.slot));
+        try std.testing.expectEqual(state.combat.gearIndex(gear.item), state.combat.progress.party[0].loadout.get(gear.slot));
         _ = try state.tickWithFieldEvents(confirm, .{});
     }
     _ = try state.tickWithFieldEvents(.{ .menu = true }, .{});
@@ -5231,15 +5231,15 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, null, 192, 96, &.{});
     try interactService(&state, .up);
     try std.testing.expectEqual(.blacksmith, state.menu.phase);
-    while (state.combat.weapon_levels[0] < state.menu.service_limit) {
+    while (state.combat.progress.party[0].weapon_level < state.menu.service_limit) {
         const price = try state.combat.sharpenPrice(0, state.menu.service_limit);
         if (state.combat.progress.money < price) break;
-        const level = state.combat.weapon_levels[0];
+        const level = state.combat.progress.party[0].weapon_level;
         _ = try state.tickWithFieldEvents(confirm, .{});
         _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
-        try std.testing.expectEqual(level + 1, state.combat.weapon_levels[0]);
+        try std.testing.expectEqual(level + 1, state.combat.progress.party[0].weapon_level);
     }
     _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
     try walkTo(allocator, &state, "vc2_room_0", 184, 232, &.{});
@@ -5334,7 +5334,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
             },
             .finished => {
                 if (duel.outcome != .victory) std.debug.print("Kwanda duel ended in round {d}: hero HP {d}/{d}, attack {d}, defense {d}, weapon level {d}, foe HP {d}\n", .{
-                    duel.round, duel.fighters[0].hp, duel.fighters[0].maximum_hp, duel.fighters[0].attack, duel.fighters[0].defense, state.combat.weapon_levels[0], duel.fighters[1].hp,
+                    duel.round, duel.fighters[0].hp, duel.fighters[0].maximum_hp, duel.fighters[0].attack, duel.fighters[0].defense, state.combat.progress.party[0].weapon_level, duel.fighters[1].hp,
                 });
                 try std.testing.expectEqual(.victory, duel.outcome.?);
                 won_kwanda = true;
@@ -5459,7 +5459,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try expectPartyOrder(&state, &.{ "hero", "gremio", "kirkis", "viktor", "cleo", "flik" });
     for (state.reserves) |reserve| {
         const member = reserve orelse continue;
-        if (std.mem.eql(u8, member.member.id, "luc")) {
+        if (std.mem.eql(u8, member.id, "luc")) {
             try std.testing.expectEqualDeep(luc, member);
             break;
         }
@@ -5599,7 +5599,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try expectPartyOrder(&state, prison_party);
     for (state.reserves) |reserve| {
         const member = reserve orelse continue;
-        if (std.mem.eql(u8, member.member.id, "kimberly")) {
+        if (std.mem.eql(u8, member.id, "kimberly")) {
             try std.testing.expectEqual(17, member.level);
             break;
         }
@@ -5732,7 +5732,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try std.testing.expect(state.combat.progress.story.scenario.?.recruit_flags[28] & 1 != 0);
     try expectPartyOrder(&state, &.{ "hero", "viktor", "flik" });
     const milich_recruited = for (state.reserves) |reserve| {
-        if (reserve != null and std.mem.eql(u8, reserve.?.member.id, "milich")) break true;
+        if (reserve != null and std.mem.eql(u8, reserve.?.id, "milich")) break true;
     } else false;
     try std.testing.expect(milich_recruited);
     for ([_]u8{ 35, 17 }) |character| {
@@ -5986,7 +5986,7 @@ test "canonical Pannu Yakuta recruits Valeria at the hero's level plus two advan
         if (full) for ([_][]const u8{ "pahn", "cleo", "gremio", "viktor", "camille" }) |member| {
             try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, member);
         };
-        const expected_level = state.combat.levels[0] + 3; // Valeria starts at level one.
+        const expected_level = state.combat.progress.party[0].level + 3; // Valeria starts at level one.
         setScenarioBit(&state, 18, 4);
         state.field_state.enterRoom(state.package.roomIndex("vc4_room_0").?, .{ .x = 248, .y = 464 });
         state.field_state.setWorldEntry(state.package, "world_c_point_3");
@@ -6002,13 +6002,13 @@ test "canonical Pannu Yakuta recruits Valeria at the hero's level plus two advan
         if (full) {
             for (state.reserves) |entry| {
                 const owned = entry orelse continue;
-                if (!std.mem.eql(u8, owned.member.id, "valeria")) continue;
+                if (!std.mem.eql(u8, owned.id, "valeria")) continue;
                 try std.testing.expectEqual(expected_level, owned.level);
                 break;
             } else return error.MissingValeriaReserve;
         } else {
             try expectPartyOrder(&state, &.{ "hero", "valeria" });
-            try std.testing.expectEqual(expected_level, state.combat.levels[1]);
+            try std.testing.expectEqual(expected_level, state.combat.progress.party[1].level);
         }
     }
 }
@@ -6102,7 +6102,7 @@ test "canonical Pahn duel outcomes return to Toran through ordinary inputs" {
         defer state.deinitActiveModes();
         try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, "pahn");
         try expectPartyOrder(&state, &.{ "hero", "pahn" });
-        if (prepared) while (state.combat.levels[1] < 75) {
+        if (prepared) while (state.combat.progress.party[1].level < 75) {
             var rolls: [7]u15 = undefined;
             for (&rolls) |*roll| roll.* = state.combat.roll();
             state.combat.levelUp(1, rolls);
@@ -6298,9 +6298,9 @@ test "canonical Soniere warehouse keeps equipped and capped items with Gremio" {
     try std.testing.expectEqual(field.game_state.storage.capacity, state.combat.progress.storage.quantity(.needle));
     const gremio = for (state.reserves) |entry| {
         const member = entry orelse continue;
-        if (std.mem.eql(u8, member.member.id, "gremio")) break member;
+        if (std.mem.eql(u8, member.id, "gremio")) break member;
     } else return error.MissingGremioReserve;
-    const bag = gremio.member.inventory;
+    const bag = gremio.inventory;
     try std.testing.expectEqual(3, bag.count());
     try std.testing.expectEqual(.leather_coat, bag.slots[0].?.id);
     try std.testing.expectEqual(.cape, bag.slots[1].?.id);
@@ -6382,7 +6382,7 @@ test "canonical Kirkis recruitment makes room in a full party" {
     try std.testing.expect(scenarioBitSet(&state, 15, 4 | 8));
     for (state.reserves) |entry| {
         const owned = entry orelse continue;
-        if (std.mem.eql(u8, owned.member.id, "luc")) {
+        if (std.mem.eql(u8, owned.id, "luc")) {
             try std.testing.expectEqualDeep(luc, owned);
             break;
         }
@@ -7277,7 +7277,7 @@ test "canonical level predicates use live roster levels and select the source fa
         var members: [6]battle.Member = undefined;
         var state = try harness.newState(&members);
         try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, "kirkis");
-        state.combat.levels[1] = level;
+        state.combat.progress.party[1].level = level;
         setScenarioBit(&state, 19, 8);
         setScenarioBit(&state, 160, 8);
         state.field_state.progress.story.scenario.?.castle_tier = 2;
@@ -7287,7 +7287,7 @@ test "canonical level predicates use live roster levels and select the source fa
         const owner = state.field_event orelse return error.MissingLevelInteraction;
         try std.testing.expectEqualStrings(if (level == 34) "vb6_room_12_e06_interaction" else "vb6_room_12_e05_interaction", owner.session.instance.?.program_id);
         try std.testing.expectEqual(level, owner.binding.character_levels.?[4]);
-        try std.testing.expectEqual(state.combat.levels[0], owner.binding.character_levels.?[8]);
+        try std.testing.expectEqual(state.combat.progress.party[0].level, owner.binding.character_levels.?[8]);
         if (level == 35) {
             var missing = owner.binding.*;
             missing.character_levels = null;
@@ -7351,7 +7351,7 @@ test "canonical source chest preserves acquisition message and retries full bags
     defer harness.deinit();
     var members: [6]battle.Member = undefined;
     var state = try harness.newState(&members);
-    state.combat.loadouts = @splat(.{});
+    for (state.combat.progress.party) |*member| member.loadout = .{};
     for (state.combat.progress.party) |*member| for (&member.inventory.slots) |*slot| {
         slot.* = .{ .id = .medicine, .uses = 6 };
     };
@@ -7400,8 +7400,8 @@ test "canonical item predicates use active bags and equipped gear" {
         try state.combat.equipSlot(0, .head, if (equipped) state.combat.gearIndex(.bandanna).? else null);
         var reserve = try party_session.catalogue.materializeBound(state.combat.*, state.party_catalog.?, "kirkis", state.party_bindings);
         reserve.owned.loadout = .{};
-        reserve.owned.member.inventory = .{};
-        try std.testing.expect(try reserve.owned.member.inventory.receive(.antitoxin));
+        reserve.owned.inventory = .{};
+        try std.testing.expect(try reserve.owned.inventory.receive(.antitoxin));
         try state.retainReserve(reserve.owned);
         state.field_state.enterRoom(state.package.roomIndex("vb2_room_5").?, .{ .x = 112, .y = 152 });
         _ = try state.tickWithFieldEvents(.{}, .{});
@@ -7693,11 +7693,11 @@ noinline fn preparePahnForTeo(allocator: std.mem.Allocator, state: *journey.Stat
     const pahn = for (state.combat.progress.party, 0..) |member, slot| {
         if (std.mem.eql(u8, member.id, "pahn")) break slot;
     } else return error.MissingPahnInParty;
-    const level_before = state.combat.levels[pahn];
+    const level_before = state.combat.progress.party[pahn].level;
     try crossToranToRegionD(allocator, state);
     // Cover the claw upgrade, armor, and the return stay.
     for (0..420) |pass| {
-        if (state.combat.levels[pahn] >= 29 and state.combat.progress.money >= 124000) break;
+        if (state.combat.progress.party[pahn].level >= 29 and state.combat.progress.money >= 124000) break;
         if (state.combat.progress.party[pahn].hp == 0 or (pass > 0 and pass % 8 == 0)) {
             try walkThroughEncounters(allocator, state, "vd2_room_0", 968, 456, &.{}, .retreat);
             try walkTo(allocator, state, "vd2_room_4", 144, 368, &.{});
@@ -7709,7 +7709,7 @@ noinline fn preparePahnForTeo(allocator: std.mem.Allocator, state: *journey.Stat
         }
         try walkThroughEncounters(allocator, state, null, if (pass % 2 == 0) 936 else 872, 472, &.{}, .prepared);
     }
-    try std.testing.expect(level_before < 29 and state.combat.levels[pahn] >= 29);
+    try std.testing.expect(level_before < 29 and state.combat.progress.party[pahn].level >= 29);
     try std.testing.expect(state.combat.progress.money >= 124000);
 
     try walkThroughEncounters(allocator, state, "vd2_room_0", 968, 456, &.{}, .retreat);
@@ -7719,18 +7719,18 @@ noinline fn preparePahnForTeo(allocator: std.mem.Allocator, state: *journey.Stat
     try std.testing.expectEqual(.blacksmith, state.menu.phase);
     while (state.menu.member != pahn) _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
     const confirm: pause_menu.Input = .{ .field = .{ .action = true } };
-    while (state.combat.weapon_levels[pahn] < 11) {
+    while (state.combat.progress.party[pahn].weapon_level < 11) {
         const price = try state.combat.sharpenPrice(pahn, state.menu.service_limit);
         if (state.combat.progress.money < price + 500) break;
-        const level = state.combat.weapon_levels[pahn];
+        const level = state.combat.progress.party[pahn].weapon_level;
         _ = try state.tickWithFieldEvents(confirm, .{});
         _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
-        try std.testing.expectEqual(level + 1, state.combat.weapon_levels[pahn]);
+        try std.testing.expectEqual(level + 1, state.combat.progress.party[pahn].weapon_level);
     }
     _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
-    try std.testing.expectEqual(@as(u8, 11), state.combat.weapon_levels[pahn]);
+    try std.testing.expectEqual(@as(u8, 11), state.combat.progress.party[pahn].weapon_level);
     try walkTo(allocator, state, "vd2_room_0", 184, 232, &.{});
     try walkTo(allocator, state, "world_d", 16, 128, &.{});
     try walkThroughEncounters(allocator, state, "vd1_room_0", 608, 408, &.{}, .retreat);
@@ -7758,7 +7758,7 @@ noinline fn preparePahnForTeo(allocator: std.mem.Allocator, state: *journey.Stat
         _ = try state.tickWithFieldEvents(confirm, .{});
         for (0..index) |_| _ = try state.tickWithFieldEvents(.{ .field = .{ .menu_direction = .down } }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
-        try std.testing.expectEqual(state.combat.gearIndex(gear.item), state.combat.loadouts[pahn].get(gear.slot));
+        try std.testing.expectEqual(state.combat.gearIndex(gear.item), state.combat.progress.party[pahn].loadout.get(gear.slot));
         _ = try state.tickWithFieldEvents(confirm, .{});
     }
     _ = try state.tickWithFieldEvents(.{ .menu = true }, .{});
@@ -7881,7 +7881,7 @@ noinline fn playTeoRematchAndRegionE(allocator: std.mem.Allocator, state: *journ
     try std.testing.expectEqual(cave_party_count, state.combat.partyCount());
     try std.testing.expect(state.combat.progress.story.scenario.?.recruit_flags[18] & 1 != 0);
     const fukien_recruited = for (state.reserves) |entry| {
-        if (entry) |member| if (std.mem.eql(u8, member.member.id, "fukien")) break true;
+        if (entry) |member| if (std.mem.eql(u8, member.id, "fukien")) break true;
     } else false;
     try std.testing.expect(fukien_recruited);
     try std.testing.expectEqualStrings("ve2_room_0", currentRoomName(state));
@@ -8611,7 +8611,7 @@ test "canonical duel art presentation and headless battle duel war transitions" 
 
     try baseline.apply(&state);
     try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, "pahn");
-    while (state.combat.levels[1] < 75) {
+    while (state.combat.progress.party[1].level < 75) {
         var rolls: [7]u15 = undefined;
         for (&rolls) |*roll| roll.* = state.combat.roll();
         state.combat.levelUp(1, rolls);

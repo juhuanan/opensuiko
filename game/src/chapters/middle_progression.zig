@@ -243,17 +243,17 @@ pub fn planDeposit(asset: Asset, packet: items.catalogue.Packet, entry_id: []con
     var candidate = snapshot;
     const member = &candidate.members[member_index].?;
     var transferred: u8 = 0;
-    var slot = member.member.inventory.slots.len;
+    var slot = member.inventory.slots.len;
     while (slot > 0) {
         slot -= 1;
-        const stack = member.member.inventory.slots[slot] orelse continue;
+        const stack = member.inventory.slots[slot] orelse continue;
         const item = items.catalogue.findById(packet, @tagName(stack.id)) orelse return error.UnknownItemIdentity;
         const eligible = try items.ledger.transferEligible(item, .{
             .identified = stack.identified,
             .worn = items.owners.wearsItem(catalogue, member.*, slot),
         });
         if (!eligible) continue;
-        try candidate.storage.deposit(&member.member.inventory, slot);
+        try candidate.storage.deposit(&member.inventory, slot);
         transferred += 1;
     }
     return .{

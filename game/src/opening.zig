@@ -9,7 +9,7 @@ pub const json = @import("opening_data").json;
 pub const BaseStats = struct { power: u8, skill: u8, defense: u8, speed: u8, magic: u8, luck: u8 };
 pub const Equipment = struct { head: ?field.items.Id = null, body: ?field.items.Id = null, shield: ?field.items.Id = null, accessory_one: ?field.items.Id = null, accessory_two: ?field.items.Id = null };
 pub const Hero = struct {
-    member: field.game_state.Member,
+    member: field.game_state.CharacterRecord,
     level: u8,
     experience: u16,
     base_stats: BaseStats,
@@ -18,7 +18,7 @@ pub const Hero = struct {
     equipped: Equipment,
 
     fn validate(self: Hero) !void {
-        var members = [_]field.game_state.Member{self.member};
+        var members = [_]field.game_state.Member{self.member.character()};
         try (field.game_state.Progress{ .party = &members, .money = 0 }).validate();
         if (!std.mem.eql(u8, self.member.id, "hero") or self.level == 0 or self.level > 99 or self.weapon_level == 0 or self.weapon_level > 16) return error.InvalidOpeningHero;
         // Only the rune-free opening seed is integrated; later attachment needs shared rune rules.

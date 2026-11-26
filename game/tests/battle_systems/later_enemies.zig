@@ -51,7 +51,7 @@ test "later enemy source formations finish defended rounds including self sleep"
             for (combat.progress.party, 0..) |*member, slot| {
                 member.max_hp = 5000;
                 member.hp = 5000;
-                combat.runes[slot] = if (variant == 2) combat.content.systems.?.runeIndex("turtle").? else null;
+                combat.progress.party[slot].rune = if (variant == 2) combat.content.systems.?.runeIndex("turtle").? else null;
                 combat.actions[slot] = .defend;
             }
             combat.phase = .resolving;
@@ -322,8 +322,8 @@ test "Orc source painting rewards enter inventory without dropping their identit
         var combat = try battle.State.init(content.value, items.value, &members, 17);
         combat.encounter = try single(content.value, "orc");
         combat.startEncounter();
-        combat.levels = @splat(99);
-        combat.experience = @splat(0);
+        for (combat.progress.party) |*member| member.level = 99;
+        for (combat.progress.party) |*member| member.experience = 0;
         var values: [256]u15 = @splat(0);
         values[0] = @intCast(slot);
         var draws = h.rules.Draws{ .values = &values };
@@ -352,8 +352,8 @@ test "region B source crystal and equipment rewards preserve inventory identity"
         var combat = try battle.State.init(content.value, items.value, &members, 17);
         combat.encounter = try single(content.value, name);
         combat.startEncounter();
-        combat.levels = @splat(99);
-        combat.experience = @splat(0);
+        for (combat.progress.party) |*member| member.level = 99;
+        for (combat.progress.party) |*member| member.experience = 0;
         var values: [256]u15 = @splat(0);
         var draws = h.rules.Draws{ .values = &values };
         combat.replay_draws = &draws;
@@ -377,8 +377,8 @@ test "Ivy source ornament rewards retain unidentified appraisal and sale state" 
         var combat = try battle.State.init(content.value, items.value, &members, 17);
         combat.encounter = try single(content.value, "ivy");
         combat.startEncounter();
-        combat.levels = @splat(99);
-        combat.experience = @splat(0);
+        for (combat.progress.party) |*member| member.level = 99;
+        for (combat.progress.party) |*member| member.experience = 0;
         var values: [256]u15 = @splat(0);
         values[0] = @intCast(slot);
         var draws = h.rules.Draws{ .values = &values };

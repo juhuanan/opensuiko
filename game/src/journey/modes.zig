@@ -36,9 +36,9 @@ pub fn startDuelById(state: *journey.State, allocator: std.mem.Allocator, duel_i
             if (std.mem.eql(u8, member.id, target_id)) break :blk duelFighter(member, state.combat.stats(index));
         }
         for (state.reserves, state.reserve_extras) |entry, extra| if (entry) |owned| {
-            if (!std.mem.eql(u8, owned.member.id, target_id)) continue;
+            if (!std.mem.eql(u8, owned.id, target_id)) continue;
             const augment: battle.systems.WeaponAugment = if (extra) |value| party_session.weaponAugment(value) else .{};
-            break :blk duelFighter(owned.member, battle.equippedStats(state.combat.content, owned, augment));
+            break :blk duelFighter(owned, battle.equippedStats(state.combat.content, owned, augment));
         };
         break :blk duel.FighterState{ .maximum_hp = 240, .hp = 240, .attack = 160, .defense = 80 };
     };

@@ -190,7 +190,7 @@ pub const Host = struct {
                     .poisoned => .poisoned,
                     .unconscious => .unconscious,
                 },
-                .level = @max(state.combat.levels[index], 1),
+                .level = @max(state.combat.progress.party[index].level, 1),
                 .weapon_level = 1,
             };
         }

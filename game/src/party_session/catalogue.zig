@@ -105,10 +105,16 @@ pub fn materializeBound(combat: battle.State, catalog: Catalogue, id: []const u8
     }
     const base_attack = std.math.add(u16, seed.stats[0], weapon.powers[seed.weapon.level - 1]) catch return error.InvalidSeed;
     var owned: battle.OwnedMember = .{
-        .member = .{ .id = profile.id, .name = profile.name, .hp = seed.hp, .max_hp = seed.max_hp, .status = .healthy, .rune_charges = seed.charges, .max_rune_charges = @splat(0) },
+        .id = profile.id,
+        .name = profile.name,
+        .hp = seed.hp,
+        .max_hp = seed.max_hp,
+        .status = .healthy,
+        .rune_charges = seed.charges,
+        .max_rune_charges = @splat(0),
         .level = seed.level,
         .experience = seed.experience,
-        .stats = .{ .attack = base_attack, .skill = seed.stats[1], .defense = seed.stats[2], .speed = seed.stats[3], .magic = seed.stats[4], .luck = seed.stats[5] },
+        .base_stats = .{ .attack = base_attack, .skill = seed.stats[1], .defense = seed.stats[2], .speed = seed.stats[3], .magic = seed.stats[4], .luck = seed.stats[5] },
         .weapon_level = seed.weapon.level,
         .loadout = .{},
         .rune = null,
@@ -117,7 +123,7 @@ pub fn materializeBound(combat: battle.State, catalog: Catalogue, id: []const u8
     for (seed.inventory, 0..) |item, i| {
         const item_id = std.meta.stringToEnum(field.items.Id, item.id) orelse return error.ItemUnavailable;
         const uses: u16 = if (item_id.maxUses() == 0) 0 else if (item.uses == 0) item_id.maxUses() else item.uses;
-        owned.member.inventory.slots[i] = .{ .id = item_id, .uses = uses, .identified = item.identified };
+        owned.inventory.slots[i] = .{ .id = item_id, .uses = uses, .identified = item.identified };
         if (item.slot) |slot| {
             var equipment: ?usize = null;
             for (systems.equipment, 0..) |entry, index| if (std.mem.eql(u8, entry.id, item.id)) {
@@ -154,8 +160,8 @@ pub fn materializeBound(combat: battle.State, catalog: Catalogue, id: []const u8
     for (std.enums.values(battle.systems.EquipmentSlot)) |slot| if (owned.loadout.get(slot)) |equip_id| {
         magic_bonus += systems.equipment[equip_id].bonuses[4];
     };
-    const magic: u16 = @intCast(std.math.clamp(@as(i32, owned.stats.magic) + magic_bonus, 0, 9999));
-    owned.member.max_rune_charges = systems.magicCapacity(magic);
+    const magic: u16 = @intCast(std.math.clamp(@as(i32, owned.base_stats.magic) + magic_bonus, 0, 9999));
+    owned.max_rune_charges = systems.magicCapacity(magic);
     try combat.validateOwnedMember(owned);
     return .{ .owned = owned, .extra = extra };
 }

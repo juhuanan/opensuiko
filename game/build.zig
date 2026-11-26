@@ -148,7 +148,7 @@ pub fn build(b: *std.Build) !void {
         .{ "game", "src/battle_menu.zig", &.{"combat_systems"} },
         .{ "campaign_policies", "src/campaign_policies/root.zig", &.{ "battle_rules", "campaign_policies_data" } },
         .{ "battle_systems", "src/battle_systems/root.zig", &.{ "battle_rules", "validation", "campaign_policies", "battle_systems_data" } },
-        .{ "field", "src/field.zig", &.{ "field_dialogue", "inn_data", "inn_zon", "item_data", "validation", "event_runtime", "area_host" } },
+        .{ "field", "src/field.zig", &.{ "field_dialogue", "inn_data", "inn_zon", "item_data", "validation", "event_runtime", "area_host", "battle_rules" } },
         .{ "ui_font", "src/ui_font.zig", &.{"field"} },
         .{ "ui", "src/ui.zig", &.{ "raylib", "ui_font", "field" } },
         .{ "world", "src/world.zig", &.{ "battle_rules", "world_data", "field" } },

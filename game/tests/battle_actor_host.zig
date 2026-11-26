@@ -1945,7 +1945,7 @@ test "exported actor recovery programs use party Turtle gates draws and retained
             var state = try Battle.State.init(content.value, items.value, &members, 17);
             const turtle = variant == 1;
             const existing: u8 = if (variant == 2 or turtle) 1 else 0;
-            state.runes[0] = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
+            state.progress.party[0].rune = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
             state.unbalanced[0] = existing;
             state.progress.party[0].status = .poisoned;
             state.progress.party[0].balloons = 2;
@@ -1990,7 +1990,7 @@ test "actor recovery refuses invalid targets and exhausted draws without applyin
     defer items.deinit();
     var members: [6]Battle.Member = undefined;
     var state = try Battle.State.init(content.value, items.value, &members, 17);
-    state.runes[0] = null;
+    state.progress.party[0].rune = null;
     var empty = Rules.Draws{};
     state.replay_draws = &empty;
     try std.testing.expectError(error.InvalidActorRecovery, state.requestUniteRecovery(state.partyCount(), 2));
@@ -2992,7 +2992,7 @@ test "actor status thresholds preserve side Turtle duplicate and zero HP orderin
         if (!party and (kind == .poison or kind == .balloon)) continue;
         const target = if (party) @as(usize, 0) else state.partyCount();
         const turtle = variant == 1;
-        state.runes[0] = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
+        state.progress.party[0].rune = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
         const values = [_]u15{ roll, roll };
         var draws = Rules.Draws{ .values = &values };
         state.replay_draws = &draws;
@@ -3013,7 +3013,7 @@ test "actor status thresholds preserve side Turtle duplicate and zero HP orderin
     };
     var members: [6]Battle.Member = undefined;
     var state = try Battle.State.init(content.value, items.value, &members, 17);
-    state.runes[0] = null;
+    state.progress.party[0].rune = null;
     state.progress.party[0].hp = 0;
     state.markPartyKnockout(0);
     const values = [_]u15{0};
@@ -3064,7 +3064,7 @@ test "actor status reaches the live playback bridge at its own script clock" {
         status_code[1].command.status.kind = kind;
         var members: [6]Battle.Member = undefined;
         var state = try Battle.State.init(content.value, items.value, &members, 17);
-        state.runes[1] = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
+        state.progress.party[1].rune = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
         state.unite_actors = &bundle;
         const homes: [12][3]i32 = @splat(.{ 0, 0, 0 });
         try state.unite_vm.begin(&bundle, 0, 1, 6, content.value.initial_party.?, homes[0 .. state.partyCount() + state.enemyCount()], 0);
@@ -3097,8 +3097,8 @@ test "actor status balloons draw before worn-hat duplicate and departure guards"
     for (0..6) |actor| for (0..4) |existing| for (0..4) |variant| {
         var members: [6]Battle.Member = undefined;
         var state = try Battle.State.init(content.value, items.value, &members, 17);
-        state.runes[actor] = if (variant == 3) content.value.systems.?.runeIndex("turtle").? else null;
-        state.loadouts[actor].head = if (variant == 1) state.gearIndex(.pointed_hat).? else null;
+        state.progress.party[actor].rune = if (variant == 3) content.value.systems.?.runeIndex("turtle").? else null;
+        state.progress.party[actor].loadout.head = if (variant == 1) state.gearIndex(.pointed_hat).? else null;
         if (variant == 1 or variant == 2) members[actor].inventory.slots[0] = .{ .id = .pointed_hat, .uses = 0 };
         members[actor].balloons = @intCast(existing);
         const before = members[actor];
@@ -3122,7 +3122,7 @@ test "actor status balloons draw before worn-hat duplicate and departure guards"
     };
     var members: [6]Battle.Member = undefined;
     var state = try Battle.State.init(content.value, items.value, &members, 17);
-    state.runes[0] = null;
+    state.progress.party[0].rune = null;
     var empty = Rules.Draws{ .values = &.{} };
     state.replay_draws = &empty;
     const before = members;

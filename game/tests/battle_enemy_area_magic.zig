@@ -561,8 +561,8 @@ test "area magic AI uses front scan secondary special thresholds pending wait em
         try std.testing.expect(!miss_s.state.unite_vm.hasActors() and miss_s.state.active == null);
         // Protect partner via state.protector
         cov_s.members[0].hp = 10;
-        cov_s.state.base_stats[0].luck = 0;
-        cov_s.state.base_stats[1].luck = 999;
+        cov_s.state.progress.party[0].base_stats.luck = 0;
+        cov_s.state.progress.party[1].base_stats.luck = 999;
         var p_values: [512]u15 = @splat(51);
         var p_draws = battle.systems.Draws{ .values = &p_values };
         _ = try cov_s.state.protector(0);
@@ -587,11 +587,11 @@ test "Sorcerer special drives 20 psxSqrt lines 32 beam sprites centered impact s
         try area_suite.attachAll(&s);
         const soul_eater_idx = try area_suite.enableSoulEaterRune(alloc, &s);
         area_suite.prepareDefendingParty(&s, 9999);
-        s.state.runes = @splat(null);
-        if (slot == 1) s.state.runes[slot] = soul_eater_idx;
-        if (slot == 2) s.state.runes[slot] = s.content.systems.?.runeIndex("resurrection");
-        if (slot == 3) s.state.runes[slot] = s.content.systems.?.runeIndex("water");
-        for (0..s.state.partyCount()) |i| s.state.base_stats[i].magic = 40;
+        for (s.state.progress.party) |*member| member.rune = null;
+        if (slot == 1) s.state.progress.party[slot].rune = soul_eater_idx;
+        if (slot == 2) s.state.progress.party[slot].rune = s.content.systems.?.runeIndex("resurrection");
+        if (slot == 3) s.state.progress.party[slot].rune = s.content.systems.?.runeIndex("water");
+        for (0..s.state.partyCount()) |i| s.state.progress.party[i].base_stats.magic = 40;
         const owner = s.state.partyCount();
         try s.state.beginEnemyMagic(owner, slot);
 
@@ -677,10 +677,10 @@ test "Siren special runs 20-tick warmup camera 4 columns 16 sirenNote quads 8 wa
     const soul_eater_idx = try area_suite.enableSoulEaterRune(alloc, &s);
     area_suite.prepareDefendingParty(&s, 9999);
     s.state.actor_camera = try @TypeOf(s.state.actor_camera.?).init(battle.layout.currentCamera(s.state.*));
-    s.state.runes = @splat(null);
-    s.state.runes[1] = s.content.systems.?.runeIndex("turtle");
-    s.state.runes[2] = soul_eater_idx;
-    for (0..s.state.partyCount()) |i| s.state.base_stats[i].magic = 40;
+    for (s.state.progress.party) |*member| member.rune = null;
+    s.state.progress.party[1].rune = s.content.systems.?.runeIndex("turtle");
+    s.state.progress.party[2].rune = soul_eater_idx;
+    for (0..s.state.partyCount()) |i| s.state.progress.party[i].base_stats.magic = 40;
     const owner = s.state.partyCount();
     try s.state.beginEnemyMagic(owner, 0);
 
@@ -756,12 +756,12 @@ test "Earth Golem special runs 6 rock arcs camera z pulses centered golem_impact
     var s = try area_suite.setup(alloc, &f, "area_h_7");
     try area_suite.attachAll(&s);
     area_suite.prepareDefendingParty(&s, 9999);
-    s.state.runes = @splat(null);
-    s.state.runes[1] = s.content.systems.?.runeIndex("earth"); // rune=6 -> target_rune_elements[5]=3 == element
-    s.state.runes[2] = null; // fallback_by_slot -> slot 2 + 1 = 3 == element
-    s.state.runes[3] = s.content.systems.?.runeIndex("water"); // rune=3 -> raw=2 != 3
-    s.state.runes[4] = s.content.systems.?.runeIndex("shrike"); // rune=9 -> raw=0 -> fallback=5 != 3
-    for (0..s.state.partyCount()) |i| s.state.base_stats[i].magic = 40;
+    for (s.state.progress.party) |*member| member.rune = null;
+    s.state.progress.party[1].rune = s.content.systems.?.runeIndex("earth"); // rune=6 -> target_rune_elements[5]=3 == element
+    s.state.progress.party[2].rune = null; // fallback_by_slot -> slot 2 + 1 = 3 == element
+    s.state.progress.party[3].rune = s.content.systems.?.runeIndex("water"); // rune=3 -> raw=2 != 3
+    s.state.progress.party[4].rune = s.content.systems.?.runeIndex("shrike"); // rune=9 -> raw=0 -> fallback=5 != 3
+    for (0..s.state.partyCount()) |i| s.state.progress.party[i].base_stats.magic = 40;
     const owner = s.state.partyCount();
     try s.state.beginEnemyMagic(owner, 0);
 
@@ -826,9 +826,9 @@ test "Earth Golem special runs 6 rock arcs camera z pulses centered golem_impact
     var s2 = try area_suite.setup(alloc, &f, "area_h_7");
     try area_suite.attachAll(&s2);
     area_suite.prepareDefendingParty(&s2, 9999);
-    s2.state.runes = @splat(null);
-    s2.state.runes[2] = s2.content.systems.?.runeIndex("water");
-    for (0..s2.state.partyCount()) |i| s2.state.base_stats[i].magic = 40;
+    for (s2.state.progress.party) |*member| member.rune = null;
+    s2.state.progress.party[2].rune = s2.content.systems.?.runeIndex("water");
+    for (0..s2.state.partyCount()) |i| s2.state.progress.party[i].base_stats.magic = 40;
     try s2.state.beginEnemyMagic(s2.state.partyCount(), 0);
     var draws2 = battle.systems.Draws{ .values = &values };
     for (0..350) |_| {

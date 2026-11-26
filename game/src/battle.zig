@@ -64,7 +64,8 @@ pub const UniteTrack = types_mod.UniteTrack;
 pub const UniteScene = types_mod.UniteScene;
 pub const Profile = types_mod.Profile;
 pub const Encounter = types_mod.Encounter;
-pub const OwnedMember = types_mod.OwnedMember;
+pub const OwnedMember = field.game_state.Character;
+pub const OwnedMemberRecord = types_mod.OwnedMemberRecord;
 pub const equippedStats = battle_stats_mod.equippedStats;
 pub const Protection = types_mod.Protection;
 pub const PartyAttackTiming = types_mod.PartyAttackTiming;
@@ -142,7 +143,6 @@ pub const State = struct {
     unite_actors: ?*const actor_host.Bundle = null,
     unite_vm: unite_playback.State = .{},
     physical_numerator: u16 = 10,
-    weapon_augments: [6]systems.WeaponAugment = @splat(.{}),
     unite_scene: ?UniteScenePlayback = null,
     trick_wave: ?struct { owner: usize, wave: unite_trick.State, updated_at: ?u32 = null } = null,
     martial_queue: ?struct { owner: usize, queue: unite_queue.State, updated_at: ?u32 = null } = null,
@@ -201,7 +201,6 @@ pub const State = struct {
     actions: [6]?Action = @splat(null),
     enemy_hp: [6]u16 = .{ 0, 0, 0, 0, 0, 0 },
     acted: [12]bool = @splat(false),
-    experience: [6]u32 = @splat(0),
     round: u32 = 1,
     active: ?Effect = null,
     /// The accepted spell/attack composition packet and the one
@@ -222,12 +221,7 @@ pub const State = struct {
     seed: u64,
     item_slot: usize = 0,
     spell_slot: usize = 0,
-    levels: [6]u8 = @splat(1),
-    weapon_levels: [6]u8 = @splat(1),
-    base_stats: [6]Stats = @splat(.{ .attack = 0, .defense = 0, .skill = 0, .speed = 0 }),
     formation: [6]u8 = .{ 0, 1, 2, 3, 4, 5 },
-    loadouts: [6]systems.Loadout = @splat(.{}),
-    runes: [6]?usize = @splat(null),
     double_beat_pending: [6]bool = @splat(false),
     spark_pending: bool = false,
     departed: [6]bool = @splat(false),
@@ -258,28 +252,27 @@ pub const State = struct {
     pub fn restart(self: *State) void {
         for (self.progress.party, 0..) |*member, i| {
             const profile = self.content.initialProfile(i);
-            member.* = .{ .id = profile.id, .name = profile.name, .hp = profile.max_hp, .max_hp = profile.max_hp, .status = .healthy, .rune_charges = .{ 0, 0, 0, 0 }, .max_rune_charges = .{ 0, 0, 0, 0 } };
+            member.* = .{
+                .id = profile.id,
+                .name = profile.name,
+                .hp = profile.max_hp,
+                .max_hp = profile.max_hp,
+                .status = .healthy,
+                .rune_charges = @splat(0),
+                .max_rune_charges = @splat(0),
+                .level = profile.level,
+                .weapon_level = if (profile.weapon) |weapon| weapon.initial_level else 1,
+                .base_stats = profile.stats,
+                .rune = if (self.content.systems) |rules| if (profile.rune) |id| rules.runeIndex(id) else null else null,
+            };
             for (0..2) |slot| member.inventory.slots[slot] = .{ .id = .medicine, .uses = self.rules.medicine.uses };
-        }
-        self.loadouts = @splat(.{});
-        self.runes = @splat(null);
-        for (self.progress.party, 0..) |_, i| {
-            const profile = self.partyProfile(i);
-            self.levels[i] = profile.level;
-            self.weapon_levels[i] = if (profile.weapon) |weapon| weapon.initial_level else 1;
-            self.base_stats[i] = profile.stats;
-            if (self.content.systems) |rules| {
-                self.runes[i] = if (profile.rune) |id| rules.runeIndex(id) else null;
-                self.refillMagic(i);
-            }
+            if (self.content.systems != null) self.refillMagic(i);
         }
         self.formation = .{ 0, 1, 2, 3, 4, 5 };
-        self.weapon_augments = @splat(.{});
         self.unbalanced = @splat(0);
         self.escape_allowed = true;
         self.reward_drop = false;
         self.progress.money = 350;
-        self.experience = @splat(0);
         self.encounter = 0;
         self.random = .init(self.seed);
         self.quit_requested = false;
@@ -298,7 +291,7 @@ pub const State = struct {
         return self.content.partyProfile(self.progress.party[member].id) orelse unreachable;
     }
     pub fn ownedMember(self: *const State, index: usize) OwnedMember {
-        return .{ .member = self.progress.party[index], .level = self.levels[index], .experience = self.experience[index], .stats = self.base_stats[index], .weapon_level = self.weapon_levels[index], .loadout = self.loadouts[index], .rune = self.runes[index] };
+        return self.progress.party[index];
     }
     pub fn noteItemImpact(self: *State, actor: usize, before: Member) void {
         const member = &self.progress.party[actor];
@@ -317,25 +310,18 @@ pub const State = struct {
         return if (self.camera_ticks -% impact.issued_at < 30) impact else null;
     }
     pub fn setOwnedMember(self: *State, index: usize, owned: OwnedMember) void {
-        const profile = self.content.partyProfile(owned.member.id).?;
-        if (!std.mem.eql(u8, self.progress.party[index].id, owned.member.id)) self.weapon_augments[index] = .{};
-        self.progress.party[index] = owned.member;
+        const profile = self.content.partyProfile(owned.id).?;
+        self.progress.party[index] = owned;
         self.progress.party[index].id = profile.id;
         self.progress.party[index].name = profile.name;
-        self.levels[index] = owned.level;
-        self.experience[index] = owned.experience;
-        self.base_stats[index] = owned.stats;
-        self.weapon_levels[index] = owned.weapon_level;
-        self.loadouts[index] = owned.loadout;
-        self.runes[index] = owned.rune;
     }
     pub fn validateOwnedMember(self: *const State, owned: OwnedMember) !void {
-        var members = [_]Member{owned.member};
+        var members = [_]Member{owned};
         try (field.game_state.Progress{ .money = 0, .party = &members }).validate();
-        const member = owned.member;
+        const member = owned;
         const profile = self.content.partyProfile(member.id) orelse return error.InvalidMember;
         if (member.max_hp > 9999 or (member.hp == 0) != (member.status == .unconscious) or !std.mem.eql(u8, member.name, profile.name) or owned.level == 0 or owned.level > 99 or owned.experience >= 1000) return error.InvalidMember;
-        for ([_]u16{ owned.stats.attack, owned.stats.defense, owned.stats.skill, owned.stats.speed, owned.stats.magic, owned.stats.luck }) |value| if (value > 9999) return error.InvalidMember;
+        for ([_]u16{ owned.base_stats.attack, owned.base_stats.defense, owned.base_stats.skill, owned.base_stats.speed, owned.base_stats.magic, owned.base_stats.luck }) |value| if (value > 9999) return error.InvalidMember;
         if (owned.weapon_level == 0 or owned.weapon_level > 16) return error.InvalidWeapon;
         const rules = self.content.systems.?;
         for (std.enums.values(systems.EquipmentSlot)) |slot| if (owned.loadout.get(slot)) |id| {
@@ -358,12 +344,7 @@ pub const State = struct {
             if (profile.rune_locked and !original) return error.InvalidRune;
             if (!original and !definition.allows(profile.id)) return error.InvalidRune;
         } else if (profile.rune_locked) return error.RuneLocked;
-        var magic_bonus: i16 = 0;
-        for (std.enums.values(systems.EquipmentSlot)) |slot| if (owned.loadout.get(slot)) |id| {
-            magic_bonus += rules.equipment[id].bonuses[4];
-        };
-        const magic: u16 = @intCast(std.math.clamp(@as(i32, owned.stats.magic) + magic_bonus, 0, 9999));
-        const capacity = rules.magicCapacity(magic);
+        const capacity = owned.runeCapacity(rules);
         if (!std.mem.eql(u16, &capacity, &member.max_rune_charges)) return error.InvalidMagicCapacity;
     }
 

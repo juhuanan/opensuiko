@@ -111,8 +111,8 @@ test "shared party melee and ranged normal critical protection knockout and dodg
             combat.round_start_pending = false;
             combat.acted = @splat(true);
             combat.actions[0] = .{ .attack = target };
-            combat.runes = @splat(null);
-            combat.base_stats[0].attack = 300;
+            for (combat.progress.party) |*member| member.rune = null;
+            combat.progress.party[0].base_stats.attack = 300;
             combat.coordinator = .{ .stage = .dispatch, .current_actor = 0 };
             const actor = combat.partyCount() + target;
             if (variant == 2) combat.actor_conditions[actor].protection_rounds = 1;
@@ -246,9 +246,9 @@ test "shared party melee catalogue completes full Free Will encounters" {
         for (combat.progress.party, 0..) |*member, owner| {
             member.max_hp = 5000;
             member.hp = 5000;
-            combat.base_stats[owner].attack = 300;
+            combat.progress.party[owner].base_stats.attack = 300;
         }
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         var tape: h.Tape = .{};
         var draws = tape.init();
         var rounds: usize = 0;
@@ -347,7 +347,7 @@ test "shared party melee catalogue completes defended defeats and rear promotion
             member.hp = 1;
             member.inventory = .{};
         }
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         const money = combat.progress.money;
         const formation = combat.formation;
         var tape: h.Tape = .{};
@@ -454,8 +454,8 @@ test "shared party melee simultaneous Double Beat owners retain independent foll
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .attack = 0 };
     combat.actions[2] = .{ .attack = 1 };
-    combat.runes = @splat(null);
-    for ([_]usize{ 0, 2 }) |owner| combat.runes[owner] = combat.content.systems.?.runeIndex("double-beat").?;
+    for (combat.progress.party) |*member| member.rune = null;
+    for ([_]usize{ 0, 2 }) |owner| combat.progress.party[owner].rune = combat.content.systems.?.runeIndex("double-beat").?;
     combat.coordinator = .{ .stage = .select, .current_actor = 2, .completed = false, .remaining = 0 };
     var values: [4096]u15 = @splat(51);
     values[0..4].* = .{ 0, 99, 0, 99 };
@@ -568,7 +568,7 @@ test "shared party melee round boundary owns native statuses without an optional
     combat.phase = .resolving;
     combat.round_start_pending = false;
     combat.acted = @splat(true);
-    combat.runes = @splat(null);
+    for (combat.progress.party) |*member| member.rune = null;
     combat.coordinator = .{ .stage = .round_ready, .current_actor = 0, .completed = true, .remaining = 0 };
     var values: [8]u15 = @splat(0);
     var draws = h.rules.Draws{ .values = &values };

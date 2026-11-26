@@ -15,7 +15,7 @@ pub const Controller = struct {
     }
     pub fn selected(self: Controller, state: session.Session) ?[]const u8 {
         if (self.cursor >= self.count(state)) return null;
-        return state.current.members[self.cursor].?.member.id;
+        return state.current.members[self.cursor].?.id;
     }
     pub fn active(state: session.Session, id: []const u8) bool {
         for (state.current.active) |maybe| if (maybe) |value| {

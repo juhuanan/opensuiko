@@ -319,10 +319,10 @@ fn cameraOf(state: *const travel.State) mode_result.Camera {
 fn memberOf(combat: *const battle.State, index: usize, systems: battle.systems.Systems) !mode_result.Member {
     const owned = combat.ownedMember(index);
     var member = mode_result.Member{
-        .id = try mode_result.Id.init(owned.member.id),
-        .hp = owned.member.hp,
-        .max_hp = owned.member.max_hp,
-        .status = switch (owned.member.status) {
+        .id = try mode_result.Id.init(owned.id),
+        .hp = owned.hp,
+        .max_hp = owned.max_hp,
+        .status = switch (owned.status) {
             .healthy => .healthy,
             .poisoned => .poisoned,
             .unconscious => .unconscious,
@@ -331,7 +331,7 @@ fn memberOf(combat: *const battle.State, index: usize, systems: battle.systems.S
         .experience = owned.experience,
         .weapon_level = owned.weapon_level,
     };
-    for (owned.member.inventory.slots, 0..) |maybe, slot| if (maybe) |stack| {
+    for (owned.inventory.slots, 0..) |maybe, slot| if (maybe) |stack| {
         if (slot >= member.inventory.len) return error.InventoryOverflow;
         member.inventory[slot] = .{ .item = try mode_result.Id.init(@tagName(stack.id)), .uses = stack.uses, .identified = stack.identified };
     };

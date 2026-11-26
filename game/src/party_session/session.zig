@@ -100,7 +100,7 @@ pub fn weaponAugments(combat: battle.State, snapshot: Snapshot) ![6]battle.syste
         const id = active orelse return error.WorldPartyMismatch;
         if (!eq(id, combat.progress.party[slot].id)) return error.WorldPartyMismatch;
         const index = for (snapshot.members, 0..) |member, i| {
-            if (member != null and eq(member.?.member.id, id)) break i;
+            if (member != null and eq(member.?.id, id)) break i;
         } else return error.UnknownMember;
         result[slot] = weaponAugment(snapshot.extras[index].?);
     }
@@ -143,7 +143,7 @@ pub const Session = struct {
     }
     fn memberIndex(self: *const Session, id: []const u8) !usize {
         for (self.current.members, 0..) |maybe, i| if (maybe) |member| {
-            if (eq(member.member.id, id)) return i;
+            if (eq(member.id, id)) return i;
         };
         return error.UnknownMember;
     }
@@ -174,10 +174,10 @@ pub const Session = struct {
                 if (ended) return error.InvalidRoster;
                 try self.combat.validateOwnedMember(member);
                 const extra = s.extras[i] orelse return error.MissingCharacterExtra;
-                if (!eq(extra.member_id, member.member.id)) return error.InvalidCharacterExtra;
+                if (!eq(extra.member_id, member.id)) return error.InvalidCharacterExtra;
                 const slots = [_]battle.systems.EquipmentSlot{ .head, .body, .shield, .accessory_one, .accessory_two };
                 for (extra.locked_equipment, slots) |locked, slot| if (locked and member.loadout.get(slot) == null) return error.InvalidCharacterExtra;
-                for (s.members[0..i]) |prior| if (prior != null and eq(prior.?.member.id, member.member.id)) return error.DuplicateMember;
+                for (s.members[0..i]) |prior| if (prior != null and eq(prior.?.id, member.id)) return error.DuplicateMember;
             } else {
                 ended = true;
                 if (s.extras[i] != null) return error.InvalidCharacterExtra;
@@ -216,7 +216,7 @@ pub const Session = struct {
         };
         if (next.current.extras[i].?.locked_equipment[slot_index] and next.current.members[i].?.loadout.get(slot) != equipment) return error.EquipmentLocked;
         var local = next.combat;
-        var members = [_]battle.Member{next.current.members[i].?.member};
+        var members = [_]battle.Member{next.current.members[i].?};
         local.progress.party = &members;
         local.setOwnedMember(0, next.current.members[i].?);
         local.clearTemporaryStats();
@@ -226,13 +226,13 @@ pub const Session = struct {
         self.* = next;
     }
     fn itemEquipped(self: Session, member: battle.OwnedMember, slot: usize) bool {
-        const item = member.member.inventory.slots[slot] orelse return false;
+        const item = member.inventory.slots[slot] orelse return false;
         const systems = self.combat.content.systems orelse return false;
         var worn: usize = 0;
         for (std.enums.values(battle.systems.EquipmentSlot)) |place| if (member.loadout.get(place)) |gear| {
             if (gear < systems.equipment.len and eq(@tagName(item.id), systems.equipment[gear].id)) worn += 1;
         };
-        for (member.member.inventory.slots[0..slot]) |other| if (other != null and other.?.id == item.id) {
+        for (member.inventory.slots[0..slot]) |other| if (other != null and other.?.id == item.id) {
             worn -|= 1;
         };
         return worn > 0;
@@ -242,8 +242,8 @@ pub const Session = struct {
         const a = try next.activeIndex(from);
         const b = try next.activeIndex(to);
         if (a == b) return error.InvalidRecipient;
-        const src = &next.current.members[a].?.member.inventory;
-        const dst = &next.current.members[b].?.member.inventory;
+        const src = &next.current.members[a].?.inventory;
+        const dst = &next.current.members[b].?.inventory;
         if (slot >= src.count()) return error.InvalidItem;
         if (next.itemEquipped(next.current.members[a].?, slot)) return error.EquippedItem;
         const n = dst.count();
@@ -258,8 +258,8 @@ pub const Session = struct {
         const a = try next.activeIndex(first);
         const b = try next.activeIndex(second);
         if (a == b) return error.InvalidRecipient;
-        const src = &next.current.members[a].?.member.inventory;
-        const dst = &next.current.members[b].?.member.inventory;
+        const src = &next.current.members[a].?.inventory;
+        const dst = &next.current.members[b].?.inventory;
         if (first_slot >= src.count() or second_slot >= dst.count()) return error.InvalidItem;
         if (next.itemEquipped(next.current.members[a].?, first_slot) or next.itemEquipped(next.current.members[b].?, second_slot)) return error.EquippedItem;
         std.mem.swap(?items.Stack, &src.slots[first_slot], &dst.slots[second_slot]);
@@ -269,7 +269,7 @@ pub const Session = struct {
     fn discard(self: *Session, id: []const u8, slot: usize) !void {
         var next = self.*;
         const i = try next.activeIndex(id);
-        const bag = &next.current.members[i].?.member.inventory;
+        const bag = &next.current.members[i].?.inventory;
         if (slot >= bag.count()) return error.InvalidItem;
         if (next.itemEquipped(next.current.members[i].?, slot)) return error.EquippedItem;
         bag.remove(slot);
@@ -279,7 +279,7 @@ pub const Session = struct {
     fn deposit(self: *Session, id: []const u8, slot: usize) !void {
         var next = self.*;
         const i = try next.activeIndex(id);
-        const bag = &next.current.members[i].?.member.inventory;
+        const bag = &next.current.members[i].?.inventory;
         if (slot >= bag.count()) return error.InvalidItem;
         if (next.itemEquipped(next.current.members[i].?, slot)) return error.EquippedItem;
         try next.current.storage.deposit(bag, slot);
@@ -289,7 +289,7 @@ pub const Session = struct {
     fn withdraw(self: *Session, id: []const u8, item: items.Id) !void {
         var next = self.*;
         const i = try next.activeIndex(id);
-        try next.current.storage.withdraw(&next.current.members[i].?.member.inventory, item);
+        try next.current.storage.withdraw(&next.current.members[i].?.inventory, item);
         try next.validate();
         self.* = next;
     }
@@ -308,7 +308,7 @@ pub const Session = struct {
         };
         const i = free orelse return error.RosterFull;
         next.current.members[i] = owned;
-        next.current.extras[i] = .{ .member_id = owned.member.id };
+        next.current.extras[i] = .{ .member_id = owned.id };
         next.current.eligible[i] = entry.eligible;
         try next.validate();
         self.* = next;
@@ -317,7 +317,7 @@ pub const Session = struct {
         var next = self.*;
         const from = try next.activeIndex(owner);
         const to = try next.activeIndex(target);
-        const bag = &next.current.members[from].?.member.inventory;
+        const bag = &next.current.members[from].?.inventory;
         if (slot >= bag.count()) return error.InvalidItem;
         const item_id = @tagName(bag.slots[slot].?.id);
         const element: @TypeOf(next.current.extras[to].?.weapon_element) = if (eq(item_id, "fire_rune_piece")) .fire else if (eq(item_id, "water_rune_piece")) .water else if (eq(item_id, "wind_rune_piece")) .wind else if (eq(item_id, "thunder_rune_piece")) .thunder else if (eq(item_id, "earth_rune_piece")) .earth else return error.UnsupportedWeaponPiece;
@@ -406,7 +406,7 @@ pub const Session = struct {
         const a = try next.activeIndex(member);
         const b = if (owner) |id| try next.activeIndex(id) else a;
         var local = next.combat;
-        var party_members = [_]battle.Member{ next.current.members[a].?.member, next.current.members[b].?.member };
+        var party_members = [_]battle.Member{ next.current.members[a].?, next.current.members[b].? };
         const n: usize = if (a == b) 1 else 2;
         local.progress.party = party_members[0..n];
         local.setOwnedMember(0, next.current.members[a].?);
@@ -423,7 +423,7 @@ pub const Session = struct {
         var next = self.*;
         const source = try next.activeIndex(from);
         _ = try next.activeIndex(to);
-        const appended = next.current.members[source].?.member.inventory.count();
+        const appended = next.current.members[source].?.inventory.count();
         try next.runeService(from, null, 0);
         try next.runeService(to, from, appended);
         self.* = next;

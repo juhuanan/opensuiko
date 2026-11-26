@@ -21,7 +21,7 @@ pub fn partyTraits(combat: *const battle.State) !Traits {
     if (combat.partyCount() == 0 or combat.partyCount() > 6) return error.InvalidParty;
     var traits: Traits = .{};
     for (combat.progress.party, 0..) |member, i| {
-        traits.level_sum += combat.levels[i];
+        traits.level_sum += combat.progress.party[i].level;
         traits.healing = traits.healing or combat.hasRune(i, "sunbeam");
         traits.suppression = traits.suppression or combat.hasRune(i, "champion's");
         traits.faster = traits.faster or std.mem.eql(u8, member.id, "stallion");
@@ -653,7 +653,8 @@ pub const State = struct {
                     .battle => block: {
                         if (std.mem.eql(u8, self.link.content.id, "region_c") and (self.region_c == null or self.region_c.?.battles == null)) return error.UnimplementedRegionCCombat;
                         if (self.party_snapshot) |snapshot| {
-                            self.combat.weapon_augments = try party.weaponAugments(self.combat.*, snapshot.*);
+                            const augments = try party.weaponAugments(self.combat.*, snapshot.*);
+                            for (self.combat.progress.party, 0..) |*member, i| member.weapon_augment = augments[i];
                         } else if (self.party_transactions) return error.UnsupportedCombatSidecar;
                         if (self.party_transactions) {
                             try self.adapter.beginTransactional(&self.link, self.combat, self.overlay, draws.*, self.battle_receipt);

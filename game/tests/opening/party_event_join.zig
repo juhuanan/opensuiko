@@ -28,7 +28,7 @@ fn bootOwner(context: creation.Context) !creation.Owner {
     roster.members[0] = hero.owned;
     roster.extras[0] = hero.extra;
     roster.eligible[0] = true;
-    roster.active[0] = hero.owned.member.id;
+    roster.active[0] = hero.owned.id;
     return creation.Owner.fromSnapshot(context, roster);
 }
 
@@ -127,7 +127,7 @@ test "0x3C missing slot only rebuilds area order and keeps the initialized recor
     try std.testing.expect(proposal.active_order_index == null);
     try event_join.commit(&owner, context, pahn_operation, proposal);
     try std.testing.expectEqual(@as(u8, 1), owner.state.count);
-    try std.testing.expectEqualStrings("pahn", owner.state.roster.members[1].?.member.id);
+    try std.testing.expectEqualStrings("pahn", owner.state.roster.members[1].?.id);
     try std.testing.expect(!owner.state.roster.eligible[1]);
     try std.testing.expectEqualSlices(u8, &.{ 8, 0xff, 0xff, 0xff, 0xff, 0xff }, &owner.state.area_party.?);
     var wrong_source = pahn_operation;

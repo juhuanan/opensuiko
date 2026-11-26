@@ -1,3 +1,4 @@
+const characterFields = @import("character_fields.zig").capture;
 const std = @import("std");
 const content = @import("journey_content");
 const journey = @import("journey");
@@ -725,7 +726,7 @@ test "field facilities open a save point and storage from interaction" {
     _ = try journey.restoreSlotWithSource(io, allocator, temp.dir, &state, 0);
     try std.testing.expectEqual(checkpoint.money, state.combat.progress.money);
     try std.testing.expectEqualDeep(checkpoint.story, state.field_state.progress.story);
-    try std.testing.expectEqualDeep(checkpoint.party[0..checkpoint.party_count], state.combat.progress.party);
+    for (checkpoint.party[0..checkpoint.party_count], state.combat.progress.party) |saved, member| try std.testing.expectEqualDeep(saved, member.record());
     try std.testing.expectEqualStrings(checkpoint.room, state.package.rooms[state.field_state.room].id);
 
     const inventory = &state.field_state.progress.party[0].inventory;
@@ -938,8 +939,8 @@ test "scripted duel outcomes and war completion resume field branches and persis
         if (case.duel_result_mask == 1) {
             for (state.combat.progress.party, 0..) |member, index| {
                 if (!std.mem.eql(u8, member.id, "pahn")) continue;
-                state.combat.base_stats[index].attack = 999;
-                state.combat.base_stats[index].defense = 999;
+                state.combat.progress.party[index].base_stats.attack = 999;
+                state.combat.progress.party[index].base_stats.defense = 999;
             }
         }
         const expected_mode: journey.Mode = if (case.duel_result_mask != 0) .duel else .war;
@@ -1328,7 +1329,7 @@ test "package field battle choices wait for confirmation and select battle or fi
             try journey.restore(io, std.testing.allocator, temp.dir, state);
             try std.testing.expectEqual(.up, state.field_state.facing);
             try before_exit.apply(state);
-            state.combat.runes[0] = state.combat.content.systems.?.runeIndex("fire") orelse return error.MissingFixtureRune;
+            state.combat.progress.party[0].rune = state.combat.content.systems.?.runeIndex("fire") orelse return error.MissingFixtureRune;
         }
         if (outcome == .battle) {
             const fallback = [_]journey.Trigger{.{ .id = "old_guard_trigger", .room = "vb6_inn", .x = 256, .y = 208, .w = 8, .h = 8, .encounter = "area_a_1", .flag = .forest_battle_one_won }};
@@ -1511,7 +1512,7 @@ test "package field battle choices wait for confirmation and select battle or fi
             try std.testing.expectEqual(.battle, state.mode);
             try std.testing.expect(!state.route.milestones.opening_battles);
             const balance = state.combat.progress.money;
-            const experience = state.combat.experience;
+            const experience = characterFields("experience", state.combat.progress.party);
             state.combat.reward_drop = true;
             const defeated = try std.testing.allocator.create(journey.State);
             defer std.testing.allocator.destroy(defeated);
@@ -1554,7 +1555,7 @@ test "package field battle choices wait for confirmation and select battle or fi
             try std.testing.expect(state.combat.enemy_hp[0] > 0);
             try std.testing.expectEqualDeep(finish_rng, state.combat.random);
             try std.testing.expectEqual(balance, state.combat.progress.money);
-            try std.testing.expectEqualDeep(experience, state.combat.experience);
+            try std.testing.expectEqualDeep(experience, characterFields("experience", state.combat.progress.party));
             try std.testing.expect(state.combat.dropped_item == null);
             try std.testing.expect(!state.route.milestones.opening_battles);
             _ = try state.tickWithFieldEvents(.{}, .{ .confirm = true });
@@ -1586,10 +1587,10 @@ test "package field battle choices wait for confirmation and select battle or fi
             try std.testing.expectEqual(@as(usize, 2), state.combat.partyCount());
             try std.testing.expectEqualStrings("hero", state.combat.progress.party[0].id);
             const joined = state.combat.ownedMember(1);
-            try std.testing.expectEqualStrings("pahn", joined.member.id);
+            try std.testing.expectEqualStrings("pahn", joined.id);
             const reserved = state.reserves[0].?;
-            try std.testing.expectEqualStrings("gremio", reserved.member.id);
-            try std.testing.expectEqual(.antitoxin, reserved.member.inventory.slots[reserved.member.inventory.count() - 1].?.id);
+            try std.testing.expectEqualStrings("gremio", reserved.id);
+            try std.testing.expectEqual(.antitoxin, reserved.inventory.slots[reserved.inventory.count() - 1].?.id);
             try std.testing.expect(state.combat.hasRune(0, "water"));
             try std.testing.expectEqual(.needle, state.combat.progress.party[0].inventory.slots[8].?.id);
             try std.testing.expectEqualStrings("water_crystal", state.shared_items[0].?);

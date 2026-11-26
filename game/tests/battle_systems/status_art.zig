@@ -145,7 +145,7 @@ test "Status art keeps independent acquisition phases and removes cured or depar
     try std.testing.expect(!combat.inflictStatus(1, .sleep));
     try std.testing.expectEqualDeep(started, combat.status_icons[1]);
     try std.testing.expectEqual(@as(usize, 2), combat.spellSceneFrame().count);
-    combat.runes[0] = combat.content.systems.?.runeIndex("water");
+    combat.progress.party[0].rune = combat.content.systems.?.runeIndex("water");
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     const spell = for (combat.content.systems.?.spells, 0..) |entry, index| {
         if (std.mem.eql(u8, entry.name, "Drops of Kindness")) break index;
@@ -367,7 +367,7 @@ test "Status art keeps idle attachments throughout Shining Wind support reaction
         combat.integration = .{ .host = host };
         try combat.attachSpellScenes(&parsed.value);
         if (with_world) combat.content.world_art = world.value;
-        combat.runes[0] = found: {
+        combat.progress.party[0].rune = found: {
             for (combat.content.systems.?.runes, 0..) |rune, index| for (rune.spells) |slot| {
                 if (slot != null and slot.? == spell_index) break :found index;
             };

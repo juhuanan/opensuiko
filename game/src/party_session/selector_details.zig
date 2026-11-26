@@ -21,21 +21,21 @@ pub const Details = struct {
     pub fn derive(combat: battle.State, owned: battle.OwnedMember, extra: party.CharacterExtra) !Details {
         const rules = combat.content.systems orelse return error.MissingSelectorSystems;
         try combat.validateOwnedMember(owned);
-        if (extra.member_id.len != 0 and !std.mem.eql(u8, extra.member_id, owned.member.id)) return error.InvalidSelectorExtra;
-        const profile = combat.content.partyProfile(owned.member.id) orelse return error.MissingSelectorProfile;
+        if (extra.member_id.len != 0 and !std.mem.eql(u8, extra.member_id, owned.id)) return error.InvalidSelectorExtra;
+        const profile = combat.content.partyProfile(owned.id) orelse return error.MissingSelectorProfile;
         const weapon = profile.weapon orelse return error.MissingSelectorWeapon;
         // Native base attack retains the initial weapon power; menu PWR excludes it.
-        const power = std.math.sub(u16, owned.stats.attack, weapon.powers[weapon.initial_level - 1]) catch return error.InvalidSelectorPower;
+        const power = std.math.sub(u16, owned.base_stats.attack, weapon.powers[weapon.initial_level - 1]) catch return error.InvalidSelectorPower;
         var result: Details = .{
             .level = owned.level,
-            .max_hp = owned.member.max_hp,
+            .max_hp = owned.max_hp,
             .power = power,
-            .skill = owned.stats.skill,
-            .defense = owned.stats.defense,
-            .speed = owned.stats.speed,
-            .magic = owned.stats.magic,
-            .luck = owned.stats.luck,
-            .charges = owned.member.rune_charges,
+            .skill = owned.base_stats.skill,
+            .defense = owned.base_stats.defense,
+            .speed = owned.base_stats.speed,
+            .magic = owned.base_stats.magic,
+            .luck = owned.base_stats.luck,
+            .charges = owned.rune_charges,
             .range = profile.weapon_range orelse return error.MissingSelectorWeaponRange,
             .rune = if (owned.rune) |index| rules.runes[index].name else null,
         };

@@ -12,7 +12,7 @@ const PartyStrike = types_mod.PartyStrike;
 pub fn resolvePhysicalDamage(self: *const State, attacker: usize, target: usize, roll: u15, defending: bool) u32 {
     const base = systems.physicalDamage(self.stats(attacker).attack, self.stats(target).defense, roll, defending and target < self.partyCount());
     if (attacker >= self.partyCount()) return base;
-    const augment = self.weapon_augments[attacker];
+    const augment = self.progress.party[attacker].weapon_augment;
     const weapon = if (self.partyProfile(attacker).weapon) |value| value.element else null;
     const element = systems.weaponElement(weapon, augment.rune);
     const profile = if (target < self.partyCount()) self.partyProfile(target) else self.enemy(target - self.partyCount());
@@ -123,7 +123,7 @@ pub fn canLetGo(self: *const State) bool {
     if (!self.canEscape()) return false;
     var party_levels: u32 = 0;
     var enemy_levels: u32 = 0;
-    for (self.levels[0..self.partyCount()]) |level| party_levels += level;
+    for (self.progress.party) |member| party_levels += member.level;
     for (0..self.enemyCount()) |i| enemy_levels += self.enemy(i).level;
     return party_levels * 60 / self.partyCount() >= enemy_levels * 60 / self.enemyCount();
 }
@@ -158,12 +158,12 @@ pub fn openAfterRound(self: *State) void {
 }
 pub fn stats(self: *const State, index: usize) Stats {
     if (index >= self.partyCount()) return withTemporaryStats(self, index, self.enemy(index - self.partyCount()).stats);
-    const result = equippedStats(self.content, self.ownedMember(index), self.weapon_augments[index]);
+    const result = equippedStats(self.content, self.ownedMember(index), self.progress.party[index].weapon_augment);
     return self.withTemporaryStats(index, result);
 }
 
 pub fn equippedStats(content: battle.Content, owned: battle.OwnedMember, augment: systems.WeaponAugment) Stats {
-    var result = owned.stats;
+    var result = owned.base_stats;
     if (content.systems) |rules| if (owned.rune) |index| {
         const rune = rules.runes[index];
         if (std.mem.eql(u8, rune.id, "gale")) result.speed = @intCast(@min(9999, @as(u32, result.speed) * 2));
@@ -172,7 +172,7 @@ pub fn equippedStats(content: battle.Content, owned: battle.OwnedMember, augment
     for (std.enums.values(systems.EquipmentSlot)) |slot| if (owned.loadout.get(slot)) |item| {
         for (content.systems.?.equipment[item].bonuses, 0..) |value, column| total[column] += value;
     };
-    if (content.partyProfile(owned.member.id).?.weapon) |weapon| total[6] += @as(i16, @intCast(weapon.powers[owned.weapon_level - 1])) - @as(i16, @intCast(weapon.powers[weapon.initial_level - 1]));
+    if (content.partyProfile(owned.id).?.weapon) |weapon| total[6] += @as(i16, @intCast(weapon.powers[owned.weapon_level - 1])) - @as(i16, @intCast(weapon.powers[weapon.initial_level - 1]));
     result.attack = bonus(result.attack, total[0] + total[6]);
     result.skill = bonus(result.skill, total[1] + if (augment.rune == .earth) @as(i16, augment.fragments) * 2 else 0);
     result.defense = bonus(result.defense, total[2] + total[7] + if (augment.rune == .wind) @as(i16, augment.fragments) * 3 else 0);
@@ -340,12 +340,12 @@ pub fn swapFormation(self: *State, first: usize, second: usize) !void {
 }
 pub fn weaponName(self: *const State, member: usize) []const u8 {
     const weapon = self.partyProfile(member).weapon orelse return "Weapon";
-    return weapon.names[self.weapon_levels[member] - 1];
+    return weapon.names[self.progress.party[member].weapon_level - 1];
 }
 pub fn sharpenPrice(self: *const State, member: usize, limit: u8) !u32 {
     if (member >= self.partyCount() or limit == 0 or limit > 16) return error.InvalidMember;
     const weapon = self.partyProfile(member).weapon orelse return error.InvalidWeapon;
-    const level = self.weapon_levels[member];
+    const level = self.progress.party[member].weapon_level;
     if (level == 0 or level > 16) return error.InvalidWeapon;
     if (level >= limit) return error.WeaponLimit;
     return weapon.upgrade_costs[level];
@@ -353,6 +353,6 @@ pub fn sharpenPrice(self: *const State, member: usize, limit: u8) !u32 {
 pub fn sharpen(self: *State, member: usize, limit: u8, money: *u32) !void {
     const price = try self.sharpenPrice(member, limit);
     if (money.* < price) return error.InsufficientFunds;
-    self.weapon_levels[member] += 1;
+    self.progress.party[member].weapon_level += 1;
     money.* -= price;
 }

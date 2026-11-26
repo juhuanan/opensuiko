@@ -1100,7 +1100,7 @@ test "Bandit normal owners retain the first recipient lock through Sydonia and c
         view.initial_party = &.{ "varkas", "sydonia", "hero", "pahn", "gremio", "camille" };
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(view, items.value, &members, 17);
-        combat.weapon_augments[0] = .{ .rune = .fire, .fragments = 3 };
+        combat.progress.party[0].weapon_augment = .{ .rune = .fire, .fragments = 3 };
         combat.integration = .{ .host = host };
         if (protected) combat.actor_conditions[6].protection_rounds = 3;
         try combat.attachUniteActors(&library.value);
@@ -2696,7 +2696,7 @@ test "Added Unite journey members keep ordinary hurt and Clone action graphics" 
         if (kind == 0) {
             try combat.beginMelee(target, member, true);
         } else {
-            combat.runes[member] = for (view.systems.?.runes, 0..) |rune, index| {
+            combat.progress.party[member].rune = for (view.systems.?.runes, 0..) |rune, index| {
                 if (std.mem.eql(u8, rune.id, "clone")) break index;
             } else return error.MissingCloneRune;
             try combat.beginSourcePhysicalRune(member, target);
@@ -3104,7 +3104,7 @@ test "all normal journey Unite rosters finish every owner mixed rounds and rejec
             combat.progress.party[item_owner].hp = 4000;
             combat.actions[item_owner] = .{ .item = .{ .slot = 0, .target = item_owner } };
             combat.acted[item_owner] = false;
-            combat.base_stats[if (mode == 4) item_owner else owner].speed = 999;
+            combat.progress.party[if (mode == 4) item_owner else owner].base_stats.speed = 999;
             for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |enemy| combat.acted[enemy] = false;
         }
         if (protected) for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |enemy| {

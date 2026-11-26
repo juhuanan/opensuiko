@@ -15,19 +15,17 @@ const allocator = std.testing.allocator;
 
 fn member(profile: roster_mod.source.Profile, index: usize) battle.OwnedMember {
     return .{
-        .member = .{
-            .id = profile.id,
-            .name = profile.name,
-            .hp = 40 + @as(u16, @intCast(index % 20)),
-            .max_hp = 99,
-            .status = .healthy,
-            .rune_charges = .{ 1, 2, 3, 4 },
-            .max_rune_charges = .{ 4, 4, 4, 4 },
-            .inventory = .{},
-        },
+        .id = profile.id,
+        .name = profile.name,
+        .hp = 40 + @as(u16, @intCast(index % 20)),
+        .max_hp = 99,
+        .status = .healthy,
+        .rune_charges = .{ 1, 2, 3, 4 },
+        .max_rune_charges = .{ 4, 4, 4, 4 },
+        .inventory = .{},
         .level = 1 + @as(u8, @intCast(index % 40)),
         .experience = @intCast((index * 17) % 1000),
-        .stats = .{ .attack = 10 + @as(u16, @intCast(index)), .defense = 9, .skill = 8, .speed = 7, .magic = 6, .luck = 5 },
+        .base_stats = .{ .attack = 10 + @as(u16, @intCast(index)), .defense = 9, .skill = 8, .speed = 7, .magic = 6, .luck = 5 },
         .weapon_level = 1 + @as(u8, @intCast(index % 16)),
         .loadout = .{ .head = 0 },
         .rune = null,

@@ -29,7 +29,7 @@ fn wornSlot(state: *const State, member: usize, slot: usize) !?battle.systems.Eq
     for (state.combat.progress.party[member].inventory.slots[0..slot]) |item| if (item != null and item.?.id == id) {
         ordinal += 1;
     };
-    for (std.enums.values(battle.systems.EquipmentSlot)) |place| if (state.combat.loadouts[member].get(place) == gear) {
+    for (std.enums.values(battle.systems.EquipmentSlot)) |place| if (state.combat.progress.party[member].loadout.get(place) == gear) {
         if (ordinal == 0) return place;
         ordinal -= 1;
     };

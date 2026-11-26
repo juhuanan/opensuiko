@@ -1,6 +1,7 @@
 const std = @import("std");
 const rl = @import("raylib");
 const field = @import("field");
+const battle = @import("battle");
 const pause = @import("pause_menu");
 const ui = @import("ui");
 const layout = @import("menu_layout");
@@ -272,7 +273,7 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
             const names = [_][]const u8{ "Head", "Body", "Shield", "Accessory 1", "Accessory 2" };
             if (menu.phase == .equipment) {
                 for (std.enums.values(@TypeOf(menu.equipment_slot)), 0..) |slot, i| {
-                    const current = combat.loadouts[menu.member].get(slot);
+                    const current = combat.progress.party[menu.member].loadout.get(slot);
                     ui.numberText("{s}{s}: {s}", .{ if (slot == menu.equipment_slot) "> " else "  ", names[i], if (current) |id| rules.equipment[id].name else "None" }, 174, 110 + @as(i32, @intCast(i)) * 31, 16, .ray_white);
                 }
                 ui.text("Left/Right: member   Up/Down: slot", 174, 303, 14, .light_gray);
@@ -290,14 +291,14 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
                     ui.numberText("{s}{s}", .{ if (index == menu.slot) "> " else "  ", if (index == 0) "Remove" else inventory.slots[index - 1].?.name() }, 174, 133 + @as(i32, @intCast(index - start)) * 23, 16, if (enabled) .ray_white else .gray);
                 }
                 const selected = if (menu.slot == 0) null else combat.gearIndex(inventory.slots[menu.slot - 1].?.id);
-                var preview = combat.*;
+                var preview = combat.progress.party[menu.member];
                 const available = if (menu.slot == 0 or selected != null) checked: {
                     combat.checkEquipment(menu.member, menu.equipment_slot, selected) catch break :checked false;
                     break :checked true;
                 } else false;
-                if (available) preview.loadouts[menu.member].set(menu.equipment_slot, selected);
+                if (available) preview.loadout.set(menu.equipment_slot, selected);
                 const current = combat.stats(menu.member);
-                const next = preview.stats(menu.member);
+                const next = combat.withTemporaryStats(menu.member, battle.equippedStats(combat.content, preview, preview.weapon_augment));
                 ui.numberText("ATK {d} -> {d}   DEF {d} -> {d}", .{ current.attack, next.attack, current.defense, next.defense }, 174, 290, 15, .sky_blue);
                 ui.numberText("MGC {d} -> {d}   SPD {d} -> {d}", .{ current.magic, next.magic, current.speed, next.speed }, 174, 315, 15, .sky_blue);
                 ui.text("Z: equip/remove   X: back", 174, 350, 14, .light_gray);
@@ -337,18 +338,18 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
                 if (menu.strength_details) {
                     const labels = [_][]const u8{ "Head", "Body", "Shield", "Accessory 1", "Accessory 2" };
                     for (std.enums.values(@TypeOf(menu.equipment_slot)), 0..) |slot, i| {
-                        const item = combat.loadouts[menu.member].get(slot);
+                        const item = combat.progress.party[menu.member].loadout.get(slot);
                         ui.numberText("{s}: {s}", .{ labels[i], if (item) |id| combat.content.systems.?.equipment[id].name else "None" }, 178, 195 + @as(i32, @intCast(i)) * 22, 15, .ray_white);
                     }
                     ui.numberText("Rune: {s}", .{if (combat.rune(menu.member)) |rune| rune.name else "None"}, 178, 309, 15, .sky_blue);
                 } else {
                     const stats = combat.stats(menu.member);
-                    ui.numberText("Level {d}    EXP {d}/1000", .{ combat.levels[menu.member], combat.experience[menu.member] }, 178, 195, 16, .sky_blue);
+                    ui.numberText("Level {d}    EXP {d}/1000", .{ combat.progress.party[menu.member].level, combat.progress.party[menu.member].experience }, 178, 195, 16, .sky_blue);
                     ui.numberText("ATK {d}  DEF {d}  SKL {d}", .{ stats.attack, stats.defense, stats.skill }, 178, 222, 16, .ray_white);
                     ui.numberText("SPD {d}  MGC {d}  LUK {d}", .{ stats.speed, stats.magic, stats.luck }, 178, 248, 16, .ray_white);
                     ui.numberText("{s} row  /  {s} reach", .{ combat.partyRow(menu.member).label(), combat.weaponRange(menu.member).label() }, 178, 276, 15, .ray_white);
-                    ui.numberText("{s} LV {d}", .{ combat.weaponName(menu.member), combat.weapon_levels[menu.member] }, 178, 303, 15, .gold);
-                    if (combat.levels[menu.member] == 99) ui.text("Maximum level", 178, 329, 14, .light_gray) else ui.numberText("Next level: {d} EXP", .{1000 - combat.experience[menu.member]}, 178, 329, 14, .sky_blue);
+                    ui.numberText("{s} LV {d}", .{ combat.weaponName(menu.member), combat.progress.party[menu.member].weapon_level }, 178, 303, 15, .gold);
+                    if (combat.progress.party[menu.member].level == 99) ui.text("Maximum level", 178, 329, 14, .light_gray) else ui.numberText("Next level: {d} EXP", .{1000 - combat.progress.party[menu.member].experience}, 178, 329, 14, .sky_blue);
                 }
             } else {
                 ui.text("Rune charges", 178, 204, 16, .ray_white);
@@ -390,15 +391,15 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
         },
         .blacksmith, .confirm_blacksmith => {
             const combat = menu.combat.?;
-            const level = combat.weapon_levels[menu.member];
+            const level = combat.progress.party[menu.member].weapon_level;
             frame(context, layout.wide);
             ui.numberText("Blacksmith - up to level {d}", .{menu.service_limit}, 48, 72, 21, .gold);
             ui.numberText("{s}: {s}", .{ combat.name(menu.member), combat.weaponName(menu.member) }, 48, 120, 20, .ray_white);
             ui.numberText("Weapon level {d}   ATK {d}", .{ level, combat.stats(menu.member).attack }, 48, 163, 18, .ray_white);
             if (combat.sharpenPrice(menu.member, menu.service_limit)) |price| {
-                var preview = combat.*;
-                preview.weapon_levels[menu.member] += 1;
-                const next = preview.stats(menu.member).attack;
+                var preview = combat.progress.party[menu.member];
+                preview.weapon_level += 1;
+                const next = combat.withTemporaryStats(menu.member, battle.equippedStats(combat.content, preview, preview.weapon_augment)).attack;
                 ui.numberText("Level {d} -> {d}   ATK {d} -> {d}", .{ level, level + 1, combat.stats(menu.member).attack, next }, 48, 211, 18, .sky_blue);
                 ui.numberText("Price: {d} bits", .{price}, 48, 245, 18, .ray_white);
                 if (menu.phase == .confirm_blacksmith) ui.text(if (menu.yes) "> Yes     No" else "  Yes   > No", 48, 294, 20, .ray_white);

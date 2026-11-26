@@ -23,15 +23,15 @@ pub fn retainReserve(state: *State, owned: battle.OwnedMember) !void {
     const snapshot = try save.Snapshot.capture(state.*);
     try snapshot.validate(state.*);
     try state.combat.validateOwnedMember(owned);
-    for (state.combat.progress.party) |member| if (std.mem.eql(u8, member.id, owned.member.id)) return error.DuplicateMember;
+    for (state.combat.progress.party) |member| if (std.mem.eql(u8, member.id, owned.id)) return error.DuplicateMember;
     for (&state.reserves, 0..) |*entry, index| {
         if (entry.*) |other| {
-            if (std.mem.eql(u8, other.member.id, owned.member.id)) return error.DuplicateMember;
+            if (std.mem.eql(u8, other.id, owned.id)) return error.DuplicateMember;
         } else {
             entry.* = owned;
-            const profile = state.combat.content.partyProfile(owned.member.id).?;
-            entry.*.?.member.id = profile.id;
-            entry.*.?.member.name = profile.name;
+            const profile = state.combat.content.partyProfile(owned.id).?;
+            entry.*.?.id = profile.id;
+            entry.*.?.name = profile.name;
             state.reserve_extras[index] = .{ .member_id = "" };
             return;
         }
@@ -46,13 +46,13 @@ pub fn swapReserve(state: *State, member_id: []const u8, reserve_id: []const u8)
     for (state.combat.progress.party, 0..) |member, active_index| {
         if (!std.mem.eql(u8, member.id, member_id)) continue;
         for (&state.reserves, 0..) |*entry, index| if (entry.*) |owned| {
-            if (!std.mem.eql(u8, owned.member.id, reserve_id)) continue;
+            if (!std.mem.eql(u8, owned.id, reserve_id)) continue;
             const leaving = state.combat.ownedMember(active_index);
             const leaving_extra = state.extras[active_index];
             state.combat.setOwnedMember(active_index, owned);
             state.extras[active_index] = state.reserve_extras[index] orelse .{ .member_id = "" };
             if (state.extras[active_index].member_id.len != 0) state.extras[active_index].member_id = state.combat.progress.party[active_index].id;
-            state.combat.weapon_augments[active_index] = party_session.weaponAugment(state.extras[active_index]);
+            state.combat.progress.party[active_index].weapon_augment = party_session.weaponAugment(state.extras[active_index]);
             entry.* = leaving;
             state.reserve_extras[index] = leaving_extra;
             return;
@@ -67,14 +67,14 @@ pub fn buildPartySnapshot(state: *const State) party_session.Snapshot {
     for (0..state.combat.progress.party.len) |i| {
         const owned = state.combat.ownedMember(i);
         snapshot.members[i] = owned;
-        snapshot.extras[i] = if (state.extras[i].member_id.len == 0) .{ .member_id = owned.member.id } else state.extras[i];
+        snapshot.extras[i] = if (state.extras[i].member_id.len == 0) .{ .member_id = owned.id } else state.extras[i];
         snapshot.eligible[i] = true;
-        snapshot.active[i] = owned.member.id;
+        snapshot.active[i] = owned.id;
     }
     var index = state.combat.progress.party.len;
     for (state.reserves, state.reserve_extras) |maybe, extra| if (maybe) |owned| {
         snapshot.members[index] = owned;
-        snapshot.extras[index] = if (extra != null and extra.?.member_id.len != 0) extra.? else .{ .member_id = owned.member.id };
+        snapshot.extras[index] = if (extra != null and extra.?.member_id.len != 0) extra.? else .{ .member_id = owned.id };
         index += 1;
     };
     snapshot.storage = state.combat.progress.storage;
@@ -91,9 +91,9 @@ pub fn useWeaponPiece(state: *State, owner: usize, slot: usize, target: usize, r
         .target = state.combat.progress.party[target].id,
         .replace = replace,
     } });
-    state.combat.progress.party[owner].inventory = session.current.members[owner].?.member.inventory;
+    state.combat.progress.party[owner].inventory = session.current.members[owner].?.inventory;
     state.extras[target] = session.current.extras[target].?;
-    state.combat.weapon_augments[target] = party_session.weaponAugment(state.extras[target]);
+    state.combat.progress.party[target].weapon_augment = party_session.weaponAugment(state.extras[target]);
 }
 
 pub const Growth = struct {
@@ -116,7 +116,7 @@ pub fn prepareGrowth(state: *const State, id: []const u8, advances: u8) !Growth 
         }
     } else reserve_member: {
         for (state.reserves, 0..) |entry, index| if (entry) |member| {
-            if (std.mem.eql(u8, member.member.id, id)) {
+            if (std.mem.eql(u8, member.id, id)) {
                 reserve = index;
                 extra = state.reserve_extras[index] orelse extra;
                 break :reserve_member member;
@@ -131,20 +131,21 @@ pub fn prepareGrowth(state: *const State, id: []const u8, advances: u8) !Growth 
         break :reserve_member materialized.owned;
     };
     try state.combat.validateOwnedMember(owned);
-    var members = [_]battle.Member{owned.member};
-    var growth = state.combat.*;
-    growth.progress.party = &members;
-    growth.setOwnedMember(0, owned);
+    const rules = state.combat.content.systems.?;
+    const profile = state.combat.content.partyProfile(owned.id).?;
+    var result = owned;
+    result.id = profile.id;
+    result.name = profile.name;
+    var random = state.combat.random;
     for (0..@min(advances, 99 - owned.level)) |_| {
         var rolls: [7]u15 = undefined;
-        for (&rolls) |*roll| roll.* = growth.roll();
-        growth.levelUp(0, rolls);
+        for (&rolls) |*roll| roll.* = random.random().int(u15);
+        result.levelUp(rules, profile.growth, rolls);
     }
-    growth.refillMagic(0);
-    const result = growth.ownedMember(0);
+    result.refillRuneCharges(rules);
     std.debug.assert(result.level == @min(@as(u16, 99), @as(u16, owned.level) + advances));
     try state.combat.validateOwnedMember(result);
-    return .{ .owned = result, .active = active, .reserve = reserve, .extra = extra, .random = growth.random };
+    return .{ .owned = result, .active = active, .reserve = reserve, .extra = extra, .random = random };
 }
 
 pub fn commitGrowth(state: *State, growth: Growth) void {
@@ -165,7 +166,7 @@ pub fn preparePartyJoin(state: *const State, backing: []battle.Member, catalog: 
     if (backing.len < count + 1) return error.InvalidParty;
     for (state.combat.progress.party) |member| if (std.mem.eql(u8, member.id, id)) return error.DuplicateMember;
     for (state.reserves, state.reserve_extras, 0..) |maybe, extra, index| if (maybe) |owned| {
-        if (std.mem.eql(u8, owned.member.id, id)) return .{ .member = .{ .owned = owned, .extra = extra orelse .{ .member_id = "" } }, .reserve = index };
+        if (std.mem.eql(u8, owned.id, id)) return .{ .member = .{ .owned = owned, .extra = extra orelse .{ .member_id = "" } }, .reserve = index };
     } else break;
     return .{ .member = try party_session.catalogue.materializeBound(state.combat.*, catalog, id, bindings) };
 }
@@ -176,13 +177,13 @@ pub fn commitPartyJoin(state: *State, backing: []battle.Member, join: PartyJoin)
     var active: [6]battle.Member = undefined;
     @memcpy(active[0..count], state.combat.progress.party);
     @memcpy(backing[0..count], active[0..count]);
-    backing[count] = materialized.owned.member;
+    backing[count] = materialized.owned;
     state.party_backing = backing;
     state.replacePartySlice(backing[0 .. count + 1]);
     state.combat.setOwnedMember(count, materialized.owned);
     std.mem.swap(u8, &state.combat.formation[count], &state.combat.formation[state.combat.formationSlot(count)]);
     state.extras[count] = materialized.extra;
-    state.combat.weapon_augments[count] = party_session.weaponAugment(materialized.extra);
+    state.combat.progress.party[count].weapon_augment = party_session.weaponAugment(materialized.extra);
     if (join.reserve) |index| {
         const last = state.reserves.len - 1;
         std.mem.copyForwards(?battle.OwnedMember, state.reserves[index..last], state.reserves[index + 1 ..]);
@@ -246,10 +247,8 @@ pub fn commitPartyLeave(state: *State, leave: PartyLeave) void {
     for (leave.member..last) |index| {
         combat.setOwnedMember(index, combat.ownedMember(index + 1));
         state.extras[index] = state.extras[index + 1];
-        combat.weapon_augments[index] = combat.weapon_augments[index + 1];
     }
     state.extras[last] = .{ .member_id = "" };
-    combat.weapon_augments[last] = .{};
     const formation = combat.formation;
     var slot: usize = 0;
     for (formation[0 .. last + 1]) |member| {

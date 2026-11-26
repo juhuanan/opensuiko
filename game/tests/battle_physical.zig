@@ -147,7 +147,7 @@ test "Physical rune missing presentation art refuses before actor or camera owne
     var combat = try battle.State.init(parsed.value, items.value, &members, 17);
     try combat.attachUniteActors(&actors.value);
     combat.content.unite_graphics = &.{};
-    combat.runes[2] = for (combat.content.systems.?.runes, 0..) |rune, index| {
+    combat.progress.party[2].rune = for (combat.content.systems.?.runes, 0..) |rune, index| {
         if (std.mem.eql(u8, rune.id, "boar")) break index;
     } else return error.MissingRune;
     const hp = combat.enemy_hp;
@@ -173,7 +173,7 @@ test "Physical rune source controller retargets and does not start without enemi
     combat.startEncounter();
     try combat.attachUniteActors(&actors.value);
     try combat.attachSpellScenes(&scenes.value);
-    combat.runes[2] = combat.content.systems.?.runeIndex("boar").?;
+    combat.progress.party[2].rune = combat.content.systems.?.runeIndex("boar").?;
     combat.enemy_hp[0] = 0;
     combat.enemy_hp[1] = 5000;
     try std.testing.expect(combat.beginRuneAttack(2, 0));
@@ -209,7 +209,7 @@ test "Physical rune camera handoff keeps a one-frame focus pulse out of its tran
     var combat = try battle.State.init(content.value, items.value, &members, 17);
     try combat.attachUniteActors(&actors.value);
     try combat.attachSpellScenes(&scenes.value);
-    combat.runes[2] = combat.content.systems.?.runeIndex("boar").?;
+    combat.progress.party[2].rune = combat.content.systems.?.runeIndex("boar").?;
     combat.phase = .resolving;
     combat.coordinator = .{ .stage = .await_order, .current_actor = 2 };
     try std.testing.expect(combat.beginRuneAttack(2, 0));
@@ -266,7 +266,7 @@ test "Physical rune overlapping source controllers share the current damage nume
     try combat.attachUniteActors(&actors.value);
     try combat.attachSpellScenes(&scenes.value);
     for ([_]struct { member: usize, rune: []const u8 }{ .{ .member = 2, .rune = "boar" }, .{ .member = 0, .rune = "falcon" } }) |binding| {
-        combat.runes[binding.member] = for (content.systems.?.runes, 0..) |rune, index| {
+        combat.progress.party[binding.member].rune = for (content.systems.?.runes, 0..) |rune, index| {
             if (std.mem.eql(u8, rune.id, binding.rune)) break index;
         } else return error.MissingRune;
     }
@@ -307,7 +307,7 @@ test "Physical rune live contact exhaustion restores the complete pending hit fo
     var combat = try battle.State.init(content, items.value, &members, 17);
     try combat.attachUniteActors(&actors.value);
     try combat.attachSpellScenes(&scenes.value);
-    combat.runes[0] = for (content.systems.?.runes, 0..) |rune, index| {
+    combat.progress.party[0].rune = for (content.systems.?.runes, 0..) |rune, index| {
         if (std.mem.eql(u8, rune.id, "clone")) break index;
     } else return error.MissingRune;
     combat.phase = .resolving;
@@ -351,7 +351,7 @@ test "Physical rune source coordinator dispatches and closes a complete queued r
     var combat = try battle.State.init(content, items.value, &members, 17);
     try combat.attachUniteActors(&actors.value);
     try combat.attachSpellScenes(&scenes.value);
-    combat.runes[2] = for (content.systems.?.runes, 0..) |rune, index| {
+    combat.progress.party[2].rune = for (content.systems.?.runes, 0..) |rune, index| {
         if (std.mem.eql(u8, rune.id, "boar")) break index;
     } else return error.MissingRune;
     combat.phase = .resolving;
@@ -422,7 +422,7 @@ test "Queued Unite waits for physical rune locks before source dispatch and both
     combat.integration = .{ .host = integration };
     try combat.attachUniteActors(&actors.value);
     try combat.attachSpellScenes(&scenes.value);
-    combat.runes[2] = for (content.systems.?.runes, 0..) |rune, index| {
+    combat.progress.party[2].rune = for (content.systems.?.runes, 0..) |rune, index| {
         if (std.mem.eql(u8, rune.id, "boar")) break index;
     } else return error.MissingRune;
     combat.choose(2);
@@ -561,11 +561,11 @@ test "Physical rune live battle uses source owner and recipient clocks without o
             var combat = try battle.State.init(content, items.value, &members, 17);
             try combat.attachUniteActors(&actors.value);
             try combat.attachSpellScenes(&scenes.value);
-            if (mode == 0) combat.weapon_augments[case.member] = .{ .rune = .fire, .fragments = 3 };
+            if (mode == 0) combat.progress.party[case.member].weapon_augment = .{ .rune = .fire, .fragments = 3 };
             if (mode == 1) combat.actor_conditions[combat.partyCount()].protection_rounds = 3;
             if (mode == 2) combat.enemy_hp[0] = 1;
             combat.actor_conditions[combat.partyCount()].sleep_turns = 1;
-            combat.runes[case.member] = for (content.systems.?.runes, 0..) |rune, index| {
+            combat.progress.party[case.member].rune = for (content.systems.?.runes, 0..) |rune, index| {
                 if (std.mem.eql(u8, rune.id, case.technique)) break index;
             } else return error.MissingRune;
             combat.phase = .resolving;

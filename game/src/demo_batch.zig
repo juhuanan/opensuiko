@@ -81,7 +81,7 @@ pub const Session = struct {
             self.battle.progress.party[2].status = .unconscious;
         }
         if (demo == 9) {
-            self.battle.experience[0] = 950;
+            self.battle.progress.party[0].experience = 950;
             self.battle.reward_drop = true;
         }
         if (demo == 4 or demo == 5) self.setDemoRune(0, "fire", 65);
@@ -94,8 +94,8 @@ pub const Session = struct {
         self.battle.enterRoundMenu();
     }
     fn setDemoRune(self: *Session, member: usize, id: []const u8, magic: u16) void {
-        self.battle.runes[member] = self.battle.content.systems.?.runeIndex(id).?;
-        self.battle.base_stats[member].magic = magic;
+        self.battle.progress.party[member].rune = self.battle.content.systems.?.runeIndex(id).?;
+        self.battle.progress.party[member].base_stats.magic = magic;
         self.battle.refillMagic(member);
     }
     pub fn next(self: *Session) void {
@@ -128,7 +128,7 @@ pub const Session = struct {
     }
     pub fn cycleEquipment(self: *Session, backwards: bool) void {
         const count = self.battle.content.systems.?.equipment.len + 1;
-        const current = if (self.battle.loadouts[self.selection].head) |item| item + 1 else 0;
+        const current = if (self.battle.progress.party[self.selection].loadout.head) |item| item + 1 else 0;
         const next_item = (current + if (backwards) count - 1 else 1) % count;
         self.battle.equip(self.selection, if (next_item == 0) null else next_item - 1) catch unreachable;
     }
@@ -221,7 +221,7 @@ pub const Snapshot = struct {
     encounter: usize,
     round: u32,
     money: u32,
-    party: [6]battle.Member,
+    party: [6]field.game_state.CharacterRecord,
     levels: [6]u8,
     stats: [6]battle.Stats,
     experience: [6]u32,
@@ -236,11 +236,20 @@ pub const Snapshot = struct {
         if (!canSave(session)) return error.SaveAtRoundStart;
         var asleep: [12]u8 = undefined;
         for (&asleep, session.battle.actor_conditions) |*turns, conditions| turns.* = conditions.sleep_turns;
-        return .{ .schema = "suikoden-demo-save/2", .encounter = session.battle.encounter, .round = session.battle.round, .money = session.battle.progress.money, .party = session.battle.progress.party[0..6].*, .levels = session.battle.levels, .stats = session.battle.base_stats, .experience = session.battle.experience, .formation = session.battle.formation, .equipment = session.battle.headEquipment(), .runes = session.battle.runes, .asleep = asleep, .enemy_hp = session.battle.enemy_hp, .random = session.battle.random };
+        var result: Snapshot = .{ .schema = "suikoden-demo-save/2", .encounter = session.battle.encounter, .round = session.battle.round, .money = session.battle.progress.money, .party = undefined, .levels = undefined, .stats = undefined, .experience = undefined, .formation = session.battle.formation, .equipment = session.battle.headEquipment(), .runes = undefined, .asleep = asleep, .enemy_hp = session.battle.enemy_hp, .random = session.battle.random };
+        for (session.battle.progress.party, 0..) |member, i| {
+            result.party[i] = member.record();
+            result.levels[i] = member.level;
+            result.stats[i] = member.base_stats;
+            result.experience[i] = member.experience;
+            result.runes[i] = member.rune;
+        }
+        return result;
     }
     pub fn restore(self: Snapshot, session: *Session) !void {
         if (!std.mem.eql(u8, self.schema, "suikoden-demo-save/2") or self.encounter >= session.battle.content.encounters.len or self.round == 0 or self.round > 1000000) return error.InvalidDemoSave;
-        var party = self.party;
+        var party: [6]battle.Member = undefined;
+        for (&party, self.party) |*member, record| member.* = record.character();
         var progress = field.game_state.Progress{ .money = self.money, .party = &party };
         try progress.validate();
         var seen: [6]bool = @splat(false);
@@ -273,14 +282,21 @@ pub const Snapshot = struct {
         session.start(11);
         session.battle.encounter = self.encounter;
         session.battle.progress.money = self.money;
-        @memcpy(session.battle.progress.party, &party);
+        for (session.battle.progress.party, party) |*member, record| {
+            const weapon_level = member.weapon_level;
+            member.* = record;
+            member.weapon_level = weapon_level;
+        }
         session.battle.startEncounter();
-        session.battle.levels = self.levels;
-        session.battle.base_stats = self.stats;
-        session.battle.experience = self.experience;
+        const loadouts = battle.systems.legacyLoadouts(self.equipment);
+        for (session.battle.progress.party, 0..) |*member, i| {
+            member.level = self.levels[i];
+            member.base_stats = self.stats[i];
+            member.experience = self.experience[i];
+            member.loadout = loadouts[i];
+            member.rune = self.runes[i];
+        }
         session.battle.formation = self.formation;
-        session.battle.loadouts = battle.systems.legacyLoadouts(self.equipment);
-        session.battle.runes = self.runes;
         for (&session.battle.actor_conditions, self.asleep) |*conditions, turns| conditions.sleep_turns = turns;
         session.battle.enemy_hp = self.enemy_hp;
         session.battle.random = self.random;

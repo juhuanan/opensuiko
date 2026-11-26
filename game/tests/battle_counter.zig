@@ -168,7 +168,7 @@ test "ranged attacks use the live battle scheduler for hit miss protection and k
         const graphics = [_]battle.UniteGraphic{ .{ .id = name, .poses = owner_poses }, .{ .id = "crow", .poses = target_poses } };
         combat.content.unite_graphics = &graphics;
         combat.startEncounter();
-        if (scenario == 0) combat.weapon_augments[0] = .{ .rune = .fire, .fragments = 3 };
+        if (scenario == 0) combat.progress.party[0].weapon_augment = .{ .rune = .fire, .fragments = 3 };
         combat.unite_actors = &bundle;
         try combat.attachSpellScenes(&scene_packet);
         combat.phase = .resolving;
@@ -176,7 +176,7 @@ test "ranged attacks use the live battle scheduler for hit miss protection and k
         combat.acted[0] = false;
         combat.actions[0] = .{ .attack = 0 };
         if (coordinated) combat.coordinator = .{ .stage = .dispatch, .current_actor = 0 };
-        if (scenario >= 5) combat.runes[0] = for (combat.content.systems.?.runes, 0..) |rune, index| {
+        if (scenario >= 5) combat.progress.party[0].rune = for (combat.content.systems.?.runes, 0..) |rune, index| {
             if (std.mem.eql(u8, rune.id, "double-beat")) break index;
         } else return error.MissingRune;
         if (scenario == 2) combat.actor_conditions[combat.partyCount()].protection_rounds = 1;
@@ -589,7 +589,7 @@ test "BonBon journey source attack handles hit miss and protection" {
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         combat.progress.party[0].inventory.slots = @splat(null);
         combat.progress.party[0].max_hp = 5000;
         combat.progress.party[0].hp = 5000;
@@ -683,7 +683,7 @@ test "Wild boar journey source attack retains queued items damage protection mis
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         combat.progress.party[0].inventory.slots = @splat(null);
         const initial_hp: u16 = if (scenario == 3) 1 else if (queued_item != null) (if (low_hp) @as(u16, 1000) else 2500) else 5000;
         combat.progress.party[0].max_hp = if (scenario == 3) 1 else 5000;
@@ -837,7 +837,7 @@ test "opening journey source encounters complete mixed rounds with queued healin
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         for (combat.progress.party, 0..) |*member, actor| {
             member.inventory.slots = @splat(null);
             member.max_hp = 5000;
@@ -966,7 +966,7 @@ test "opening journey source rounds mix spells healing items and enemy returns" 
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         for (combat.progress.party) |*member| {
             member.inventory.slots = @splat(null);
             member.max_hp = 5000;
@@ -980,7 +980,7 @@ test "opening journey source rounds mix spells healing items and enemy returns" 
         const spell = for (content.systems.?.spells, 0..) |entry, index| {
             if (std.mem.eql(u8, entry.id, if (healing) "spell_9" else "spell_1")) break index;
         } else return error.MissingSpell;
-        combat.runes[caster] = content.systems.?.runeIndex(if (healing) "water" else "fire");
+        combat.progress.party[caster].rune = content.systems.?.runeIndex(if (healing) "water" else "fire");
         try std.testing.expect(combat.canCast(caster, spell));
         combat.actions[caster] = .{ .spell = .{ .index = spell, .target = if (healing) 1 else 0 } };
         combat.acted[caster] = false;
@@ -1081,8 +1081,8 @@ test "opening journey source rounds mix physical runes Fisherman and Medicine" {
             try std.testing.expect(combat.partyProfile(technique.owner).rune_locked);
             try std.testing.expect(combat.hasRune(technique.owner, technique.rune));
         }
-        combat.runes = @splat(null);
-        combat.runes[technique.owner] = content.systems.?.runeIndex(technique.rune);
+        for (combat.progress.party) |*member| member.rune = null;
+        combat.progress.party[technique.owner].rune = content.systems.?.runeIndex(technique.rune);
         try std.testing.expect(combat.canPhysicalRune(technique.owner));
         combat.actions = @splat(null);
         combat.choose(4);
@@ -1099,7 +1099,7 @@ test "opening journey source rounds mix physical runes Fisherman and Medicine" {
             member.hp = 3000;
         }
         combat.progress.party[1].inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
-        combat.base_stats[if (physical_first) technique.owner else 4].speed = 999;
+        combat.progress.party[if (physical_first) technique.owner else 4].base_stats.speed = 999;
         if (protected) for (&combat.actor_conditions) |*conditions| {
             conditions.protection_rounds = 2;
         };
@@ -1233,7 +1233,7 @@ test "Crow journey source dive reaches every party row and retains contact rollb
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         combat.progress.party[target].inventory.slots = @splat(null);
         const hp: u16 = if (scenario == 3) 1 else 5000;
         combat.progress.party[target].hp = hp;
@@ -1299,7 +1299,7 @@ test "Ant journey plays source ordinary and special attacks" {
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         combat.progress.party[0].inventory.slots = @splat(null);
         const initial_hp: u16 = if (scenario >= 6) 1 else 5000;
         combat.progress.party[0].max_hp = if (scenario >= 8) 5000 else initial_hp;
@@ -1388,7 +1388,7 @@ test "Ant source coordinator delays selection while its special continues" {
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         combat.progress.party[0].max_hp = 5000;
         combat.progress.party[0].hp = 5000;
         const enemy = combat.partyCount();
@@ -1457,8 +1457,8 @@ test "Ant special starts the coordinator in an ordinary journey round" {
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
         combat.actions[1] = if (attack) .{ .attack = 0 } else if (item) .{ .item = .{ .slot = 0, .target = 0, .id = .medicine } } else .defend;
-        combat.runes = @splat(null);
-        if (mode == 3) combat.runes[1] = for (combat.content.systems.?.runes, 0..) |rune, index| {
+        for (combat.progress.party) |*member| member.rune = null;
+        if (mode == 3) combat.progress.party[1].rune = for (combat.content.systems.?.runes, 0..) |rune, index| {
             if (std.mem.eql(u8, rune.id, "double-beat")) break index;
         } else return error.MissingRune;
         combat.progress.party[0].max_hp = 5000;
@@ -1863,7 +1863,7 @@ test "Parry live party hurt protection KO Buddha and Double-Beat preserve source
             }
         }
         if (scenario == 3) combat.progress.party[0].inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
-        if (scenario >= 4) combat.runes[0] = for (combat.content.systems.?.runes, 0..) |rune, index| {
+        if (scenario >= 4) combat.progress.party[0].rune = for (combat.content.systems.?.runes, 0..) |rune, index| {
             if (std.mem.eql(u8, rune.id, "double-beat")) break index;
         } else return error.MissingRune;
         const hp = combat.hp(0);
@@ -2243,7 +2243,7 @@ test "Counter live eligibility preserves source slot weapon Defend rune and rand
         var combat = try battle.State.init(content, items.value, &members, 17);
         try combat.attachUniteActors(&actors.value);
         combat.actions[0] = if (scenario == 0 or scenario == 5 or scenario == 6 or scenario == 7) .defend else .{ .attack = 0 };
-        if (scenario == 3 or scenario == 4) combat.runes[0] = for (content.systems.?.runes, 0..) |rune, index| {
+        if (scenario == 3 or scenario == 4) combat.progress.party[0].rune = for (content.systems.?.runes, 0..) |rune, index| {
             if (std.mem.eql(u8, rune.id, "counter")) break index;
         } else return error.MissingCounterRune;
         if (scenario == 4) profiles[0].weapon_range = .long;
@@ -2343,7 +2343,7 @@ test "Counter and physical rune simultaneous callbacks consume variance in actor
     combat.enemy_hp = @splat(5000);
     const recipient = combat.partyCount();
     const attacker = recipient + 1;
-    combat.runes[2] = for (content.systems.?.runes, 0..) |rune, index| {
+    combat.progress.party[2].rune = for (content.systems.?.runes, 0..) |rune, index| {
         if (std.mem.eql(u8, rune.id, "boar")) break index;
     } else return error.MissingRune;
     try combat.beginSourcePhysicalRune(2, recipient);
@@ -2407,7 +2407,7 @@ test "Parry and physical rune simultaneous contacts restore party HP after a lat
     combat.progress.party[0].hp = 5000;
     const attacker = combat.partyCount();
     const recipient = attacker + 1;
-    combat.runes[2] = for (content.systems.?.runes, 0..) |rune, index| {
+    combat.progress.party[2].rune = for (content.systems.?.runes, 0..) |rune, index| {
         if (std.mem.eql(u8, rune.id, "boar")) break index;
     } else return error.MissingRune;
     try combat.beginSourcePhysicalRune(2, recipient);

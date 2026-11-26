@@ -31,12 +31,17 @@ test "combat checkpoints rebind imported spell data and refuse a different libra
     _ = try draws.next();
     var session = try combat_session.Session.begin(entry, source, &scratch, draws);
     const checkpoint = try session.capture(draws);
+    const campaign_member = source.progress.party[0];
+    session.state.progress.party[0].experience = (campaign_member.experience + 1) % 1000;
+    session.state.progress.party[0].weapon_augment = .{ .rune = .fire, .fragments = 2 };
+    try std.testing.expectEqualDeep(campaign_member, source.progress.party[0]);
     var other_draws = draws;
     other_draws.prng = .init(18);
     try std.testing.expectError(error.RandomStreamMismatch, session.tick(.{}, &other_draws));
     session.state.spell_scenes = &rebound;
     try session.restore(checkpoint, &draws);
     try std.testing.expectEqualDeep(checkpoint.draws, draws);
+    try std.testing.expectEqualDeep(campaign_member, session.state.progress.party[0]);
     try std.testing.expect(session.state.spell_scenes == &rebound);
     session.state.spell_scenes = null;
     try std.testing.expectError(error.CombatContentMismatch, session.restore(checkpoint, &draws));
@@ -62,7 +67,7 @@ test "imported Firestorm shares the action camera and drives group damage withou
     try std.testing.expectEqual(@as(usize, 3), combat.enemyCount());
     try combat.attachSpellScenes(&packet.value);
     combat.enemy_hp[0] = 0;
-    combat.runes[0] = fixture.view.systems.?.runeIndex("fire");
+    combat.progress.party[0].rune = fixture.view.systems.?.runeIndex("fire");
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -172,7 +177,7 @@ test "imported Fog retains enemy bonuses and applies its group modifier only on 
     combat.actor_conditions[party].stat_modifiers.skill_bonus = 70;
     combat.actor_conditions[party + 1].stat_modifiers = .{ .skill_bonus = 50, .defense_bonus = 91 };
     combat.actor_conditions[party + 2].stat_modifiers = .{ .skill_bonus = -51, .defense_bonus = -7 };
-    combat.runes[0] = fixture.view.systems.?.runeIndex("water");
+    combat.progress.party[0].rune = fixture.view.systems.?.runeIndex("water");
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     var spell_index: usize = 0;
@@ -217,7 +222,7 @@ test "Spark launches an ordinary source strike and lets remaining allies follow 
     var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
     try sourceRoundBoundary(&combat, source.value);
     combat.content.party_attacks = source.value.party_attacks;
-    combat.runes[0] = fixture.view.systems.?.runeIndex("spark");
+    combat.progress.party[0].rune = fixture.view.systems.?.runeIndex("spark");
     try std.testing.expect(combat.hasRune(0, "spark"));
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .attack = 0 };
@@ -263,7 +268,7 @@ test "generated Water heals living allies at246 and binds four orbits per party 
     var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
     combat.integration = .{ .host = host };
     try combat.attachSpellScenes(&packet.value);
-    combat.runes[0] = fixture.view.systems.?.runeIndex("water");
+    combat.progress.party[0].rune = fixture.view.systems.?.runeIndex("water");
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     for (combat.progress.party, 0..) |*member, index| {
@@ -426,14 +431,14 @@ test "direct Earth buffs preserve ailments and accept a Turtle target in both sp
         const spell = for (systems.spells, 0..) |definition, i| {
             if (std.mem.eql(u8, definition.name, name)) break i;
         } else return error.MissingBuff;
-        combat.runes[0] = for (systems.runes, 0..) |rune, i| {
+        combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
             var owns = false;
             for (rune.spells) |maybe| if (maybe == spell) {
                 owns = true;
             };
             if (owns) break i;
         } else return error.MissingBuffRune;
-        combat.runes[1] = systems.runeIndex("turtle").?;
+        combat.progress.party[1].rune = systems.runeIndex("turtle").?;
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         combat.progress.party[1].status = .poisoned;
         combat.progress.party[1].balloons = 2;
@@ -479,8 +484,8 @@ test "generated Clay applies one Turtle-compatible buff and rolls back a late pa
         var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
         combat.integration = .{ .host = host };
         try combat.attachSpellScenes(&packet.value);
-        combat.runes[0] = combat.content.systems.?.runeIndex("earth").?;
-        combat.runes[1] = combat.content.systems.?.runeIndex("turtle").?;
+        combat.progress.party[0].rune = combat.content.systems.?.runeIndex("earth").?;
+        combat.progress.party[1].rune = combat.content.systems.?.runeIndex("turtle").?;
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         combat.actor_conditions[1].stat_modifiers.defense_bonus = -51;
         const spell = for (combat.content.systems.?.spells, 0..) |entry, i| {
@@ -542,14 +547,14 @@ test "generated Guardian of Earth buffs living allies once at289 and releases353
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.name, "Guardian of Earth")) break i;
     } else unreachable;
-    combat.runes[0] = for (systems.runes, 0..) |rune, i| {
+    combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
         var owns = false;
         for (rune.spells) |maybe| if (maybe == spell) {
             owns = true;
         };
         if (owns) break i;
     } else unreachable;
-    combat.runes[1] = systems.runeIndex("turtle").?;
+    combat.progress.party[1].rune = systems.runeIndex("turtle").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.actor_conditions[1].stat_modifiers.defense_bonus = -51;
     combat.actor_conditions[2].stat_modifiers.defense_bonus = 50;
@@ -600,8 +605,8 @@ test "generated Copper Flesh protects a Turtle target at225 and releases449" {
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_23")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("earth").?;
-    combat.runes[1] = systems.runeIndex("turtle").?;
+    combat.progress.party[0].rune = systems.runeIndex("earth").?;
+    combat.progress.party[1].rune = systems.runeIndex("turtle").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[1].status = .poisoned;
@@ -646,14 +651,14 @@ test "generated Mother Ocean binds fallen allies and heals once at366 before rel
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_30")) break i;
     } else unreachable;
-    combat.runes[0] = for (systems.runes, 0..) |rune, i| {
+    combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
         var owns = false;
         for (rune.spells) |maybe| if (maybe == spell) {
             owns = true;
         };
         if (owns) break i;
     } else unreachable;
-    combat.runes[1] = systems.runeIndex("turtle").?;
+    combat.progress.party[1].rune = systems.runeIndex("turtle").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[1].status = .poisoned;
@@ -736,14 +741,14 @@ test "generated Rain of Kindness heals living allies once396 and releases397" {
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_12")) break i;
     } else unreachable;
-    combat.runes[0] = for (systems.runes, 0..) |rune, i| {
+    combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
         var owns = false;
         for (rune.spells) |maybe| if (maybe == spell) {
             owns = true;
         };
         if (owns) break i;
     } else unreachable;
-    combat.runes[1] = systems.runeIndex("turtle").?;
+    combat.progress.party[1].rune = systems.runeIndex("turtle").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[1].status = .poisoned;
@@ -805,7 +810,7 @@ test "generated Angry Blow lands twice reacts189 damages240 and releases305" {
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_17")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("lightning").?;
+    combat.progress.party[0].rune = systems.runeIndex("lightning").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -861,7 +866,7 @@ test "generated Rainstorm keeps KO formation gaps reacts289 damages345 and relea
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_18")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("lightning").?;
+    combat.progress.party[0].rune = systems.runeIndex("lightning").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -930,7 +935,7 @@ test "generated arranged lightning reacts268 damages337 and releases401 without 
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_19")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("lightning").?;
+    combat.progress.party[0].rune = systems.runeIndex("lightning").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -983,7 +988,7 @@ test "generated contracting lightning preserves reaction gaps damages384 and rel
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_20")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("lightning").?;
+    combat.progress.party[0].rune = systems.runeIndex("lightning").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -1032,7 +1037,7 @@ test "generated sound scenes revive368 or heal364 and consume only scheduled dra
         const spell = for (systems.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, id)) break i;
         } else unreachable;
-        combat.runes[0] = for (systems.runes, 0..) |rune, i| {
+        combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
             var owns = false;
             for (rune.spells) |maybe| if (maybe == spell) {
                 owns = true;
@@ -1094,7 +1099,7 @@ test "generated Storm keeps KO formation gaps reacts171 damages224 and releases2
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_16")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("wind").?;
+    combat.progress.party[0].rune = systems.runeIndex("wind").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -1147,7 +1152,7 @@ test "generated paired wind reacts163 damages208 and releases265 without visual 
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_14")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("wind").?;
+    combat.progress.party[0].rune = systems.runeIndex("wind").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -1191,14 +1196,14 @@ test "generated Healing Wind respects HP protection cures288 and releases289 wit
         const spell = for (systems.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, "spell_15")) break i;
         } else unreachable;
-        combat.runes[0] = for (systems.runes, 0..) |rune, i| {
+        combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
             var owns = false;
             for (rune.spells) |maybe| if (maybe == spell) {
                 owns = true;
             };
             if (owns) break i;
         } else unreachable;
-        combat.runes[1] = systems.runeIndex("turtle").?;
+        combat.progress.party[1].rune = systems.runeIndex("turtle").?;
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
         combat.progress.party[1].status = .poisoned;
@@ -1261,7 +1266,7 @@ test "generated Wind of Sleep preserves KO gaps wards and HP protection and roll
         const spell = for (systems.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, "spell_13")) break i;
         } else unreachable;
-        combat.runes[0] = systems.runeIndex("wind").?;
+        combat.progress.party[0].rune = systems.runeIndex("wind").?;
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
         combat.actions = @splat(.defend);
@@ -1346,7 +1351,7 @@ test "generated Dancing Flames repeats target reactions preserves KO gaps damage
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_3")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("fire").?;
+    combat.progress.party[0].rune = systems.runeIndex("fire").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -1424,7 +1429,7 @@ test "generated Judgment retargets KO respects protection and ignores death ward
         var view = systems;
         view.runes = runes;
         combat.content.systems = view;
-        combat.runes[0] = systems.runes.len;
+        combat.progress.party[0].rune = systems.runes.len;
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
         combat.actions = @splat(.defend);
@@ -1499,7 +1504,7 @@ test "generated Shining Wind heals cures and damages384 with distinct reactions 
         combat.actor_conditions[4].rune_blocked = true;
         combat.actor_conditions[4].accuracy_reduced = true;
         try combat.attachSpellScenes(&packet.value);
-        combat.runes[0] = fixture.view.systems.?.runeIndex("cyclone");
+        combat.progress.party[0].rune = fixture.view.systems.?.runeIndex("cyclone");
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
         const spell = for (fixture.view.systems.?.spells, 0..) |entry, i| {
@@ -1590,7 +1595,7 @@ test "generated Explosion preserves RNG scale KO gaps protection damages448 and 
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_4")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("fire").?;
+    combat.progress.party[0].rune = systems.runeIndex("fire").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -1665,7 +1670,7 @@ test "generated Earthquake preserves bounce RNG KO gaps protection damages257 an
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_24")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("earth").?;
+    combat.progress.party[0].rune = systems.runeIndex("earth").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -1735,7 +1740,7 @@ test "generated Thunder God keeps radial draws KO gaps protection damage484 and 
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_32")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("thunder").?;
+    combat.progress.party[0].rune = systems.runeIndex("thunder").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -1805,7 +1810,7 @@ test "generated Final Flame keeps staged draws KO gaps protection damage584 and 
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_29")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("rage").?;
+    combat.progress.party[0].rune = systems.runeIndex("rage").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -1900,7 +1905,7 @@ test "generated Charm Arrow keeps erosion draws KO gaps protection damage224 and
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_8")) break i;
     } else unreachable;
-    combat.runes[0] = systems.runeIndex("resurrection").?;
+    combat.progress.party[0].rune = systems.runeIndex("resurrection").?;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -1974,7 +1979,7 @@ test "generated Voice of Earth keeps grounded motion protection airborne immunit
         const spell = for (systems.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, "spell_22")) break i;
         } else unreachable;
-        combat.runes[0] = systems.runeIndex("earth").?;
+        combat.progress.party[0].rune = systems.runeIndex("earth").?;
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
         const casts: usize = if (airborne) 1 else 2;
@@ -2073,7 +2078,7 @@ test "generated Deadly Fingertips keeps retargeting immunity result306 charge an
         var view = systems;
         view.runes = runes;
         combat.content.systems = view;
-        combat.runes[0] = systems.runes.len;
+        combat.progress.party[0].rune = systems.runes.len;
         combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
         combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
         combat.actions = @splat(.defend);
@@ -2145,7 +2150,7 @@ test "Scolding replacement uses the normal owner and commits only at source impa
     var view = systems;
     view.runes = &runes;
     combat.content.systems = view;
-    combat.runes[0] = 0;
+    combat.progress.party[0].rune = 0;
     combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
     combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
@@ -2216,7 +2221,7 @@ test "approved Soul casts use the canonical library and preserve outcomes charge
             var view = systems;
             view.runes = runes;
             combat.content.systems = view;
-            combat.runes[0] = systems.runes.len;
+            combat.progress.party[0].rune = systems.runes.len;
             combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
             combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
             combat.actions = @splat(.defend);

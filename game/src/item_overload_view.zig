@@ -43,7 +43,7 @@ pub fn draw(state: *const journey.State, context: *const ui.Context) !void {
             }
             const bag = if (active.phase == .settling) bag: {
                 const selection = active.replacement.?;
-                break :bag (try journey.overload.prepareReplacement(state, selection.member, selection.slot, active.item)).member.inventory;
+                break :bag (try journey.overload.prepareReplacement(state, selection.member, selection.slot, active.item)).inventory;
             } else state.combat.progress.party[active.member].inventory;
             for (bag.slots[0..bag.count()], 0..) |item, i| {
                 const y = 122 + @as(i32, @intCast(i)) * 24;

@@ -31,7 +31,7 @@ test "Strong Arm live branches preserve ally selection protector HP KO Buddha an
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        combat.runes = @splat(null);
+        for (combat.progress.party) |*member| member.rune = null;
         const owner = combat.partyCount() + 1;
         const covered = scenario >= 3 and scenario <= 6;
         const victim: usize = if (covered) 1 else 0;

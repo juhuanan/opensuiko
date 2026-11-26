@@ -80,7 +80,7 @@ pub const Proposal = struct {
 fn selectedRecord(state: creation.OwnerState, source_character_id: u8, member_id: []const u8) !RecordSelection {
     for (state.roster.members, 0..) |maybe_member, index| {
         const member = maybe_member orelse continue;
-        if (std.mem.eql(u8, member.member.id, member_id)) return .{
+        if (std.mem.eql(u8, member.id, member_id)) return .{
             .roster_index = index,
             .source_character_id = source_character_id,
             .member_id = member_id,

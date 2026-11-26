@@ -72,13 +72,13 @@ pub fn modeProjection(self: *Host) results.Store {
     store.party.count = 0;
     for (self.roster.snapshot.members) |maybe| if (maybe) |member| {
         if (store.party.count == results.max_members) break;
-        const member_state = self.roster.stateOf(member.member.id) orelse continue;
+        const member_state = self.roster.stateOf(member.id) orelse continue;
         if (member_state.presence != .active) continue;
         var slot = results.Member{};
-        slot.id = results.Id.init(member.member.id) catch continue;
-        slot.hp = member.member.hp;
-        slot.max_hp = member.member.max_hp;
-        slot.status = switch (member.member.status) {
+        slot.id = results.Id.init(member.id) catch continue;
+        slot.hp = member.hp;
+        slot.max_hp = member.max_hp;
+        slot.status = switch (member.status) {
             .healthy => .healthy,
             .poisoned => .poisoned,
             .unconscious => .unconscious,

@@ -143,15 +143,15 @@ test "all 78 admitted profiles keep their source seed fields" {
         const owned = ledger.owned(profile.id).?;
         for (profile.seed.inventory, 0..) |item, slot| if (std.mem.eql(u8, item.id, "sacrificial_buddha")) {
             try std.testing.expectEqual(@as(u16, 1), item.uses);
-            try std.testing.expectEqual(field.items.Id.sacrificial_buddha, owned.member.inventory.slots[slot].?.id);
-            try std.testing.expectEqual(@as(u16, 0), owned.member.inventory.slots[slot].?.uses);
+            try std.testing.expectEqual(field.items.Id.sacrificial_buddha, owned.inventory.slots[slot].?.id);
+            try std.testing.expectEqual(@as(u16, 0), owned.inventory.slots[slot].?.uses);
         };
-        try std.testing.expectEqualStrings(profile.name, owned.member.name);
+        try std.testing.expectEqualStrings(profile.name, owned.name);
         try std.testing.expectEqual(profile.seed.level, owned.level);
         try std.testing.expectEqual(@as(u32, profile.seed.experience), owned.experience);
-        try std.testing.expectEqual(profile.seed.max_hp, owned.member.max_hp);
+        try std.testing.expectEqual(profile.seed.max_hp, owned.max_hp);
         try std.testing.expectEqual(profile.seed.weapon.level, owned.weapon_level);
-        try std.testing.expectEqual(profile.seed.stats[0] + profile.seed.weapon.powers[profile.seed.weapon.level - 1], owned.stats.attack);
+        try std.testing.expectEqual(profile.seed.stats[0] + profile.seed.weapon.powers[profile.seed.weapon.level - 1], owned.base_stats.attack);
         const sidecar = ledger.extra(profile.id).?;
         try std.testing.expectEqualStrings(profile.id, sidecar.member_id);
         try std.testing.expectEqualDeep(profile.seed.weapon_fragments, sidecar.weapon_fragments);
@@ -178,14 +178,14 @@ test "source growth, weapon curve, piece counters and rune/equipment retention" 
     const hero = ledger.owned("hero").?;
     try std.testing.expectEqual(@as(u8, 2), hero.level);
     try std.testing.expectEqual(@as(u32, 0), hero.experience);
-    try std.testing.expectEqual(@as(u16, 21), hero.stats.attack);
-    try std.testing.expectEqual(@as(u16, 25), hero.stats.skill);
-    try std.testing.expectEqual(@as(u16, 20), hero.stats.defense);
-    try std.testing.expectEqual(@as(u16, 18), hero.stats.speed);
-    try std.testing.expectEqual(@as(u16, 15), hero.stats.magic);
-    try std.testing.expectEqual(@as(u16, 18), hero.stats.luck);
-    try std.testing.expectEqual(@as(u16, 27), hero.member.max_hp);
-    try std.testing.expectEqual(@as(u16, 27), hero.member.hp);
+    try std.testing.expectEqual(@as(u16, 21), hero.base_stats.attack);
+    try std.testing.expectEqual(@as(u16, 25), hero.base_stats.skill);
+    try std.testing.expectEqual(@as(u16, 20), hero.base_stats.defense);
+    try std.testing.expectEqual(@as(u16, 18), hero.base_stats.speed);
+    try std.testing.expectEqual(@as(u16, 15), hero.base_stats.magic);
+    try std.testing.expectEqual(@as(u16, 18), hero.base_stats.luck);
+    try std.testing.expectEqual(@as(u16, 27), hero.max_hp);
+    try std.testing.expectEqual(@as(u16, 27), hero.hp);
     try std.testing.expectEqual(@as(usize, 1), ledger.activeCount());
 
     _ = try ledger.awardExp(asset, f.roster_source.value, f.bindings(), "hero", 500, &rolls);
@@ -196,7 +196,7 @@ test "source growth, weapon curve, piece counters and rune/equipment retention" 
 
     _ = try ledger.raiseWeapon(asset, f.roster_source.value, f.bindings(), "hero");
     try std.testing.expectEqual(@as(u8, 2), ledger.owned("hero").?.weapon_level);
-    try std.testing.expectEqual(@as(u16, 23), ledger.owned("hero").?.stats.attack);
+    try std.testing.expectEqual(@as(u16, 23), ledger.owned("hero").?.base_stats.attack);
 
     _ = try ledger.applyWeaponPiece(asset, f.roster_source.value, f.bindings(), "hero", .fire, false);
     try std.testing.expectEqualDeep([5]u8{ 1, 0, 0, 0, 0 }, ledger.extra("hero").?.weapon_fragments);
@@ -303,14 +303,14 @@ test "knockout, revive, rest and reload preserve progression fields" {
     const before = ledger.owned("gremio").?;
     const before_extra = ledger.extra("gremio").?;
     _ = try ledger.knockout(asset, f.roster_source.value, f.bindings(), "gremio", "MAIN:0x800E9CC4");
-    try std.testing.expectEqual(field.game_state.Status.unconscious, ledger.owned("gremio").?.member.status);
-    try std.testing.expectEqual(@as(u16, 0), ledger.owned("gremio").?.member.hp);
+    try std.testing.expectEqual(field.game_state.Status.unconscious, ledger.owned("gremio").?.status);
+    try std.testing.expectEqual(@as(u16, 0), ledger.owned("gremio").?.hp);
     try std.testing.expectEqualDeep(before_extra, ledger.extra("gremio").?);
     _ = try ledger.revive(asset, f.roster_source.value, f.bindings(), "gremio", "MAIN:0x800E9CC4");
-    try std.testing.expectEqual(field.game_state.Status.healthy, ledger.owned("gremio").?.member.status);
-    try std.testing.expectEqual(before.member.hp, ledger.owned("gremio").?.member.hp);
+    try std.testing.expectEqual(field.game_state.Status.healthy, ledger.owned("gremio").?.status);
+    try std.testing.expectEqual(before.hp, ledger.owned("gremio").?.hp);
     _ = try ledger.rest(asset, f.roster_source.value, f.bindings(), "gremio");
-    try std.testing.expectEqual(ledger.owned("gremio").?.member.max_hp, ledger.owned("gremio").?.member.hp);
+    try std.testing.expectEqual(ledger.owned("gremio").?.max_hp, ledger.owned("gremio").?.hp);
 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

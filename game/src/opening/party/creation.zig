@@ -72,7 +72,7 @@ pub fn beginInitialParty(
         roster.members[index] = materialized.owned;
         roster.extras[index] = materialized.extra;
         roster.eligible[index] = true;
-        roster.active[index] = materialized.owned.member.id;
+        roster.active[index] = materialized.owned.id;
     }
     _ = try party.Session.init(combat, roster, sources_for_session);
     return .{ .roster = roster, .members = ids };
@@ -100,7 +100,7 @@ pub fn addLoaded(
 
     var next = current;
     const member_index = for (next.members, 0..) |member, i| {
-        if (member) |owned| if (std.mem.eql(u8, owned.member.id, source.character_id)) break i;
+        if (member) |owned| if (std.mem.eql(u8, owned.id, source.character_id)) break i;
     } else return error.PersistentRecordUnavailable;
     var active_slot: ?usize = null;
     for (next.active, 0..) |member, i| if (member == null) {
@@ -110,7 +110,7 @@ pub fn addLoaded(
     const active_index = active_slot orelse return error.PartyFull;
 
     next.eligible[member_index] = true;
-    next.active[active_index] = current.members[member_index].?.member.id;
+    next.active[active_index] = current.members[member_index].?.id;
     _ = try party.Session.init(combat, next, sources_for_session);
     return .{ .source = source, .before = current, .after = next };
 }
@@ -232,12 +232,12 @@ pub const Owner = struct {
         var state = saved;
         var present: [110]bool = @splat(false);
         for (&state.roster.members, 0..) |*maybe_member, index| if (maybe_member.*) |*member| {
-            const character = try sourceCharacter(context.catalogue, member.member.id);
+            const character = try sourceCharacter(context.catalogue, member.id);
             const id: usize = @intCast(character.source_character_id);
-            if (present[id] or !state.initialized[id] or !std.mem.eql(u8, member.member.name, character.name)) return error.InvalidOwnerState;
+            if (present[id] or !state.initialized[id] or !std.mem.eql(u8, member.name, character.name)) return error.InvalidOwnerState;
             present[id] = true;
-            member.member.id = character.id;
-            member.member.name = character.name;
+            member.id = character.id;
+            member.name = character.name;
             const extra = state.roster.extras[index] orelse return error.InvalidOwnerState;
             if (!std.mem.eql(u8, extra.member_id, character.id)) return error.InvalidOwnerState;
             state.roster.extras[index].?.member_id = character.id;
@@ -305,7 +305,7 @@ pub const Owner = struct {
                     (try initialTemplate(context.combat, context.catalogue, operand)).materialized;
                 const index = for (next.roster.members, 0..) |member, i| {
                     if (member == null) break i;
-                    if (std.mem.eql(u8, member.?.member.id, character.id)) return error.PersistentRecordMismatch;
+                    if (std.mem.eql(u8, member.?.id, character.id)) return error.PersistentRecordMismatch;
                 } else return error.RosterFull;
                 next.roster.members[index] = materialized.owned;
                 next.roster.extras[index] = materialized.extra;
@@ -345,11 +345,11 @@ pub const Owner = struct {
                 if (!next.initialized[35]) return error.PersistentRecordUnavailable;
                 const character = try sourceCharacter(context.catalogue, "viktor");
                 const index = for (next.roster.members, 0..) |member, i| {
-                    if (member != null and std.mem.eql(u8, member.?.member.id, character.id)) break i;
+                    if (member != null and std.mem.eql(u8, member.?.id, character.id)) break i;
                 } else return error.PersistentRecordUnavailable;
                 if (resolved.slot) |slot| {
                     next.roster.eligible[index] = true;
-                    next.roster.active[next.count] = next.roster.members[index].?.member.id;
+                    next.roster.active[next.count] = next.roster.members[index].?.id;
                     next.slots[slot] = 35;
                     next.order[next.count] = slot;
                     next.count += 1;
