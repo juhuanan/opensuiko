@@ -198,8 +198,8 @@ pub fn build(b: *std.Build) !void {
         .{ "recruitment", "src/recruitment.zig", &.{"field"} },
         .{ "party_session", "src/party_session/session.zig", &.{ "battle_rules", "field", "recruitment", "combat_systems", "party_data" } },
         .{ "party_content", "src/party_content.zig", &.{"party_session"} },
-        .{ "opening_party", "src/opening/party/root.zig", &.{ "party_session", "battle", "opening_records" } },
-        .{ "item_ledger", "src/item_ledger/root.zig", &.{ "battle", "field", "party_session" } },
+        .{ "opening_party", "src/opening/party/root.zig", &.{ "party_session", "field", "opening_records" } },
+        .{ "item_ledger", "src/item_ledger/root.zig", &.{ "battle_rules", "field", "party_session" } },
         .{ "route_coordinates", "src/route_coordinates.zig", &.{} },
         .{ "route_transitions", "src/route_transitions.zig", &.{ "field_coordinates", "event_runtime", "validation", "route_coordinates" } },
         .{ "travel_modes", "src/travel_modes/controller.zig", &.{ "route_transitions", "event_runtime", "travel_data" } },
@@ -320,5 +320,6 @@ pub fn build(b: *std.Build) !void {
     _ = r.addTest(campaign_test, "tests/package_host_suite.zig", &.{ "world_graph", "package_host", "package_host_data", "platform_recovery", "pause_menu", "field", "hq", "hq_data", "opening_data" }, true);
     _ = r.addTest(campaign_test, "tests/chapters_suite.zig", &.{ "chapters", "middle_assets", "final_assets", "event_runtime", "duel", "war", "war_session", "battle", "item_ledger", "campaign_policies_data", "party_session", "hq", "hq_data", "field" }, true);
     _ = r.addTest(campaign_test, "tests/campaign_status.zig", &.{"campaign"}, false);
+    _ = r.addTest(campaign_test, "tests/character_domain.zig", &.{ "field", "battle_rules", "party_session" }, false);
     _ = r.addTest(campaign_test, "tests/optional_game_contracts.zig", &.{"optional_game_contracts"}, false);
 }

@@ -1,6 +1,6 @@
 //! Source-qualified NewGame templates and existing-record 0x3C party additions.
 const std = @import("std");
-const battle = @import("battle");
+const game_state = @import("field").game_state;
 const party = @import("party_session");
 
 const entry = @import("opening_records").entry;
@@ -27,7 +27,7 @@ pub const LoadedBinding = struct {
 /// Materialize the source's persistent NewGame template. This creates no roster,
 /// eligibility, formation, or recruitment mutation.
 pub fn initialTemplate(
-    combat: battle.State,
+    rules: game_state.CharacterRules,
     catalogue: party.catalogue.Catalogue,
     source_character_id: u8,
 ) !InitialTemplate {
@@ -39,7 +39,7 @@ pub fn initialTemplate(
             std.mem.eql(u8, candidate.resource, source.resource) and
             std.mem.eql(u8, candidate.resource_sha256, source.resource_sha256)) break candidate;
     } else return error.PersistentRecordMismatch;
-    return .{ .source = source, .materialized = try party.catalogue.materialize(combat.content.characterRules(), catalogue, character.id) };
+    return .{ .source = source, .materialized = try party.catalogue.materialize(rules, catalogue, character.id) };
 }
 
 pub const InitialParty = struct {
@@ -52,7 +52,8 @@ pub const InitialParty = struct {
 /// This is the template caller; it does not claim the 0x3C event join, which
 /// needs its own source-qualified event contract.
 pub fn beginInitialParty(
-    combat: battle.State,
+    rules: game_state.CharacterRules,
+    content_id: []const u8,
     catalogue: party.catalogue.Catalogue,
     sources_for_session: party.Sources,
 ) !InitialParty {
@@ -60,28 +61,28 @@ pub fn beginInitialParty(
     const operands = [_]u8{ 0, 6, 1, 2 };
     var roster: party.Snapshot = .{
         .entry_id = "opening_initial_party",
-        .content_id = combat.content.schema,
+        .content_id = content_id,
         .receipt = "initial",
         .baseline_revision = 0,
     };
     for (ids, operands, 0..) |id, operand, index| {
         const materialized = if (index == 0)
-            try party.catalogue.materialize(combat.content.characterRules(), catalogue, id)
+            try party.catalogue.materialize(rules, catalogue, id)
         else
-            (try initialTemplate(combat, catalogue, operand)).materialized;
+            (try initialTemplate(rules, catalogue, operand)).materialized;
         roster.members[index] = materialized.owned;
         roster.extras[index] = materialized.extra;
         roster.eligible[index] = true;
         roster.active[index] = materialized.owned.id;
     }
-    _ = try party.Session.init(combat.content.characterRules(), roster, sources_for_session);
+    _ = try party.Session.init(rules, roster, sources_for_session);
     return .{ .roster = roster, .members = ids };
 }
 
 /// Prepare the active-roster part of 0x3C only when the loader proves that the
 /// operand resolved to an existing persistent member. No member record is created.
 pub fn addLoaded(
-    combat: battle.State,
+    rules: game_state.CharacterRules,
     expected_before: party.Snapshot,
     current: party.Snapshot,
     operand: u8,
@@ -111,7 +112,7 @@ pub fn addLoaded(
 
     next.eligible[member_index] = true;
     next.active[active_index] = current.members[member_index].?.id;
-    _ = try party.Session.init(combat.content.characterRules(), next, sources_for_session);
+    _ = try party.Session.init(rules, next, sources_for_session);
     return .{ .source = source, .before = current, .after = next };
 }
 
@@ -140,7 +141,7 @@ pub const Operation = union(enum) {
 };
 pub const Proposal = struct { operation: Operation, before: OwnerState, after: OwnerState };
 pub const Context = struct {
-    combat: battle.State,
+    rules: game_state.CharacterRules,
     catalogue: party.catalogue.Catalogue,
     sources: party.Sources,
     template: local.Asset,
@@ -179,8 +180,8 @@ fn sourceCharacter(catalogue: party.catalogue.Catalogue, id: []const u8) !party.
 pub const Owner = struct {
     state: OwnerState,
 
-    pub fn init(combat: battle.State, roster: party.Snapshot, sources_for_session: party.Sources) !Owner {
-        _ = try party.Session.init(combat.content.characterRules(), roster, sources_for_session);
+    pub fn init(rules: game_state.CharacterRules, roster: party.Snapshot, sources_for_session: party.Sources) !Owner {
+        _ = try party.Session.init(rules, roster, sources_for_session);
         if (roster.active[0] == null or !std.mem.eql(u8, roster.active[0].?, "hero")) return error.InvalidBootParty;
         for (roster.active[1..]) |id| if (id != null) return error.InvalidBootParty;
         for (roster.members[1..]) |member| if (member != null) return error.InvalidBootParty;
@@ -283,7 +284,7 @@ pub const Owner = struct {
                 maybe_id.* = (try sourceCharacter(context.catalogue, id)).id;
             };
         }
-        _ = try party.Session.init(context.combat.content.characterRules(), state.roster, context.sources);
+        _ = try party.Session.init(context.rules, state.roster, context.sources);
         return .{ .state = state };
     }
 
@@ -298,11 +299,11 @@ pub const Owner = struct {
                 };
                 if (next.initialized[operand]) return error.AlreadyInitialized;
                 const materialized = if (operand == 108)
-                    try party.catalogue.materializeBound(context.combat.content.characterRules(), context.catalogue, character.id, context.ownership_bindings)
+                    try party.catalogue.materializeBound(context.rules, context.catalogue, character.id, context.ownership_bindings)
                 else if (operand == 35)
-                    try party.catalogue.materialize(context.combat.content.characterRules(), context.catalogue, character.id)
+                    try party.catalogue.materialize(context.rules, context.catalogue, character.id)
                 else
-                    (try initialTemplate(context.combat, context.catalogue, operand)).materialized;
+                    (try initialTemplate(context.rules, context.catalogue, operand)).materialized;
                 const index = for (next.roster.members, 0..) |member, i| {
                     if (member == null) break i;
                     if (std.mem.eql(u8, member.?.id, character.id)) return error.PersistentRecordMismatch;
@@ -324,7 +325,7 @@ pub const Owner = struct {
                     for (next.order[0..next.count]) |active_slot| {
                         if (active_slot == index) return error.UnmodeledNativePartyAppend;
                     }
-                    const result = try addLoaded(context.combat, next.roster, next.roster, operand, .{ .source_character_id = source.source_character_id, .member_id = source.character_id }, context.sources);
+                    const result = try addLoaded(context.rules, next.roster, next.roster, operand, .{ .source_character_id = source.source_character_id, .member_id = source.character_id }, context.sources);
                     next.order[next.count] = @intCast(index);
                     next.count += 1;
                     next.roster = result.after;
@@ -357,7 +358,7 @@ pub const Owner = struct {
                 next.loaded[35] = true;
             },
         }
-        _ = try party.Session.init(context.combat.content.characterRules(), next.roster, context.sources);
+        _ = try party.Session.init(context.rules, next.roster, context.sources);
         next.revision = try std.math.add(u64, next.revision, 1);
         next.receipt = try std.math.add(u64, next.receipt, 1);
         next.checkpoint = checkpoint;

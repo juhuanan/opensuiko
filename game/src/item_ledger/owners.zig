@@ -12,12 +12,11 @@
 //!
 //! `save_file.zig` and the global game state are deliberately not imported.
 const std = @import("std");
-const battle = @import("battle");
 const field = @import("field");
 const party = @import("party_session");
 const packet = @import("catalogue.zig");
 
-pub const systems = battle.systems;
+pub const systems = @import("battle_rules");
 pub const items = field.items;
 pub const Storage = field.game_state.storage.Storage;
 pub const max_members = party.max_owned;
@@ -27,7 +26,7 @@ pub const warehouse_capacity = field.game_state.storage.capacity;
 pub const receipt_capacity = 16;
 pub const version: u8 = 1;
 
-/// The host's equipment catalogue (`battle.content.systems.equipment`).
+/// The equipment catalogue supplied by the host.
 pub const Catalogue = []const systems.Equipment;
 
 pub const Receipts = struct {
@@ -146,23 +145,7 @@ pub fn activeIndex(snapshot: party.Snapshot, id: []const u8) !usize {
     return error.MemberNotActive;
 }
 
-/// The existing `party_session.itemEquipped` rule, expressed against the host
-/// catalogue instead of a whole battle state.
-pub fn wearsItem(catalogue: Catalogue, member: battle.OwnedMember, bag_slot: usize) bool {
-    const stack = member.inventory.slots[bag_slot] orelse return false;
-    var worn: usize = 0;
-    for (std.enums.values(systems.EquipmentSlot)) |slot| {
-        if (member.loadout.get(slot)) |equipment| {
-            if (equipment < catalogue.len and std.mem.eql(u8, catalogue[equipment].id, @tagName(stack.id))) {
-                worn += 1;
-            }
-        }
-    }
-    for (member.inventory.slots[0..bag_slot]) |other| {
-        if (other != null and other.?.id == stack.id) worn -|= 1;
-    }
-    return worn > 0;
-}
+pub const wearsItem = field.game_state.wearsItem;
 
 /// The runtime controller identity of a reviewed packet identity, if the
 /// runtime can represent it at all.

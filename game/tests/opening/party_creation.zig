@@ -1,7 +1,6 @@
 const std = @import("std");
 const creation = @import("opening_party").creation;
 const battle = @import("battle");
-const field = @import("field");
 const party = @import("party_session");
 const allocator = std.testing.allocator;
 
@@ -59,13 +58,10 @@ test "Pahn's NewGame template materializes from the source fixture without roste
     defer allocator.free(bytes);
     const content = try battle.load(allocator, bytes);
     defer content.deinit();
-    const rules = try field.items.load(allocator, field.items.json);
-    defer rules.deinit();
     const catalogue = try party.catalogue.decode(allocator, @import("party_data").json);
     defer catalogue.deinit();
-    var participants: [6]battle.Member = undefined;
-    const combat = try battle.State.init(content.value, rules.value, &participants, 17);
-    const pahn_source = try creation.initialTemplate(combat, catalogue.value, 6);
+    const rules = content.value.characterRules();
+    const pahn_source = try creation.initialTemplate(rules, catalogue.value, 6);
     try std.testing.expectEqualStrings("pahn", pahn_source.materialized.owned.id);
     try std.testing.expectEqualStrings("pahn", pahn_source.materialized.extra.member_id);
     try std.testing.expectEqual(@as(u32, 6), pahn_source.source.source_character_id);
@@ -95,24 +91,21 @@ test "party owner replays source additions and rejects forged or stale proposals
     defer allocator.free(bytes);
     const content = try battle.load(allocator, bytes);
     defer content.deinit();
-    const rules = try field.items.load(allocator, field.items.json);
-    defer rules.deinit();
     const catalogue = try party.catalogue.decode(allocator, @import("party_data").json);
     defer catalogue.deinit();
     const template_bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "assets/campaign/opening/party_setup/local_template.json", allocator, .limited(64 * 1024));
     defer allocator.free(template_bytes);
     const template = try creation.local.open(allocator, template_bytes);
     defer template.deinit();
-    var participants: [6]battle.Member = undefined;
-    const combat = try battle.State.init(content.value, rules.value, &participants, 17);
-    const hero = try party.catalogue.materialize(combat.content.characterRules(), catalogue.value, "hero");
+    const rules = content.value.characterRules();
+    const hero = try party.catalogue.materialize(rules, catalogue.value, "hero");
     var roster: party.Snapshot = .{ .entry_id = "boot", .content_id = "source", .receipt = "boot", .baseline_revision = 0 };
     roster.members[0] = hero.owned;
     roster.extras[0] = hero.extra;
     roster.eligible[0] = true;
     roster.active[0] = hero.owned.id;
-    var owner = try creation.Owner.init(combat, roster, .{});
-    const context: creation.Context = .{ .combat = combat, .catalogue = catalogue.value, .sources = .{}, .template = template.value };
+    var owner = try creation.Owner.init(rules, roster, .{});
+    const context: creation.Context = .{ .rules = rules, .catalogue = catalogue.value, .sources = .{}, .template = template.value };
     const guarded = try creation.Entry.init(.{ 8, 0xff, 0xff, 0xff, 0xff, 0xff }, .{ 0, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe }, 1, 0x80);
     try std.testing.expect((try guarded.propose(1)) == null);
     const resource_bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "assets/campaign/opening/party_setup/entry_resources.json", allocator, .limited(64 * 1024));
@@ -184,7 +177,7 @@ test "party owner replays source additions and rejects forged or stale proposals
     try std.testing.expectError(error.InvalidProposal, owner.commit(context, forged));
     forged = proposal;
     forged.after.roster.members[0].?.hp -= 1;
-    _ = try party.Session.init(combat.content.characterRules(), forged.after.roster, .{});
+    _ = try party.Session.init(rules, forged.after.roster, .{});
     try std.testing.expectError(error.InvalidProposal, owner.commit(context, forged));
     try owner.commit(context, proposal);
     try owner.commit(context, try owner.propose(context, .{ .event_add = 6 }, 5));
@@ -239,12 +232,9 @@ test "initial-party caller refuses content without every required combat profile
     defer allocator.free(bytes);
     const content = try battle.load(allocator, bytes);
     defer content.deinit();
-    const rules = try field.items.load(allocator, field.items.json);
-    defer rules.deinit();
     const catalogue = try party.catalogue.decode(allocator, @import("party_data").json);
     defer catalogue.deinit();
-    var participants: [6]battle.Member = undefined;
-    const combat = try battle.State.init(content.value, rules.value, &participants, 17);
+    const rules = content.value.characterRules();
     try std.testing.expect(content.value.partyProfile("cleo") == null);
-    try std.testing.expectError(error.ProfileUnavailable, creation.beginInitialParty(combat, catalogue.value, .{}));
+    try std.testing.expectError(error.ProfileUnavailable, creation.beginInitialParty(rules, content.value.schema, catalogue.value, .{}));
 }

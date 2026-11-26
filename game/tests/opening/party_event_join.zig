@@ -4,7 +4,6 @@ const creation = opening_party.creation;
 const event_join = opening_party.event_join;
 const party = opening_party.party;
 const battle = @import("battle");
-const field = @import("field");
 const party_session = @import("party_session");
 const operations_data = @import("opening_assets").party_setup;
 
@@ -18,7 +17,7 @@ fn operation(asset: party.Asset, id: []const u8) !party.Operation {
 }
 
 fn bootOwner(context: creation.Context) !creation.Owner {
-    const hero = try party_session.catalogue.materialize(context.combat.content.characterRules(), context.catalogue, "hero");
+    const hero = try party_session.catalogue.materialize(context.rules, context.catalogue, "hero");
     var roster: party_session.Snapshot = .{
         .entry_id = "boot",
         .content_id = "source",
@@ -63,8 +62,6 @@ test "0x3C selects a loaded record and appends Pahn without recruit writes" {
     defer allocator.free(bytes);
     const content = try battle.load(allocator, bytes);
     defer content.deinit();
-    const rules = try field.items.load(allocator, field.items.json);
-    defer rules.deinit();
     const catalogue = try party_session.catalogue.decode(allocator, @import("party_data").json);
     defer catalogue.deinit();
     const template_bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "assets/campaign/opening/party_setup/local_template.json", allocator, .limited(64 * 1024));
@@ -73,10 +70,9 @@ test "0x3C selects a loaded record and appends Pahn without recruit writes" {
     defer template.deinit();
     var operations = try party.open(allocator, operations_data.json);
     defer operations.deinit();
-    var participants: [6]battle.Member = undefined;
-    const combat = try battle.State.init(content.value, rules.value, &participants, 17);
-    var owner = try bootOwner(.{ .combat = combat, .catalogue = catalogue.value, .sources = .{}, .template = template.value });
-    const context: creation.Context = .{ .combat = combat, .catalogue = catalogue.value, .sources = .{}, .template = template.value };
+    const rules = content.value.characterRules();
+    var owner = try bootOwner(.{ .rules = rules, .catalogue = catalogue.value, .sources = .{}, .template = template.value });
+    const context: creation.Context = .{ .rules = rules, .catalogue = catalogue.value, .sources = .{}, .template = template.value };
     try adoptEntry(&owner);
     try owner.commit(context, try owner.propose(context, .{ .initialize_template = 6 }, 2));
 
@@ -105,8 +101,6 @@ test "0x3C missing slot only rebuilds area order and keeps the initialized recor
     defer allocator.free(bytes);
     const content = try battle.load(allocator, bytes);
     defer content.deinit();
-    const rules = try field.items.load(allocator, field.items.json);
-    defer rules.deinit();
     const catalogue = try party_session.catalogue.decode(allocator, @import("party_data").json);
     defer catalogue.deinit();
     const template_bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "assets/campaign/opening/party_setup/local_template.json", allocator, .limited(64 * 1024));
@@ -115,10 +109,9 @@ test "0x3C missing slot only rebuilds area order and keeps the initialized recor
     defer template.deinit();
     var operations = try party.open(allocator, operations_data.json);
     defer operations.deinit();
-    var participants: [6]battle.Member = undefined;
-    const combat = try battle.State.init(content.value, rules.value, &participants, 17);
-    var owner = try bootOwner(.{ .combat = combat, .catalogue = catalogue.value, .sources = .{}, .template = template.value });
-    const context: creation.Context = .{ .combat = combat, .catalogue = catalogue.value, .sources = .{}, .template = template.value };
+    const rules = content.value.characterRules();
+    var owner = try bootOwner(.{ .rules = rules, .catalogue = catalogue.value, .sources = .{}, .template = template.value });
+    const context: creation.Context = .{ .rules = rules, .catalogue = catalogue.value, .sources = .{}, .template = template.value };
     try owner.commit(context, try owner.propose(context, .{ .initialize_template = 6 }, 1));
     const pahn_operation = try operation(operations.value, "party_op_03");
     const proposal = try event_join.propose(owner, context, pahn_operation, 2);
@@ -140,8 +133,6 @@ test "0x1F resolves VA1 entry 11 and atomically loads existing Viktor" {
     defer allocator.free(bytes);
     const content = try battle.load(allocator, bytes);
     defer content.deinit();
-    const rules = try field.items.load(allocator, field.items.json);
-    defer rules.deinit();
     const catalogue = try party_session.catalogue.decode(allocator, @import("party_data").json);
     defer catalogue.deinit();
     const template_bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "assets/campaign/opening/party_setup/local_template.json", allocator, .limited(64 * 1024));
@@ -150,10 +141,9 @@ test "0x1F resolves VA1 entry 11 and atomically loads existing Viktor" {
     defer template.deinit();
     var operations = try party.open(allocator, operations_data.json);
     defer operations.deinit();
-    var participants: [6]battle.Member = undefined;
-    const combat = try battle.State.init(content.value, rules.value, &participants, 17);
-    var owner = try bootOwner(.{ .combat = combat, .catalogue = catalogue.value, .sources = .{}, .template = template.value });
-    const context: creation.Context = .{ .combat = combat, .catalogue = catalogue.value, .sources = .{}, .template = template.value };
+    const rules = content.value.characterRules();
+    var owner = try bootOwner(.{ .rules = rules, .catalogue = catalogue.value, .sources = .{}, .template = template.value });
+    const context: creation.Context = .{ .rules = rules, .catalogue = catalogue.value, .sources = .{}, .template = template.value };
     const viktor_operation = try operation(operations.value, "party_op_02");
     try std.testing.expectError(error.PersistentRecordUnavailable, event_join.propose(owner, context, viktor_operation, 1));
     try owner.commit(context, try owner.propose(context, .{ .initialize_template = 35 }, 1));

@@ -133,7 +133,7 @@ def test_party_catalogue_is_separate_from_roster() -> None:
 
 def test_party_rules_do_not_depend_on_battle_state() -> None:
     modules = registered_modules()
-    for name in ('party_session', 'recruitment'):
+    for name in ('party_session', 'recruitment', 'opening_party', 'item_ledger'):
         for chain in dependency_paths(modules[name], modules):
             assert chain[-1] != modules['battle'], show_chain(chain)
 

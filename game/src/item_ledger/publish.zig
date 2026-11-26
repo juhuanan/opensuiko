@@ -16,7 +16,6 @@
 //! journal replays against a baseline reconstructed from canonical data; a
 //! stale revision/digest or an already-applied host receipt is refused.
 const std = @import("std");
-const battle = @import("battle");
 const field = @import("field");
 const party = @import("party_session");
 const packet = @import("catalogue.zig");
@@ -74,11 +73,11 @@ fn bindingFor(sources: Sources, id: []const u8) ?*const SharedBinding {
     return null;
 }
 
-fn memberAt(snapshot: *party.Snapshot, index: usize) *battle.OwnedMember {
+fn memberAt(snapshot: *party.Snapshot, index: usize) *field.game_state.Character {
     return &snapshot.members[index].?;
 }
 
-fn slotIndex(slot: battle.systems.EquipmentSlot) usize {
+fn slotIndex(slot: owners.systems.EquipmentSlot) usize {
     return switch (slot) {
         .head => 0,
         .body => 1,
@@ -88,7 +87,7 @@ fn slotIndex(slot: battle.systems.EquipmentSlot) usize {
     };
 }
 
-fn slotAccepts(slot: battle.systems.EquipmentSlot, required: packet.EquipmentSlot) bool {
+fn slotAccepts(slot: owners.systems.EquipmentSlot, required: packet.EquipmentSlot) bool {
     return switch (required) {
         .head => slot == .head,
         .body => slot == .body,
@@ -128,7 +127,7 @@ fn execute(p: packet.Packet, snapshot: *party.Snapshot, sources: Sources, catalo
     }
 }
 
-fn equipmentSlotFor(slot: u8) !battle.systems.EquipmentSlot {
+fn equipmentSlotFor(slot: u8) !owners.systems.EquipmentSlot {
     return switch (slot) {
         0 => .head,
         1 => .body,
@@ -220,7 +219,7 @@ fn equip(p: packet.Packet, snapshot: *party.Snapshot, catalogue: owners.Catalogu
     member.loadout.set(slot, equipment_index);
 }
 
-fn unequip(snapshot: *party.Snapshot, member_id: []const u8, slot: battle.systems.EquipmentSlot) !void {
+fn unequip(snapshot: *party.Snapshot, member_id: []const u8, slot: owners.systems.EquipmentSlot) !void {
     const index = try owners.activeIndex(snapshot.*, member_id);
     if (snapshot.extras[index].?.locked_equipment[slotIndex(slot)]) return error.EquipmentLocked;
     if (memberAt(snapshot, index).loadout.get(slot) == null) return error.NotEquipped;

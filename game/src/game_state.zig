@@ -292,16 +292,8 @@ pub const CharacterRules = struct {
     }
 
     pub fn itemEquipped(self: CharacterRules, member: Character, slot: usize) bool {
-        const stack = member.inventory.slots[slot] orelse return false;
         const tables = self.tables orelse return false;
-        var worn: usize = 0;
-        for (std.enums.values(character_rules.EquipmentSlot)) |place| if (member.loadout.get(place)) |gear| {
-            if (gear < tables.equipment.len and std.mem.eql(u8, @tagName(stack.id), tables.equipment[gear].id)) worn += 1;
-        };
-        for (member.inventory.slots[0..slot]) |other| {
-            if (other != null and other.?.id == stack.id) worn -|= 1;
-        }
-        return worn > 0;
+        return wearsItem(tables.equipment, member, slot);
     }
 
     pub fn equipOwned(self: CharacterRules, member: *Character, slot: character_rules.EquipmentSlot, item: ?usize) !void {
@@ -339,6 +331,18 @@ pub const CharacterRules = struct {
         member.rune = null;
     }
 };
+
+pub fn wearsItem(equipment: []const character_rules.Equipment, member: Character, slot: usize) bool {
+    const stack = member.inventory.slots[slot] orelse return false;
+    var worn: usize = 0;
+    for (std.enums.values(character_rules.EquipmentSlot)) |place| if (member.loadout.get(place)) |gear| {
+        if (gear < equipment.len and std.mem.eql(u8, @tagName(stack.id), equipment[gear].id)) worn += 1;
+    };
+    for (member.inventory.slots[0..slot]) |other| {
+        if (other != null and other.?.id == stack.id) worn -|= 1;
+    }
+    return worn > 0;
+}
 
 // The caller owns the members; changes survive scene transitions for this session.
 pub const Progress = struct {
