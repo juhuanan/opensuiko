@@ -36,7 +36,7 @@ pub fn draw(state: *const journey.State, context: *const ui.Context) !void {
         },
         .members, .items, .commit, .settling => {
             context.text(labels.choose_item, 44, 82, 17, .ray_white);
-            for (state.combat.progress.party, 0..) |member, i| {
+            for (state.combat.progress.party.items(), 0..) |member, i| {
                 const y = 124 + @as(i32, @intCast(i)) * 25;
                 if (active.member == i) context.selection(40, y - 3, 150, 23);
                 context.text(member.name, 48, y, 16, .ray_white);
@@ -44,7 +44,7 @@ pub fn draw(state: *const journey.State, context: *const ui.Context) !void {
             const bag = if (active.phase == .settling) bag: {
                 const selection = active.replacement.?;
                 break :bag (try journey.overload.prepareReplacement(state, selection.member, selection.slot, active.item)).inventory;
-            } else state.combat.progress.party[active.member].inventory;
+            } else state.combat.progress.party.at(active.member).inventory;
             for (bag.slots[0..bag.count()], 0..) |item, i| {
                 const y = 122 + @as(i32, @intCast(i)) * 24;
                 if (active.phase == .items and active.slot == i) context.selection(202, y - 3, 264, 23);

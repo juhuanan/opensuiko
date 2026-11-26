@@ -30,7 +30,7 @@ pub const Boot = struct {
 
     pub fn newStateNamed(self: *Boot, hero_name: ?[]const u8) !engine.State {
         const package = self.bundle.package;
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var combat: battle.State = undefined;
         var name_override: ?[]u8 = null;
         errdefer if (name_override) |name| self.allocator.free(name);
@@ -125,7 +125,7 @@ pub fn load(init: std.process.Init, args: []const [:0]const u8, check_journey_fi
     const canonical = journey.usesOpeningSeed(bundle.package.start_room);
     const opening_seed = if (canonical or packaged_opening) try opening.load(allocator, opening_data.json) else null;
     errdefer if (opening_seed) |seed| seed.deinit();
-    const members = try allocator.alloc(battle.Member, 6);
+    const members = try allocator.alloc(battle.Member, battle.Party.roster_capacity);
     errdefer allocator.free(members);
     const combat = try allocator.create(battle.State);
     errdefer allocator.destroy(combat);

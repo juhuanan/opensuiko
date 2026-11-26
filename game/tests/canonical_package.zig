@@ -18,7 +18,7 @@ test "packaged optional games admit from field input and settle before returning
     defer save_dir.cleanup();
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     state.combat.progress.money = 1500;
     state.field_state.progress.money = 1500;
@@ -87,7 +87,7 @@ test "packaged optional games admit from field input and settle before returning
     try std.testing.expectEqualStrings("vb5c3_room_0", currentRoomName(&state));
 
     try journey.saveSlot(io, allocator, save_dir.dir, state, 0, state.menu.save_label);
-    var restored_members: [6]battle.Member = undefined;
+    var restored_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&restored_members);
     _ = try journey.restoreSlotWithSource(io, allocator, save_dir.dir, &restored, 0);
     try std.testing.expectEqualDeep(state.optional_games, restored.optional_games);
@@ -118,13 +118,13 @@ fn findCardPair(cards: journey.dice.games.contracts.KarutaSession) ?[2]usize {
 test "packaged vault opens from its attendant and returns a deposited item" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     state.field_state.enterRoom(state.package.roomIndex("vb5b2_room_0").?, .{ .x = 88, .y = 240 });
     _ = try state.tickWithFieldEvents(.{}, .{});
     const action: pause_menu.Input = .{ .field = .{ .action = true } };
     const cancel: pause_menu.Input = .{ .field = .{ .cancel = true } };
-    const bag = &state.combat.progress.party[0].inventory;
+    const bag = &state.combat.progress.party.at(0).inventory;
     const slot = bag.count();
     try std.testing.expect(try bag.receive(.medicine));
     _ = try state.tickWithFieldEvents(.{ .field = .{ .action = true, .direction = .up } }, .{});
@@ -154,7 +154,7 @@ test "packaged vault opens from its attendant and returns a deposited item" {
 test "packaged headquarters tablets browse the live roster and return to the field" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     state.combat.progress.story.scenario.?.recruit_flags = @splat(0);
     state.combat.progress.story.scenario.?.recruit_flags[8] = 1;
@@ -196,7 +196,7 @@ test "packaged library collects books and reopens donated volumes after reload" 
     defer save_dir.cleanup();
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     const room = state.package.roomIndex("vb5c3_room_0").?;
     var checkpoint: []const u8 = "availability";
@@ -222,7 +222,7 @@ test "packaged library collects books and reopens donated volumes after reload" 
 
     checkpoint = "donation";
     state.shared_items = try state.bindSharedItems(.{ "old_book_vol_2", "water_crystal", "old_book_vol_8", "old_book_vol_2", null, null, null });
-    const bag = &state.combat.progress.party[0].inventory;
+    const bag = &state.combat.progress.party.at(0).inventory;
     const previous_count = bag.count();
     try std.testing.expect(try bag.receive(.old_book_vol_3));
     _ = try state.tickWithFieldEvents(action, .{});
@@ -242,7 +242,7 @@ test "packaged library collects books and reopens donated volumes after reload" 
 
     checkpoint = "reload";
     try journey.saveSlot(io, allocator, save_dir.dir, state, 0, state.menu.save_label);
-    var restored_members: [6]battle.Member = undefined;
+    var restored_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&restored_members);
     _ = try journey.restoreSlotWithSource(io, allocator, save_dir.dir, &restored, 0);
     try std.testing.expectEqual(@as(u8, 0b10000110), restored.combat.progress.story.scenario.?.library_books);
@@ -266,12 +266,12 @@ test "packaged window styles collect sets, skip locked choices, and persist appe
     defer directory.cleanup();
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     setScenarioBit(&state, 36, 0x80);
     state.field_state.enterRoom(state.package.roomIndex("vb5ca_room_3").?, .{ .x = 56, .y = 144 });
     _ = try state.tickWithFieldEvents(.{}, .{});
-    const bag = &state.combat.progress.party[0].inventory;
+    const bag = &state.combat.progress.party.at(0).inventory;
     const count = bag.count();
     try std.testing.expect(try bag.receive(.window_setting_0));
     state.shared_items = try state.bindSharedItems(.{ "window_setting_2", "water_crystal", null, null, null, null, null });
@@ -300,7 +300,7 @@ test "packaged window styles collect sets, skip locked choices, and persist appe
     try std.testing.expectEqual(.closed, state.menu.phase);
 
     try journey.saveSlot(io, allocator, directory.dir, state, 0, state.menu.save_label);
-    var restored_members: [6]battle.Member = undefined;
+    var restored_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&restored_members);
     _ = try journey.restoreSlotWithSource(io, allocator, directory.dir, &restored, 0);
     try std.testing.expectEqualDeep(appearance.*, restored.combat.progress.story.scenario.?.window_appearance);
@@ -326,12 +326,12 @@ test "packaged sound themes admit from both Melodye callers and restore the conf
     defer directory.cleanup();
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     setScenarioBit(&state, 36, 1);
     state.field_state.enterRoom(state.package.roomIndex("vb5ba_room_3").?, .{ .x = 88, .y = 112 });
     _ = try state.tickWithFieldEvents(.{}, .{});
-    const bag = &state.combat.progress.party[0].inventory;
+    const bag = &state.combat.progress.party.at(0).inventory;
     const count = bag.count();
     try std.testing.expect(try bag.receive(.sound_setting_0));
     state.shared_items = try state.bindSharedItems(.{ "sound_setting_2", "water_crystal", null, null, null, null, null });
@@ -363,7 +363,7 @@ test "packaged sound themes admit from both Melodye callers and restore the conf
     try std.testing.expect(state.takeFieldSound() == null);
 
     try journey.saveSlot(io, allocator, directory.dir, state, 0, state.menu.save_label);
-    var restored_members: [6]battle.Member = undefined;
+    var restored_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&restored_members);
     _ = try journey.restoreSlotWithSource(io, allocator, directory.dir, &restored, 0);
     try std.testing.expectEqual(.pulse, restored.combat.progress.story.scenario.?.sound_theme);
@@ -389,7 +389,7 @@ test "packaged Kasios offers all 16 tracks and clears playback on exit" {
     defer directory.cleanup();
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     state.field_state.enterRoom(state.package.roomIndex("vb5a1_room_1").?, .{ .x = 232, .y = 192 });
     _ = try state.tickWithFieldEvents(.{}, .{});
@@ -417,7 +417,7 @@ test "packaged Kasios offers all 16 tracks and clears playback on exit" {
     try std.testing.expect(state.menu.jukeboxTrack() == null);
 
     try journey.saveSlot(io, allocator, directory.dir, state, 0, state.menu.save_label);
-    var restored_members: [6]battle.Member = undefined;
+    var restored_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&restored_members);
     _ = try journey.restoreSlotWithSource(io, allocator, directory.dir, &restored, 0);
     try std.testing.expectEqual(16, restored.menu.region_bgm.?.jukebox.len);
@@ -436,7 +436,7 @@ test "packaged Kasios offers all 16 tracks and clears playback on exit" {
 test "packaged teleport has a cancel path and the Blinking Mirror returns to headquarters" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     setScenarioBit(&state, 39, 1);
     state.field_state.enterRoom(state.package.roomIndex("vb5ag_room_2").?, .{ .x = 176, .y = 72 });
@@ -459,7 +459,7 @@ test "packaged teleport has a cancel path and the Blinking Mirror returns to hea
     try std.testing.expectEqualStrings("vb1_room_0", currentRoomName(&state));
     try std.testing.expectEqualStrings("world_b_point_0", state.field_state.worldEntry(state.package).?.id);
 
-    const bag = &state.combat.progress.party[0].inventory;
+    const bag = &state.combat.progress.party.at(0).inventory;
     const slot = bag.count();
     try std.testing.expect(try bag.receive(.blinking_mirror));
     state.menu.phase = .item_action;
@@ -492,7 +492,7 @@ test "modeled Kaku dice matches plain settlement and RNG through headless acknow
     defer model.deinit();
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     state.dice_model = &model.value;
     state.combat.progress.money = 5000;
@@ -551,7 +551,7 @@ test "modeled Kaku dice matches plain settlement and RNG through headless acknow
     const won = scenarioBitSet(&state, 12, 1);
     const final_random = state.combat.random;
 
-    var plain_members: [6]battle.Member = undefined;
+    var plain_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var plain = try harness.newState(&plain_members);
     plain.dice_model = null;
     plain.combat.progress.money = 5000;
@@ -567,7 +567,7 @@ test "modeled Kaku dice matches plain settlement and RNG through headless acknow
 test "packaged Kaku dice settles the story wager and offers the follow-up game" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     state.combat.progress.money = 5000;
     state.field_state.progress.money = 5000;
@@ -627,7 +627,7 @@ fn playFixedDiceWithInput(state: *journey.State) !struct { money: u32, won: bool
 test "packaged elevator serves both destinations and the bathhouse returns to the field" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     state.combat.progress.story.scenario.?.recruit_flags[92] = 1;
     const lift = state.package.roomIndex("vb5ag_room_8").?;
@@ -662,7 +662,7 @@ test "packaged floating orb saves and restores field progress" {
     defer save_dir.cleanup();
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     const room_index = state.package.roomIndex("vc5_room_0").?;
     state.field_state.enterRoom(room_index, .{ .x = 40, .y = 248 });
@@ -683,7 +683,7 @@ test "packaged floating orb saves and restores field progress" {
     setScenarioBit(&state, 1, 16);
     state.field_state.progress.story.scenario.?.recruit_flags[59] = 1;
     state.field_state.progress.money = 4567;
-    const inventory = &state.field_state.progress.party[0].inventory;
+    const inventory = &state.field_state.progress.party.at(0).inventory;
     const slot = inventory.count();
     try std.testing.expect(try inventory.receive(.medicine));
     try state.field_state.progress.storage.deposit(inventory, slot);
@@ -702,13 +702,13 @@ test "packaged floating orb saves and restores field progress" {
     const checkpoint = try journey.Snapshot.capture(state);
     try journey.saveSlot(io, allocator, save_dir.dir, state, state.menu.save_slot, state.menu.save_label);
 
-    var reloaded_members: [6]battle.Member = undefined;
+    var reloaded_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var reloaded = try harness.newState(&reloaded_members);
     _ = try journey.restoreSlotWithSource(io, allocator, save_dir.dir, &reloaded, state.menu.save_slot);
     try std.testing.expectEqualStrings("vc5_room_0", currentRoomName(&reloaded));
     try std.testing.expectEqual(checkpoint.money, reloaded.field_state.progress.money);
     try std.testing.expectEqualDeep(checkpoint.story, reloaded.field_state.progress.story);
-    for (checkpoint.party[0..checkpoint.party_count], reloaded.combat.progress.party) |saved, member| try std.testing.expectEqualDeep(saved, member.record());
+    for (checkpoint.party[0..checkpoint.party_count], reloaded.combat.progress.party.items()) |saved, member| try std.testing.expectEqualDeep(saved, member.record());
     try std.testing.expectEqualDeep(checkpoint.storage.?, reloaded.field_state.progress.storage);
     try std.testing.expectEqualDeep(checkpoint.shared_items.?, reloaded.shared_items);
 }
@@ -716,7 +716,7 @@ test "packaged floating orb saves and restores field progress" {
 test "packaged floating orb interaction opens save slots at every bound endpoint" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     // The mansion's first visit runs an automatic scene before accepting field actions.
     setScenarioBit(&state, 0, 128);
@@ -758,7 +758,7 @@ test "packaged floating orb interaction opens save slots at every bound endpoint
 test "packaged field attendants let the party rest, decline, or open save slots" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     const offers = [_]struct { room: []const u8, position: field.Point, rest: u8, leave: u8, save: u8 }{
         .{ .room = "vf3_room_1", .position = .{ .x = 304, .y = 144 }, .rest = 0, .leave = 1, .save = 2 },
@@ -766,20 +766,20 @@ test "packaged field attendants let the party rest, decline, or open save slots"
     };
     for (offers) |offer| {
         const money = state.combat.progress.money;
-        state.combat.progress.party[0].hp = 1;
+        state.combat.progress.party.at(0).hp = 1;
         state.field_state.enterRoom(state.package.roomIndex(offer.room).?, offer.position);
         _ = try state.tickWithFieldEvents(.{}, .{});
         try interactFacing(&state, .up, &.{offer.leave});
         try std.testing.expectEqual(.closed, state.menu.phase);
-        try std.testing.expectEqual(@as(u16, 1), state.combat.progress.party[0].hp);
+        try std.testing.expectEqual(@as(u16, 1), state.combat.progress.party.at(0).hp);
         try interactFacing(&state, .up, &.{offer.save});
         try std.testing.expectEqual(.save_slots, state.menu.phase);
         _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
         try std.testing.expectEqual(.closed, state.menu.phase);
-        try std.testing.expectEqual(@as(u16, 1), state.combat.progress.party[0].hp);
+        try std.testing.expectEqual(@as(u16, 1), state.combat.progress.party.at(0).hp);
         try interactFacing(&state, .up, &.{offer.rest});
         try std.testing.expectEqual(.closed, state.menu.phase);
-        try std.testing.expectEqual(state.combat.progress.party[0].max_hp, state.combat.progress.party[0].hp);
+        try std.testing.expectEqual(state.combat.progress.party.at(0).max_hp, state.combat.progress.party.at(0).hp);
         try std.testing.expectEqual(money, state.combat.progress.money);
     }
 }
@@ -787,7 +787,7 @@ test "packaged field attendants let the party rest, decline, or open save slots"
 test "packaged closed inn variants return to the field without opening a service menu" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     const variants = [_]struct { room: []const u8, position: field.Point, story9: u8, story10: u8, program: []const u8 }{
         .{ .room = "va3_room_2", .position = .{ .x = 336, .y = 208 }, .story9 = 0, .story10 = 0, .program = "va3_room_2_e10_interaction" },
@@ -814,7 +814,7 @@ test "source scenery models and draw bindings require versioned room data" {
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     const state = try harness.newState(&members);
     var count: usize = 0;
     for (state.package.rooms) |room| if (room.scenery_model) |model| {
@@ -856,7 +856,7 @@ test "source scenery models and draw bindings require versioned room data" {
 test "canonical scenery insertions settle on room entry" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     const Case = struct {
         room: []const u8,
@@ -926,7 +926,7 @@ test "camera push packet admission requires its version and shared motion host" 
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     const state = try harness.newState(&members);
     const bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "../kit/work/build/canonical/battle/field_events.json", allocator, .limited(64 * 1024 * 1024));
     defer allocator.free(bytes);
@@ -972,11 +972,11 @@ test "source camera pushes intercept held input and retain the decoded endpoint"
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     var binding = state.room_battles.?.bindingFor("va4_room_6").?;
     var party_ids: [6]u8 = undefined;
-    for (state.field_state.progress.party, 0..) |member, i| party_ids[i] = state.combat.integration.?.host.characterId(member.id).?;
+    for (state.field_state.progress.party.items(), 0..) |member, i| party_ids[i] = state.combat.integration.?.host.characterId(member.id).?;
     binding.party = party_ids[0..state.field_state.progress.party.len];
     for ([_]field.Direction{ .left, .right }) |direction| {
         state.field_state.enterRoom(state.package.roomIndex(binding.room).?, .{ .x = 248, .y = 64 });
@@ -1022,7 +1022,7 @@ test "source camera pushes intercept held input and retain the decoded endpoint"
     invalid.x = 216;
     invalid.y = 40;
     try std.testing.expectError(error.InvalidSave, invalid.validate(state));
-    var restored_members: [6]battle.Member = undefined;
+    var restored_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&restored_members);
     const saved_bytes = try std.json.Stringify.valueAlloc(allocator, pushed_save, .{});
     defer allocator.free(saved_bytes);
@@ -1051,11 +1051,11 @@ test "camera push playback preserves its eight update wait and serialized owner"
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     var binding = state.room_battles.?.bindingFor("va4_room_6").?;
     var party_ids: [6]u8 = undefined;
-    for (state.field_state.progress.party, 0..) |member, i| party_ids[i] = state.combat.integration.?.host.characterId(member.id).?;
+    for (state.field_state.progress.party.items(), 0..) |member, i| party_ids[i] = state.combat.integration.?.host.characterId(member.id).?;
     binding.party = party_ids[0..state.field_state.progress.party.len];
     const programs = try allocator.dupe(event_runtime.Program, binding.content.programs);
     defer allocator.free(programs);
@@ -1209,7 +1209,7 @@ test "canonical opening rooms become the journey start package" {
     try std.testing.expectEqual(@as(usize, 2), room10.exits.len);
     try std.testing.expectEqual(@as(usize, 0), town.npcs.len);
     try std.testing.expectEqual(@as(usize, 2), room0.events.len);
-    var rumor_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var rumor_progress: field.game_state.Progress = .{ .money = 0, .party = .{} };
     var rumor = field.State.init(bound.package, &rumor_progress);
     rumor.room = bound.package.roomIndex("vaa_room_0").?;
     rumor.x = 344;
@@ -1218,7 +1218,7 @@ test "canonical opening rooms become the journey start package" {
     rumor.tick(bound.package, .{});
     try std.testing.expect(rumor.dialogue != null);
     try std.testing.expect(rumor.progress.story.vaa_dungeon_rumor);
-    var greeting_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var greeting_progress: field.game_state.Progress = .{ .money = 0, .party = .{} };
     var greeting = field.State.init(bound.package, &greeting_progress);
     greeting.room = bound.package.roomIndex("vaa_room_0").?;
     greeting.x = 280;
@@ -1233,7 +1233,7 @@ test "ordinary movement crosses the sourced palace exit" {
     var fixture = try BoundFixture.init(std.testing.allocator, std.testing.io);
     defer fixture.deinit();
     const bound = &fixture.bound;
-    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = .{} };
     var state = field.State.init(bound.package, &state_progress);
     try std.testing.expectEqualStrings("vaa_room_2", bound.package.rooms[state.room].id);
     state.x = 472;
@@ -1254,13 +1254,13 @@ test "real initialization opens the canonical palace start" {
     const data = fixture.data;
     const content = fixture.content;
     const rules = fixture.rules;
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state_backing: battle.State = undefined;
     var state = try fixture.openingState(members[0..1], &state_backing);
     try std.testing.expectEqual(@as(usize, 1), state.combat.progress.party.len);
     try std.testing.expectEqual(@as(u32, 1500), state.combat.progress.money);
-    try std.testing.expectEqual(@as(u16, 17), state.combat.progress.party[0].max_hp);
-    try std.testing.expectEqual(@as(u8, 1), state.combat.progress.party[0].level);
+    try std.testing.expectEqual(@as(u16, 17), state.combat.progress.party.at(0).max_hp);
+    try std.testing.expectEqual(@as(u8, 1), state.combat.progress.party.at(0).level);
     for (0..4) |slot| try std.testing.expect(state.combat.itemEquipped(0, slot));
     try std.testing.expect(!state.combat.itemEquipped(0, 4));
     try std.testing.expectEqual(@as(u16, 26), state.combat.stats(0).defense);
@@ -1282,11 +1282,11 @@ test "real initialization opens the canonical palace start" {
     state.field_state.dialogue = null;
     const saved = try journey.Snapshot.capture(state);
     try std.testing.expectEqual(@as(u8, 1), saved.party_count);
-    var fresh_members: [6]battle.Member = undefined;
+    var fresh_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored_backing: battle.State = undefined;
     var restored = try journey.State.fromSnapshot(bound.package, data.value, content.value, rules.value, field.inn.embedded(), saved, battle.trial_seed, &fresh_members, &restored_backing);
     try std.testing.expectEqual(@as(usize, 1), restored.combat.progress.party.len);
-    try std.testing.expectEqual(state.combat.progress.party[0].loadout, restored.combat.progress.party[0].loadout);
+    try std.testing.expectEqual(state.combat.progress.party.at(0).loadout, restored.combat.progress.party.at(0).loadout);
     try std.testing.expect(journey.usesOpeningSeed("vaa_room_2"));
     try std.testing.expect(journey.usesOpeningSeed("vaa_room_1"));
     try std.testing.expect(!journey.usesOpeningSeed("vb6_inn"));
@@ -1314,7 +1314,7 @@ test "real initialization opens the canonical palace start" {
     }
     try std.testing.expectEqualStrings("vaa_room_1", bound.package.rooms[state.field_state.room].id);
     const moved = try journey.Snapshot.capture(state);
-    var moved_members: [6]battle.Member = undefined;
+    var moved_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored_move_backing: battle.State = undefined;
     const restored_move = try journey.State.fromSnapshot(bound.package, data.value, content.value, rules.value, field.inn.embedded(), moved, battle.trial_seed, &moved_members, &restored_move_backing);
     try std.testing.expectEqualStrings("vaa_room_1", bound.package.rooms[restored_move.field_state.room].id);
@@ -1328,7 +1328,7 @@ test "real initialization opens the canonical palace start" {
     defer bindings.deinit();
     var patrol_data = data.value;
     patrol_data.field_encounters = null;
-    var hooked_members: [6]battle.Member = undefined;
+    var hooked_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var hooked_backing: battle.State = undefined;
     var hooked = try journey.State.initOpening(bound.package, patrol_data, content.value, rules.value, field.inn.embedded(), &hooked_members, &hooked_backing, bound.loaded.opening.value.hero, bound.loaded.opening.value.money);
     hooked.party_catalog = catalog.value;
@@ -1337,7 +1337,7 @@ test "real initialization opens the canonical palace start" {
     hooked.field_state.room = bound.package.roomIndex("va1_room_2").?;
     _ = hooked.tick(.{}, .{});
     try std.testing.expectEqual(@as(usize, 2), hooked.combat.progress.party.len);
-    try std.testing.expectEqualStrings("ted", hooked.combat.progress.party[1].id);
+    try std.testing.expectEqualStrings("ted", hooked.combat.progress.party.at(1).id);
     hooked.field_state.room = bound.package.roomIndex("va1_room_0").?;
     hooked.field_state.x = 184;
     hooked.field_state.y = 352;
@@ -1356,10 +1356,10 @@ test "real initialization opens the canonical palace start" {
     try std.testing.expectEqual(@as(i32, 184), hooked.field_state.x);
     try std.testing.expectEqual(@as(i32, 352), hooked.field_state.y);
     try std.testing.expectEqual(@as(usize, 3), hooked.combat.progress.party.len);
-    try std.testing.expectEqualStrings("cleo", hooked.combat.progress.party[2].id);
+    try std.testing.expectEqualStrings("cleo", hooked.combat.progress.party.at(2).id);
     try std.testing.expect(hooked.route.milestones.initial_party);
     const town_saved = try journey.Snapshot.capture(hooked);
-    var town_members: [6]battle.Member = undefined;
+    var town_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var town_restored_backing: battle.State = undefined;
     const town_restored = try journey.State.fromSnapshot(bound.package, patrol_data, content.value, rules.value, field.inn.embedded(), town_saved, battle.trial_seed, &town_members, &town_restored_backing);
     try std.testing.expectEqualStrings("va1_room_1", bound.package.rooms[town_restored.field_state.room].id);
@@ -1371,7 +1371,7 @@ test "real initialization opens the canonical palace start" {
     try std.testing.expectEqual(@as(i32, 264), hooked.field_state.y);
     try std.testing.expectEqual(@as(usize, 3), hooked.combat.progress.party.len);
     const route_saved = try journey.Snapshot.capture(hooked);
-    var route_members: [6]battle.Member = undefined;
+    var route_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var route_restored_backing: battle.State = undefined;
     const route_restored = try journey.State.fromSnapshot(bound.package, patrol_data, content.value, rules.value, field.inn.embedded(), route_saved, battle.trial_seed, &route_members, &route_restored_backing);
     try std.testing.expectEqualStrings("va1_room_2", bound.package.rooms[route_restored.field_state.room].id);
@@ -1391,7 +1391,7 @@ test "real initialization opens the canonical palace start" {
     try std.testing.expectEqual(.world, hooked.route.stage);
     try std.testing.expectEqual(@as(u8, 4), hooked.route.completed);
     const world_saved = try journey.Snapshot.capture(hooked);
-    var world_members: [6]battle.Member = undefined;
+    var world_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var world_restored_backing: battle.State = undefined;
     var world_restored = try journey.State.fromSnapshot(bound.package, patrol_data, content.value, rules.value, field.inn.embedded(), world_saved, battle.trial_seed, &world_members, &world_restored_backing);
     try std.testing.expectEqualStrings("world_a", bound.package.rooms[world_restored.field_state.room].id);
@@ -1440,7 +1440,7 @@ test "real initialization opens the canonical palace start" {
     try std.testing.expectEqual(money_after, hooked.combat.progress.money);
     try std.testing.expectEqual(.field, hooked.mode);
     const patrol_saved = try journey.Snapshot.capture(hooked);
-    var patrol_members: [6]battle.Member = undefined;
+    var patrol_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var patrol_restored_backing: battle.State = undefined;
     var patrol_restored = try journey.State.fromSnapshot(bound.package, patrol_data, content.value, rules.value, field.inn.embedded(), patrol_saved, battle.trial_seed, &patrol_members, &patrol_restored_backing);
     try std.testing.expect(patrol_restored.combat.progress.story.world_patrol_won);
@@ -1458,7 +1458,7 @@ test "real initialization opens the canonical palace start" {
     try std.testing.expectEqual(.field, hooked.mode);
     try std.testing.expect(!hooked.combat.progress.story.world_patrol_won);
     const escaped_saved = try journey.Snapshot.capture(hooked);
-    var escaped_members: [6]battle.Member = undefined;
+    var escaped_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var escaped_restored_backing: battle.State = undefined;
     var escaped_restored = try journey.State.fromSnapshot(bound.package, patrol_data, content.value, rules.value, field.inn.embedded(), escaped_saved, battle.trial_seed, &escaped_members, &escaped_restored_backing);
     try std.testing.expect(!escaped_restored.combat.progress.story.world_patrol_won);
@@ -1471,7 +1471,7 @@ test "real initialization opens the canonical palace start" {
     const heading: field.Direction = if (patrol_room.canStand(hooked.field_state.x - 8, hooked.field_state.y)) .left else .right;
     for (1..hooked.package.step_ticks) |_| _ = hooked.tick(.{ .field = .{ .direction = heading } }, .{});
     try std.testing.expectEqual(@as(u16, @intFromBool(hooked.package.step_ticks > 1)), hooked.field_state.remaining);
-    hooked.combat.progress.party[0].status = .poisoned;
+    hooked.combat.progress.party.at(0).status = .poisoned;
     hooked.combat.random = std.Random.DefaultPrng.init(17);
     var after_step = hooked.combat.random;
     _ = after_step.random().int(u15);
@@ -1480,9 +1480,9 @@ test "real initialization opens the canonical palace start" {
     const defeat_checkpoint_money = hooked.combat.progress.money;
     const defeat_checkpoint_random = hooked.combat.random;
     try std.testing.expectEqualDeep(after_step, defeat_checkpoint_random);
-    const defeat_checkpoint_member = hooked.combat.progress.party[0];
+    const defeat_checkpoint_member = hooked.combat.progress.party.at(0).*;
     hooked.combat.progress.money = 123456;
-    for (hooked.combat.progress.party) |*member| {
+    for (hooked.combat.progress.party.items()) |member| {
         member.hp = 0;
         member.status = .unconscious;
     }
@@ -1495,15 +1495,15 @@ test "real initialization opens the canonical palace start" {
     try std.testing.expectEqual(.battle, hooked.mode);
     try std.testing.expectEqual(defeat_checkpoint_money, hooked.combat.progress.money);
     try std.testing.expectEqualDeep(defeat_checkpoint_random, hooked.combat.random);
-    try std.testing.expectEqualDeep(defeat_checkpoint_member, hooked.combat.progress.party[0]);
+    try std.testing.expectEqualDeep(defeat_checkpoint_member, hooked.combat.progress.party.at(0).*);
     restored.route.stage = .first_town;
     restored.route.completed = 3;
     try restored.joinOnRoomEntry(&fresh_members, catalog.value, bindings.value, "va1_room_2");
     try std.testing.expectEqual(@as(usize, 2), restored.combat.progress.party.len);
-    try std.testing.expectEqualStrings("ted", restored.combat.progress.party[1].id);
+    try std.testing.expectEqualStrings("ted", restored.combat.progress.party.at(1).id);
     try restored.joinOnRoomEntry(&fresh_members, catalog.value, bindings.value, "va1_room_1");
     try std.testing.expectEqual(@as(usize, 3), restored.combat.progress.party.len);
-    try std.testing.expectEqualStrings("cleo", restored.combat.progress.party[2].id);
+    try std.testing.expectEqualStrings("cleo", restored.combat.progress.party.at(2).id);
     try restored.joinOnRoomEntry(&fresh_members, catalog.value, bindings.value, "va1_room_2");
     try std.testing.expectEqual(@as(usize, 3), restored.combat.progress.party.len);
     restored.route.stage = .world;
@@ -1511,13 +1511,13 @@ test "real initialization opens the canonical palace start" {
     try restored.joinOnRoomEntry(&fresh_members, catalog.value, bindings.value, "va1_room_2");
     try std.testing.expectEqual(@as(usize, 3), restored.combat.progress.party.len);
     const reserved = try party_session.catalogue.materializeBound(state.combat.content.characterRules(), catalog.value, "cleo", null);
-    state.reserves[0] = reserved.owned;
-    state.reserve_extras[0] = reserved.extra;
+    try state.retainReserve(reserved.owned);
+    state.roster_extras[state.reserve_slots[0].?] = reserved.extra;
     try state.joinPartyMember(&members, catalog.value, null, "cleo");
-    try std.testing.expect(state.reserves[0] == null);
+    try std.testing.expect(state.reserveMember(0) == null);
     try std.testing.expectEqualDeep(reserved.owned, state.combat.ownedMember(1));
     try std.testing.expectEqual(@as(usize, 2), state.combat.progress.party.len);
-    try std.testing.expectEqualStrings("cleo", state.combat.progress.party[1].id);
+    try std.testing.expectEqualStrings("cleo", state.combat.progress.party.at(1).id);
     try std.testing.expectError(error.DuplicateMember, state.joinPartyMember(&members, catalog.value, null, "cleo"));
     try std.testing.expectEqual(@as(usize, 2), state.combat.progress.party.len);
     const joined = try journey.Snapshot.capture(state);
@@ -1527,21 +1527,21 @@ test "real initialization opens the canonical palace start" {
     try std.testing.expectEqual(@as(usize, 2), state.combat.progress.party.len);
     try state.joinPartyMember(&members, catalog.value, bindings.value, "ted");
     try std.testing.expectEqual(@as(usize, 3), state.combat.progress.party.len);
-    try std.testing.expect(state.combat.progress.party[2].inventory.count() > 0);
-    try std.testing.expect(state.combat.progress.party[2].rune != null);
+    try std.testing.expect(state.combat.progress.party.at(2).inventory.count() > 0);
+    try std.testing.expect(state.combat.progress.party.at(2).rune != null);
     try std.testing.expectError(error.DuplicateMember, state.joinPartyMember(&members, catalog.value, bindings.value, "ted"));
     try std.testing.expectEqual(@as(usize, 3), state.combat.progress.party.len);
-    state.extras[1].weapon_element = .fire;
+    state.roster_extras[state.combat.progress.party.slot(1)].weapon_element = .fire;
     var bad_extras = try journey.Snapshot.capture(state);
     bad_extras.extras[4].member_id = "ghost";
     try std.testing.expectError(error.InvalidExtras, bad_extras.validate(state));
     var with_joins = try journey.Snapshot.capture(state);
     with_joins.route.?.milestones.initial_party = false;
-    var join_members: [6]battle.Member = undefined;
+    var join_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored_joins_backing: battle.State = undefined;
     const restored_joins = try journey.State.fromSnapshot(bound.package, data.value, content.value, rules.value, field.inn.embedded(), with_joins, battle.trial_seed, &join_members, &restored_joins_backing);
     try std.testing.expectEqual(@as(usize, 3), restored_joins.combat.progress.party.len);
-    try std.testing.expectEqual(.fire, restored_joins.extras[1].weapon_element);
+    try std.testing.expectEqual(.fire, restored_joins.activeExtra(1).weapon_element);
     try std.testing.expect(restored_joins.route.milestones.initial_party);
     try state.joinPartyMember(&members, catalog.value, null, "pahn");
     try state.joinPartyMember(&members, catalog.value, null, "viktor");
@@ -1554,7 +1554,7 @@ test "ordinary input walks from the opening start to the palace exit" {
     var fixture = try BoundFixture.init(std.testing.allocator, std.testing.io);
     defer fixture.deinit();
     const bound = &fixture.bound;
-    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = .{} };
     var state = field.State.init(bound.package, &state_progress);
     try std.testing.expectEqualStrings("vaa_room_2", bound.package.rooms[state.room].id);
     const path = "DDDLLLLLLLLLLLLUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUURRRRDD";
@@ -1580,7 +1580,7 @@ test "ordinary input walks from the palace landing to the dungeon" {
     var fixture = try BoundFixture.init(std.testing.allocator, std.testing.io);
     defer fixture.deinit();
     const bound = &fixture.bound;
-    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = .{} };
     var state = field.State.init(bound.package, &state_progress);
     state.room = bound.package.roomIndex("vaa_room_1").?;
     state.x = 40;
@@ -1614,7 +1614,7 @@ test "save and restore after walking to the palace landing" {
     const data = fixture.data;
     const content = fixture.content;
     const rules = fixture.rules;
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state_backing: battle.State = undefined;
     var state = try fixture.openingState(&members, &state_backing);
     const path = "DDDLLLLLLLLLLLLUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUURRRRDD";
@@ -1633,7 +1633,7 @@ test "save and restore after walking to the palace landing" {
     while (state.field_state.remaining > 0) _ = state.tick(.{}, .{});
     try std.testing.expectEqualStrings("vaa_room_1", bound.package.rooms[state.field_state.room].id);
     const saved = try journey.Snapshot.capture(state);
-    var fresh: [6]battle.Member = undefined;
+    var fresh: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored_backing: battle.State = undefined;
     const restored = try journey.State.fromSnapshot(bound.package, data.value, content.value, rules.value, field.inn.embedded(), saved, battle.trial_seed, &fresh, &restored_backing);
     try std.testing.expectEqualStrings("vaa_room_1", bound.package.rooms[restored.field_state.room].id);
@@ -1645,7 +1645,7 @@ test "ordinary input walks the dungeon and palace exits into the first town" {
     var fixture = try BoundFixture.init(std.testing.allocator, std.testing.io);
     defer fixture.deinit();
     const bound = &fixture.bound;
-    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = .{} };
     var state = field.State.init(bound.package, &state_progress);
     state.room = bound.package.roomIndex("vaa_room_0").?;
     state.x = 312;
@@ -1677,7 +1677,7 @@ test "world collision blocks right movement and allows left movement" {
     var fixture = try BoundFixture.init(std.testing.allocator, std.testing.io);
     defer fixture.deinit();
     const bound = &fixture.bound;
-    var state_progress: field.game_state.Progress = .{ .money = 0, .party = &.{} };
+    var state_progress: field.game_state.Progress = .{ .money = 0, .party = .{} };
     var state = field.State.init(bound.package, &state_progress);
     state.room = bound.package.roomIndex("world_a").?;
     state.x = 640;
@@ -1717,7 +1717,7 @@ test "ordinary input reaches the world through the whole first-town route" {
     defer allocator.free(binding_bytes);
     const bindings = try party_session.catalogue.decodeBindings(allocator, binding_bytes, party_data.json);
     defer bindings.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state_backing: battle.State = undefined;
     var state = try fixture.openingState(&members, &state_backing);
     state.party_catalog = catalog.value;
@@ -1745,8 +1745,8 @@ test "ordinary input reaches the world through the whole first-town route" {
     for (0..30) |_| _ = state.tick(.{}, .{});
     try std.testing.expectEqualStrings("world_a", bound.package.rooms[state.field_state.room].id);
     try std.testing.expectEqual(@as(usize, 3), state.combat.progress.party.len);
-    try std.testing.expectEqualStrings("cleo", state.combat.progress.party[1].id);
-    try std.testing.expectEqualStrings("ted", state.combat.progress.party[2].id);
+    try std.testing.expectEqualStrings("cleo", state.combat.progress.party.at(1).id);
+    try std.testing.expectEqualStrings("ted", state.combat.progress.party.at(2).id);
 }
 
 const CanonicalHarness = struct {
@@ -1777,7 +1777,7 @@ const CanonicalHarness = struct {
         self.bundle.deinit();
     }
 
-    fn newState(self: *CanonicalHarness, members: *[6]battle.Member) !journey.State {
+    fn newState(self: *CanonicalHarness, members: *[battle.Party.roster_capacity]battle.Member) !journey.State {
         var boot: journey_boot.Boot = .{
             .allocator = self.allocator,
             .path = @constCast(""),
@@ -2062,11 +2062,11 @@ fn needsFieldMedicine(member: battle.Member, medicine_id: field.items.Id) bool {
 
 fn prepareWithCarriedMedicine(state: *journey.State, medicine_id: field.items.Id) !void {
     for (0..12) |_| {
-        const wounded = for (state.combat.progress.party) |member| {
-            if (needsFieldMedicine(member, medicine_id)) break true;
+        const wounded = for (state.combat.progress.party.items()) |member| {
+            if (needsFieldMedicine(member.*, medicine_id)) break true;
         } else false;
         if (!wounded) break;
-        const owner = for (state.combat.progress.party, 0..) |member, index| {
+        const owner = for (state.combat.progress.party.items(), 0..) |member, index| {
             const has_medicine = for (member.inventory.slots) |item| {
                 if (item != null and item.?.id == medicine_id) break true;
             } else false;
@@ -2114,7 +2114,7 @@ fn interactFacing(state: *journey.State, facing: field.Direction, choices: []con
 fn expectPartyOrder(state: *const journey.State, expected: []const []const u8) !void {
     try std.testing.expectEqual(expected.len, state.combat.progress.party.len);
     for (expected, 0..) |id, idx| {
-        try std.testing.expectEqualStrings(id, state.combat.progress.party[idx].id);
+        try std.testing.expectEqualStrings(id, state.combat.progress.party.at(idx).id);
     }
 }
 
@@ -2272,7 +2272,7 @@ test "canonical O01 live scenes dialogue, 2- and 3-option choices, and inn stays
     const io = std.testing.io;
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
 
     try std.testing.expectEqualStrings("vaa_room_2", currentRoomName(&state));
@@ -2344,20 +2344,20 @@ test "canonical O01 live scenes dialogue, 2- and 3-option choices, and inn stays
     _ = try drainFieldEvent(&state, &.{1});
     try std.testing.expectEqual(inn_money, state.combat.progress.money);
     try std.testing.expectEqual(@as(u16, 0), state.field_state.rest_ticks);
-    state.combat.progress.party[0].hp = 0;
-    state.combat.progress.party[0].status = .unconscious;
+    state.combat.progress.party.at(0).hp = 0;
+    state.combat.progress.party.at(0).status = .unconscious;
     state.combat.progress.money = 0;
     try interactFacing(&state, .up, &.{0});
     try std.testing.expectEqual(.notice, state.menu.phase);
     try std.testing.expectEqual(@as(u32, 0), state.combat.progress.money);
     try std.testing.expectEqual(@as(u16, 0), state.field_state.rest_ticks);
-    try std.testing.expectEqual(.unconscious, state.combat.progress.party[0].status);
+    try std.testing.expectEqual(.unconscious, state.combat.progress.party.at(0).status);
     _ = try state.tickWithFieldEvents(.{ .menu = true }, .{});
     state.combat.progress.money = inn_money;
     try interactFacing(&state, .up, &.{0});
     try std.testing.expectEqual(inn_money - state.combat.progress.cost(30), state.combat.progress.money);
     try std.testing.expect(state.field_state.rest_ticks > 0);
-    for (state.combat.progress.party) |member| {
+    for (state.combat.progress.party.items()) |member| {
         try std.testing.expectEqual(member.max_hp, member.hp);
         try std.testing.expectEqual(.healthy, member.status);
         try std.testing.expectEqual(member.max_rune_charges, member.rune_charges);
@@ -2381,7 +2381,7 @@ test "canonical O02 live movement traverses palace, halls, town exits, mansion, 
     const io = std.testing.io;
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
 
     // Main palace exit from start room vaa_room_2 -> 1 -> 0 -> 10 -> va1_room_0 -> va1_room_17 -> vaa_room_0 -> vaa_room_1 -> vaa_room_2.
@@ -2555,7 +2555,7 @@ fn restoreWithMedicine(state: *journey.State, owner: usize, critical_only: bool)
 }
 
 fn restoreWithOwnedMedicine(state: *journey.State, owner: usize, medicine_id: field.items.Id, critical_only: bool, only_target: ?usize) !void {
-    const slot = for (state.combat.progress.party[owner].inventory.slots, 0..) |item, index| {
+    const slot = for (state.combat.progress.party.at(owner).inventory.slots, 0..) |item, index| {
         if (item != null and item.?.id == medicine_id) break index;
     } else return error.MissingMedicine;
     const confirm: pause_menu.Input = .{ .field = .{ .action = true } };
@@ -2565,11 +2565,11 @@ fn restoreWithOwnedMedicine(state: *journey.State, owner: usize, medicine_id: fi
     _ = try state.tickWithFieldEvents(confirm, .{});
     while (state.menu.member != owner) _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
     for (0..slot) |_| _ = try state.tickWithFieldEvents(.{ .field = .{ .menu_direction = .down } }, .{});
-    for (state.combat.progress.party, 0..) |*member, target| {
+    for (state.combat.progress.party.items(), 0..) |member, target| {
         if (only_target != null and only_target.? != target) continue;
         if (member.hp == 0 or (critical_only and !needsFieldMedicine(member.*, medicine_id))) continue;
         while (member.hp < member.max_hp) {
-            const medicine = state.combat.progress.party[owner].inventory.slots[slot] orelse {
+            const medicine = state.combat.progress.party.at(owner).inventory.slots[slot] orelse {
                 if (critical_only) break;
                 return error.MissingMedicine;
             };
@@ -2597,17 +2597,17 @@ fn summitInput(combat: *const battle.State) battle.Input {
         .intro, .confirm_round, .victory => return .{ .confirm = true },
         .battle_menu => return if (combat.selection == 0) .{ .confirm = true } else .{ .up = true },
         .command, .item, .item_target => {
-            const has_medicine = for (combat.progress.party[combat.actor].inventory.slots, 0..) |entry, slot| {
+            const has_medicine = for (combat.progress.party.at(combat.actor).inventory.slots, 0..) |entry, slot| {
                 if (entry != null and entry.?.id == .medicine and combat.canSelectItem(combat.actor, slot)) break slot;
             } else null;
             var recipient: ?usize = null;
-            if (has_medicine != null) for (combat.progress.party, 0..) |member, i| {
+            if (has_medicine != null) for (combat.progress.party.items(), 0..) |member, i| {
                 if (!combat.participates(i) or member.hp > 14 or member.max_hp - member.hp < 20) continue;
                 const already_covered = for (combat.actions) |prior| {
                     if (prior != null and prior.? == .item and prior.?.item.target == i) break true;
                 } else false;
                 if (already_covered) continue;
-                if (recipient == null or member.hp < combat.progress.party[recipient.?].hp) recipient = i;
+                if (recipient == null or member.hp < combat.progress.party.at(recipient.?).hp) recipient = i;
             };
             if (combat.phase == .command) {
                 const desired: @TypeOf(combat.picker.selected) = if (recipient != null) .item else if (combat.firstAttackTarget(combat.actor) != null) .attack else .defend;
@@ -2718,7 +2718,7 @@ fn travelCombatInput(combat: *const battle.State) battle.Input {
         if (neclord and !std.mem.eql(u8, rune.id, "soul_eater")) spell_tier = null;
     }
     var medicine: ?usize = null;
-    for (combat.progress.party[combat.actor].inventory.slots, 0..) |entry, slot| {
+    for (combat.progress.party.at(combat.actor).inventory.slots, 0..) |entry, slot| {
         const item = entry orelse continue;
         if (!combat.canSelectItem(combat.actor, slot)) continue;
         if ((late_encounter or region_e) and item.id == .mega_medicine) {
@@ -2731,15 +2731,15 @@ fn travelCombatInput(combat: *const battle.State) battle.Input {
         }
     }
     var recipient: ?usize = null;
-    if (medicine != null) for (combat.progress.party, 0..) |member, index| {
+    if (medicine != null) for (combat.progress.party.items(), 0..) |member, index| {
         if (!combat.participates(index) or member.max_hp - member.hp < 20 or @as(u32, member.hp) * 4 >= @as(u32, member.max_hp) * 3) continue;
         const covered = for (combat.actions) |action| {
             if (action != null and action.? == .item and action.?.item.target == index) break true;
         } else false;
-        if (!covered and (recipient == null or member.hp < combat.progress.party[recipient.?].hp)) recipient = index;
+        if (!covered and (recipient == null or member.hp < combat.progress.party.at(recipient.?).hp)) recipient = index;
     };
     // Brace against the opening attacks while Odessa puts a large group to sleep.
-    const brace = combat.round == 1 and combat.enemyCount() >= 4 and for (combat.progress.party, 0..) |member, index| {
+    const brace = combat.round == 1 and combat.enemyCount() >= 4 and for (combat.progress.party.items(), 0..) |member, index| {
         const rune = combat.rune(index) orelse continue;
         if (combat.participates(index) and combat.actor_conditions[index].sleep_turns == 0 and !combat.actor_conditions[index].rune_blocked and
             std.mem.eql(u8, rune.id, "wind") and member.rune_charges[0] > 0) break true;
@@ -2826,7 +2826,7 @@ fn finishBattleWithInput(state: *journey.State, strategy: enum { free_will, defe
     const encounter = state.combat.content.encounters[state.combat.encounter].id;
     var entry_hp: [6]u16 = @splat(0);
     var entry_charges: [6][4]u16 = @splat(@splat(0));
-    for (state.combat.progress.party, 0..) |member, slot| {
+    for (state.combat.progress.party.items(), 0..) |member, slot| {
         entry_hp[slot] = member.hp;
         entry_charges[slot] = member.rune_charges;
     }
@@ -2869,9 +2869,9 @@ fn finishBattleWithInput(state: *journey.State, strategy: enum { free_will, defe
     if (state.combat.active) |effect| std.debug.print("  Active {s} from {d} to {d}\n", .{
         @tagName(effect.kind), effect.actor, effect.target,
     });
-    for (state.combat.progress.party, 0..) |member, slot| {
+    for (state.combat.progress.party.items(), 0..) |member, slot| {
         std.debug.print("  {s}: level {d}, HP {d}/{d}, {s}; entered with {d} HP and rune charges {any}\n", .{
-            member.id, state.combat.progress.party[slot].level, member.hp, member.max_hp, @tagName(member.status), entry_hp[slot], entry_charges[slot],
+            member.id, state.combat.progress.party.at(slot).level, member.hp, member.max_hp, @tagName(member.status), entry_hp[slot], entry_charges[slot],
         });
     }
     for (state.combat.enemy_hp[0..state.combat.enemyCount()], 0..) |hp, slot| {
@@ -2956,7 +2956,7 @@ test "canonical O03 rockland battle triggers e35/e36/e37 enforce escape=false, d
     {
         var harness = try CanonicalHarness.load(allocator, io);
         defer harness.deinit();
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
 
         try walkOutToRockland(allocator, &state);
@@ -2994,7 +2994,7 @@ test "canonical O03 rockland battle triggers e35/e36/e37 enforce escape=false, d
     {
         var harness = try CanonicalHarness.load(allocator, io);
         defer harness.deinit();
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
 
         try walkOutToRockland(allocator, &state);
@@ -3030,7 +3030,7 @@ test "canonical O03 rockland battle triggers e35/e36/e37 enforce escape=false, d
     {
         var harness = try CanonicalHarness.load(allocator, io);
         defer harness.deinit();
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
 
         try walkOutToRockland(allocator, &state);
@@ -3056,11 +3056,11 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
     {
         var harness = try CanonicalHarness.load(allocator, io);
         defer harness.deinit();
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
 
         try expectPartyOrder(&state, &.{"hero"});
-        try std.testing.expect(state.combat.progress.party[0].rune == null);
+        try std.testing.expect(state.combat.progress.party.at(0).rune == null);
 
         // Talk to Emperor & Kraze -> home cutscene lands in va1_room_1.
         try walkTo(allocator, &state, null, 464, 632, &.{});
@@ -3142,19 +3142,19 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
         try std.testing.expect(state.combat.hasMagic(0));
         try std.testing.expect(state.combat.canCast(0, soul_eater_t0_spell));
         try std.testing.expect(state.menu.isEnabled(.rune));
-        expected_charges = state.combat.progress.party[0].rune_charges;
+        expected_charges = state.combat.progress.party.at(0).rune_charges;
 
         // Trigger front-hall e33 escape ("All right." choice 1 -> exits to va1_room_0 at 1144, 264) and accept Viktor (e37 choice 1).
         try walkTo(allocator, &state, "va1_room_0", 176, 384, &.{1});
         try walkTo(allocator, &state, null, 504, 200, &.{});
         try interactFacing(&state, .up, &.{1});
         try expectPartyOrder(&state, &.{ "hero", "gremio", "cleo", "viktor" });
-        try std.testing.expectEqual(@as(u8, 7), state.combat.progress.party[3].level);
+        try std.testing.expectEqual(@as(u8, 7), state.combat.progress.party.at(3).level);
 
         // Also verify character stats and Soul Eater persist across room transition into Marie's Inn before saving.
         try walkTo(allocator, &state, "va1_room_3", 576, 632, &.{});
         try expectPartyOrder(&state, &.{ "hero", "gremio", "cleo", "viktor" });
-        try std.testing.expectEqual(@as(u8, 7), state.combat.progress.party[3].level);
+        try std.testing.expectEqual(@as(u8, 7), state.combat.progress.party.at(3).level);
         try std.testing.expectEqualStrings("soul_eater", state.combat.rune(0).?.id);
 
         expected_story_before_save = state.combat.progress.story.scenario.?;
@@ -3165,7 +3165,7 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
     {
         var reloaded_harness = try CanonicalHarness.load(allocator, io);
         defer reloaded_harness.deinit();
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var reloaded = try reloaded_harness.newState(&members);
         defer reloaded.releaseRestoredSave();
 
@@ -3174,10 +3174,10 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
 
         try std.testing.expectEqualStrings("va1_room_3", currentRoomName(&reloaded));
         try expectPartyOrder(&reloaded, &.{ "hero", "gremio", "cleo", "viktor" });
-        try std.testing.expectEqual(@as(u8, 7), reloaded.combat.progress.party[3].level);
+        try std.testing.expectEqual(@as(u8, 7), reloaded.combat.progress.party.at(3).level);
         try std.testing.expectEqualStrings("soul_eater", reloaded.combat.rune(0).?.id);
         try std.testing.expectEqual(@as(?u8, 1), reloaded.combat.runeByteFor(0));
-        try std.testing.expectEqualSlices(u16, &expected_charges, &reloaded.combat.progress.party[0].rune_charges);
+        try std.testing.expectEqualSlices(u16, &expected_charges, &reloaded.combat.progress.party.at(0).rune_charges);
         try std.testing.expect(reloaded.combat.hasMagic(0));
         try std.testing.expect(reloaded.combat.canCast(0, soul_eater_t0_spell));
         try std.testing.expect(reloaded.menu.isEnabled(.rune));
@@ -3317,7 +3317,7 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
             if (entry != null and std.mem.eql(u8, entry.?, "blueprint")) break true;
         } else false;
         try std.testing.expect(blueprint_found);
-        try std.testing.expectEqual(@as(u8, 6), reloaded.combat.progress.party[4].level);
+        try std.testing.expectEqual(@as(u8, 6), reloaded.combat.progress.party.at(4).level);
         try std.testing.expectEqualStrings("wind", reloaded.combat.rune(4).?.id);
         try journey.save(io, allocator, temp.dir, reloaded);
         try journey.restore(io, allocator, temp.dir, &reloaded);
@@ -3364,7 +3364,7 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
         try std.testing.expect(!scenarioBitSet(&reloaded, 8, 64));
         try walkTo(allocator, &reloaded, null, 296, 176, &.{});
         const before_morning_money = reloaded.field_state.progress.money;
-        for (reloaded.combat.progress.party) |*member| {
+        for (reloaded.combat.progress.party.items()) |member| {
             member.hp = 1;
             member.status = .poisoned;
             member.balloons = 2;
@@ -3377,7 +3377,7 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
         try std.testing.expect(scenarioBitSet(&reloaded, 8, 64));
         try std.testing.expectEqualStrings("va8_room_5", currentRoomName(&reloaded));
         try std.testing.expectEqual(before_morning_money, reloaded.field_state.progress.money);
-        for (reloaded.combat.progress.party) |member| {
+        for (reloaded.combat.progress.party.items()) |member| {
             try std.testing.expectEqual(member.max_hp, member.hp);
             try std.testing.expectEqual(.healthy, member.status);
             try std.testing.expectEqual(@as(u8, 0), member.balloons);
@@ -3479,21 +3479,21 @@ test "canonical O04 and B16 party joins/leaves commit in source order and soul e
         try walkTo(allocator, &reloaded, null, 96, 112, &.{});
         const before_regular_inn = try journey.Snapshot.capture(reloaded);
         reloaded.combat.progress.money = 0;
-        reloaded.combat.progress.party[0].hp = 0;
-        reloaded.combat.progress.party[0].status = .unconscious;
+        reloaded.combat.progress.party.at(0).hp = 0;
+        reloaded.combat.progress.party.at(0).status = .unconscious;
         try interactFacing(&reloaded, .up, &.{0});
         try std.testing.expectEqual(.notice, reloaded.menu.phase);
-        try std.testing.expectEqual(.unconscious, reloaded.combat.progress.party[0].status);
+        try std.testing.expectEqual(.unconscious, reloaded.combat.progress.party.at(0).status);
         try std.testing.expectEqual(@as(u32, 0), reloaded.combat.progress.money);
         try before_regular_inn.apply(&reloaded);
         reloaded.bind();
         reloaded.combat.progress.money = reloaded.combat.progress.cost(50);
-        reloaded.combat.progress.party[0].hp = 0;
-        reloaded.combat.progress.party[0].status = .unconscious;
+        reloaded.combat.progress.party.at(0).hp = 0;
+        reloaded.combat.progress.party.at(0).status = .unconscious;
         try interactFacing(&reloaded, .up, &.{0});
         try std.testing.expectEqual(@as(u32, 0), reloaded.combat.progress.money);
-        try std.testing.expectEqual(.healthy, reloaded.combat.progress.party[0].status);
-        try std.testing.expectEqual(reloaded.combat.progress.party[0].max_hp, reloaded.combat.progress.party[0].hp);
+        try std.testing.expectEqual(.healthy, reloaded.combat.progress.party.at(0).status);
+        try std.testing.expectEqual(reloaded.combat.progress.party.at(0).max_hp, reloaded.combat.progress.party.at(0).hp);
         try before_regular_inn.apply(&reloaded);
         reloaded.bind();
         try walkTo(allocator, &reloaded, "va5_room_0", 104, 336, &.{});
@@ -3623,13 +3623,13 @@ test "canonical Soul Eater spell slots persist without changing charges or the c
     const io = std.testing.io;
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     const rules = state.combat.content.systems.?;
     const index = rules.runeIndex("soul_eater").?;
     // Supplied attachment isolates spell visibility from the story grant event.
-    state.combat.progress.party[0].rune = index;
-    const charges = state.combat.progress.party[0].rune_charges;
+    state.combat.progress.party.at(0).rune = index;
+    const charges = state.combat.progress.party.at(0).rune_charges;
     for (1..5) |slots| {
         state.combat.progress.story.scenario.?.soul_eater_spell_slots = @intCast(slots);
         const rune = state.combat.rune(0).?;
@@ -3637,7 +3637,7 @@ test "canonical Soul Eater spell slots persist without changing charges or the c
             try std.testing.expectEqual(tier < slots, rune.spells[tier] != null);
             try std.testing.expect(rules.runes[index].spells[tier] != null);
         }
-        try std.testing.expectEqual(charges, state.combat.progress.party[0].rune_charges);
+        try std.testing.expectEqual(charges, state.combat.progress.party.at(0).rune_charges);
         const bytes = try std.json.Stringify.valueAlloc(allocator, state.combat.progress.story.scenario.?, .{});
         defer allocator.free(bytes);
         const restored = try std.json.parseFromSlice(event_runtime.StoryState, allocator, bytes, .{});
@@ -3668,11 +3668,11 @@ test "canonical Odessa scene preserves a full shared inventory and still continu
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     // Supplied raid checkpoint isolates the source append-failure boundary.
     for ([_][]const u8{ "gremio", "cleo", "viktor" }) |id| try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, id);
-    state.combat.progress.party[0].rune = state.combat.content.systems.?.runeIndex("soul_eater").?;
+    state.combat.progress.party.at(0).rune = state.combat.content.systems.?.runeIndex("soul_eater").?;
     setScenarioBit(&state, 9, 32 | 128);
     setScenarioBit(&state, 10, 1);
     setScenarioBit(&state, 47, 3);
@@ -3702,7 +3702,7 @@ test "canonical world arrival preserves blocked source return through reload" {
     defer harness.deinit();
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     // Supplied exit fixture isolates arrival validation from campaign combat.
     state.field_state.enterRoom(state.package.roomIndex("va8_room_0").?, .{ .x = 176, .y = 320 });
@@ -3869,7 +3869,7 @@ fn restInKaku(allocator: std.mem.Allocator, state: *journey.State) !void {
     try walkTo(allocator, state, "vb2_room_3", 464, 128, &.{});
     try walkTo(allocator, state, null, 248, 128, &.{});
     try interactFacing(state, .up, &.{0});
-    for (state.combat.progress.party) |member| try std.testing.expectEqual(member.max_hp, member.hp);
+    for (state.combat.progress.party.items()) |member| try std.testing.expectEqual(member.max_hp, member.hp);
     try walkTo(allocator, state, "vb2_room_0", 248, 240, &.{});
 }
 
@@ -3925,7 +3925,7 @@ test "canonical Toran boat upgrade requires an active pilot and sails to Region 
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     defer state.deinitActiveModes();
     state.field_state.enterRoom(state.package.roomIndex("vb5bg_room_0").?, .{ .x = 192, .y = 344 });
@@ -3997,7 +3997,7 @@ fn restInNorthernSwallowPass(allocator: std.mem.Allocator, state: *journey.State
     try walkTo(allocator, state, "vg1_room_5", 248, 120, &.{});
     try walkTo(allocator, state, null, 48, 192, &.{});
     try interactFacing(state, .up, &.{0});
-    for (state.combat.progress.party) |member| try std.testing.expectEqual(member.max_hp, member.hp);
+    for (state.combat.progress.party.items()) |member| try std.testing.expectEqual(member.max_hp, member.hp);
     try walkTo(allocator, state, "vg1_room_0", 184, 336, &.{});
 }
 
@@ -4054,7 +4054,7 @@ test "island return flight leaves a walkable route to the palace" {
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     setScenarioBit(&state, 2, 4);
     setScenarioBit(&state, 20, 32);
@@ -4093,7 +4093,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     const io = std.testing.io;
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     defer state.deinitActiveModes();
 
@@ -4216,7 +4216,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     const confirm: pause_menu.Input = .{ .field = .{ .action = true } };
     _ = try state.tickWithFieldEvents(confirm, .{});
     try std.testing.expectEqual(.rune_attach, state.menu.phase);
-    for (state.combat.progress.party, 0..) |member, owner| {
+    for (state.combat.progress.party.items(), 0..) |member, owner| {
         const slot = for (member.inventory.slots, 0..) |item, index| {
             if (item != null and item.?.id == .fire_crystal) break index;
         } else continue;
@@ -4235,7 +4235,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, null, 192, 256, &.{});
     try interactFacing(&state, .up, &.{0});
     for (0..60) |_| _ = try state.tickWithFieldEvents(.{}, .{});
-    for (state.combat.progress.party) |member| try std.testing.expectEqual(member.max_hp, member.hp);
+    for (state.combat.progress.party.items()) |member| try std.testing.expectEqual(member.max_hp, member.hp);
     try walkTo(allocator, &state, "va1_room_0", 176, 384, &.{});
     try finishFieldOrEncountersUntilRoom(allocator, &state, &.{
         .{ .want = "world_a", .x = 720, .y = 872 },
@@ -4395,14 +4395,14 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try interactService(&state, .up);
     try std.testing.expectEqual(.blacksmith, state.menu.phase);
     while (state.menu.member != 2) _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
-    while (state.combat.progress.party[2].weapon_level < 4) {
+    while (state.combat.progress.party.at(2).weapon_level < 4) {
         const price = try state.combat.sharpenPrice(2, state.menu.service_limit);
         if (state.combat.progress.money < price + 500) break;
-        const level = state.combat.progress.party[2].weapon_level;
+        const level = state.combat.progress.party.at(2).weapon_level;
         _ = try state.tickWithFieldEvents(confirm, .{});
         _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
-        try std.testing.expectEqual(level + 1, state.combat.progress.party[2].weapon_level);
+        try std.testing.expectEqual(level + 1, state.combat.progress.party.at(2).weapon_level);
         _ = try state.tickWithFieldEvents(confirm, .{});
     }
     _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
@@ -4448,7 +4448,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, null, 112, 272, &.{});
     try interactFacing(&state, .up, &.{0});
     for (0..60) |_| _ = try state.tickWithFieldEvents(.{}, .{});
-    for (state.combat.progress.party) |member| try std.testing.expectEqual(member.max_hp, member.hp);
+    for (state.combat.progress.party.items()) |member| try std.testing.expectEqual(member.max_hp, member.hp);
     try arrangeEarlyBattleParty(&state);
     try std.testing.expectEqual(.back, state.combat.partyRow(2));
     try walkTo(allocator, &state, "va2_room_0", 120, 368, &.{});
@@ -4559,7 +4559,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, null, 200, 160, &.{});
     try interactFacing(&state, .up, &.{0});
     for (0..60) |_| _ = try state.tickWithFieldEvents(.{}, .{});
-    for (state.combat.progress.party) |member| {
+    for (state.combat.progress.party.items()) |member| {
         try std.testing.expectEqual(member.max_hp, member.hp);
         try std.testing.expectEqual(member.max_rune_charges, member.rune_charges);
     }
@@ -4704,7 +4704,8 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try std.testing.expectEqual(@as(u8, 1), state.combat.progress.story.recruitment_tier);
     try expectPartyOrder(&state, &.{"hero"});
     for ([_][]const u8{ "gremio", "cleo", "viktor", "camille", "tai_ho", "yam_koo", "luc" }) |id| {
-        const reserve = for (state.reserves) |entry| {
+        const reserve = for (0..state.reserveCount()) |index| {
+            const entry = state.reserveMember(index);
             const owned = entry orelse break null;
             if (std.mem.eql(u8, owned.id, id)) break owned;
         } else null;
@@ -4763,7 +4764,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, null, 248, 112, &.{});
     try interactFacing(&state, .up, &.{0});
     for (0..60) |_| _ = try state.tickWithFieldEvents(.{}, .{});
-    for (state.combat.progress.party) |member| {
+    for (state.combat.progress.party.items()) |member| {
         try std.testing.expectEqual(member.max_hp, member.hp);
         try std.testing.expectEqual(member.max_rune_charges, member.rune_charges);
     }
@@ -4932,7 +4933,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try std.testing.expect(!scenarioBitSet(&state, 15, 2));
     try interactFacing(&state, .up, &.{0});
     try std.testing.expect(scenarioBitSet(&state, 15, 2));
-    try std.testing.expectEqual(state.combat.progress.party[0].max_hp, state.combat.progress.party[0].hp);
+    try std.testing.expectEqual(state.combat.progress.party.at(0).max_hp, state.combat.progress.party.at(0).hp);
     _ = try state.tickWithFieldEvents(.{}, .{});
     _ = try drainFieldEvent(&state, &.{});
     try expectPartyOrder(&state, &.{ "hero", "gremio" });
@@ -5018,7 +5019,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, "vc4_room_8", 120, 376, &.{});
     try walkTo(allocator, &state, null, 120, 104, &.{});
     try interactFacing(&state, .up, &.{0});
-    for (state.combat.progress.party) |member| try std.testing.expectEqual(member.max_hp, member.hp);
+    for (state.combat.progress.party.items()) |member| try std.testing.expectEqual(member.max_hp, member.hp);
     try walkTo(allocator, &state, "vc4_room_1", 120, 240, &.{});
     try walkTo(allocator, &state, "vc4_room_0", 248, 464, &.{});
     _ = try state.tickWithFieldEvents(.{}, .{});
@@ -5056,7 +5057,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, "vc2_room_6", 72, 544, &.{});
     try walkTo(allocator, &state, null, 224, 144, &.{});
     try interactFacing(&state, .right, &.{0});
-    for (state.combat.progress.party) |member| try std.testing.expectEqual(member.max_hp, member.hp);
+    for (state.combat.progress.party.items()) |member| try std.testing.expectEqual(member.max_hp, member.hp);
     try walkTo(allocator, &state, "vc2_room_0", 184, 232, &.{});
     try walkTo(allocator, &state, "world_c", 320, 744, &.{});
     try walkThroughEncounters(allocator, &state, "vc3_room_0", 1096, 272, &.{}, .retreat);
@@ -5258,7 +5259,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, "vc2_room_6", 72, 544, &.{});
     try walkTo(allocator, &state, null, 224, 144, &.{});
     try interactFacing(&state, .right, &.{0});
-    for (state.combat.progress.party) |member| try std.testing.expectEqual(member.max_hp, member.hp);
+    for (state.combat.progress.party.items()) |member| try std.testing.expectEqual(member.max_hp, member.hp);
     try walkTo(allocator, &state, "vc2_room_0", 184, 232, &.{});
     // Prepare for the next duel while the party is already in the Dwarf Village.
     try walkTo(allocator, &state, "vc2_room_10", 80, 304, &.{});
@@ -5273,16 +5274,16 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     const rules = state.field_state.item_rules.?;
     var sharpening_budget: u32 = 0;
     const upgrade_costs = state.combat.partyProfile(0).weapon.?.upgrade_costs;
-    for (upgrade_costs[@min(state.combat.progress.party[0].weapon_level, 8)..8]) |price| sharpening_budget += price;
+    for (upgrade_costs[@min(state.combat.progress.party.at(0).weapon_level, 8)..8]) |price| sharpening_budget += price;
     for (duel_gear, 0..) |gear, index| {
         const price = rules.offerGood(gear.item).?.price;
         const money = state.combat.progress.money;
-        const inventory = state.combat.progress.party[0].inventory;
+        const inventory = state.combat.progress.party.at(0).inventory;
         if (index != 0 and (money < price + sharpening_budget or inventory.count() == inventory.slots.len)) continue;
         try std.testing.expect(money >= price);
         try buyStockItem(&state, gear.item, 0);
     }
-    const hero_inventory = state.combat.progress.party[0].inventory;
+    const hero_inventory = state.combat.progress.party.at(0).inventory;
     _ = try state.tickWithFieldEvents(.{ .menu = true }, .{});
     _ = try state.tickWithFieldEvents(.{ .menu = true }, .{});
     try std.testing.expectEqual(.root, state.menu.phase);
@@ -5296,7 +5297,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
         _ = try state.tickWithFieldEvents(confirm, .{});
         for (0..index) |_| _ = try state.tickWithFieldEvents(.{ .field = .{ .menu_direction = .down } }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
-        try std.testing.expectEqual(state.combat.gearIndex(gear.item), state.combat.progress.party[0].loadout.get(gear.slot));
+        try std.testing.expectEqual(state.combat.gearIndex(gear.item), state.combat.progress.party.at(0).loadout.get(gear.slot));
         _ = try state.tickWithFieldEvents(confirm, .{});
     }
     _ = try state.tickWithFieldEvents(.{ .menu = true }, .{});
@@ -5312,15 +5313,15 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, null, 192, 96, &.{});
     try interactService(&state, .up);
     try std.testing.expectEqual(.blacksmith, state.menu.phase);
-    while (state.combat.progress.party[0].weapon_level < state.menu.service_limit) {
+    while (state.combat.progress.party.at(0).weapon_level < state.menu.service_limit) {
         const price = try state.combat.sharpenPrice(0, state.menu.service_limit);
         if (state.combat.progress.money < price) break;
-        const level = state.combat.progress.party[0].weapon_level;
+        const level = state.combat.progress.party.at(0).weapon_level;
         _ = try state.tickWithFieldEvents(confirm, .{});
         _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
-        try std.testing.expectEqual(level + 1, state.combat.progress.party[0].weapon_level);
+        try std.testing.expectEqual(level + 1, state.combat.progress.party.at(0).weapon_level);
     }
     _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
     try walkTo(allocator, &state, "vc2_room_0", 184, 232, &.{});
@@ -5374,7 +5375,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, "world_c", 360, 216, &.{});
     try walkThroughEncounters(allocator, &state, null, 808, 688, &.{}, .prepared);
     try restoreWithOwnedMedicine(&state, 1, .mega_medicine, false, 0);
-    try std.testing.expectEqual(state.combat.progress.party[0].max_hp, state.combat.progress.party[0].hp);
+    try std.testing.expectEqual(state.combat.progress.party.at(0).max_hp, state.combat.progress.party.at(0).hp);
     try walkThroughEncounters(allocator, &state, "vc6_room_0", 808, 696, &.{}, .retreat);
     try std.testing.expectEqualStrings("world_c_point_5", state.field_state.worldEntry(state.package).?.id);
     for (0..8) |_| {
@@ -5415,7 +5416,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
             },
             .finished => {
                 if (duel.outcome != .victory) std.debug.print("Kwanda duel ended in round {d}: hero HP {d}/{d}, attack {d}, defense {d}, weapon level {d}, foe HP {d}\n", .{
-                    duel.round, duel.fighters[0].hp, duel.fighters[0].maximum_hp, duel.fighters[0].attack, duel.fighters[0].defense, state.combat.progress.party[0].weapon_level, duel.fighters[1].hp,
+                    duel.round, duel.fighters[0].hp, duel.fighters[0].maximum_hp, duel.fighters[0].attack, duel.fighters[0].defense, state.combat.progress.party.at(0).weapon_level, duel.fighters[1].hp,
                 });
                 try std.testing.expectEqual(.victory, duel.outcome.?);
                 won_kwanda = true;
@@ -5451,7 +5452,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, "vb6_room_12", 304, 152, &.{});
     try walkTo(allocator, &state, null, 208, 184, &.{});
     try interactFacing(&state, .right, &.{0});
-    try std.testing.expectEqual(state.combat.progress.party[0].max_hp, state.combat.progress.party[0].hp);
+    try std.testing.expectEqual(state.combat.progress.party.at(0).max_hp, state.combat.progress.party.at(0).hp);
     try walkTo(allocator, &state, "vb6_room_6", 184, 240, &.{});
     try finishFieldOrEncountersUntilRoom(allocator, &state, &.{
         .{ .want = "vb6_room_5", .x = 8, .y = 216 },
@@ -5538,7 +5539,8 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try std.testing.expect(!scenarioBitSet(&state, 198, 2));
     try makeRoomForRecruit(&state, "luc");
     try expectPartyOrder(&state, &.{ "hero", "gremio", "kirkis", "viktor", "cleo", "flik" });
-    for (state.reserves) |reserve| {
+    for (0..state.reserveCount()) |index| {
+        const reserve = state.reserveMember(index);
         const member = reserve orelse continue;
         if (std.mem.eql(u8, member.id, "luc")) {
             try std.testing.expectEqualDeep(luc, member);
@@ -5678,7 +5680,8 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try std.testing.expect(!carriesSharedItem(&state, "mathiu_s_letter__source_90"));
     try std.testing.expect(state.combat.progress.story.scenario.?.recruit_flags[45] & 1 != 0);
     try expectPartyOrder(&state, prison_party);
-    for (state.reserves) |reserve| {
+    for (0..state.reserveCount()) |index| {
+        const reserve = state.reserveMember(index);
         const member = reserve orelse continue;
         if (std.mem.eql(u8, member.id, "kimberly")) {
             try std.testing.expectEqual(17, member.level);
@@ -5696,7 +5699,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, "vd1_room_6", 544, 432, &.{});
     try walkTo(allocator, &state, null, 128, 112, &.{});
     try interactFacing(&state, .up, &.{0});
-    for (state.combat.progress.party) |member| try std.testing.expectEqual(member.max_hp, member.hp);
+    for (state.combat.progress.party.items()) |member| try std.testing.expectEqual(member.max_hp, member.hp);
     try walkTo(allocator, &state, "vd1_room_0", 184, 208, &.{});
     try finishFieldOrEncountersUntilRoom(allocator, &state, &.{.{ .want = "world_d", .x = 368, .y = 592 }}, .retreat);
     try crossRegionDToToran(allocator, &state);
@@ -5812,7 +5815,8 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try std.testing.expect(scenarioBitSet(&state, 197, 1));
     try std.testing.expect(state.combat.progress.story.scenario.?.recruit_flags[28] & 1 != 0);
     try expectPartyOrder(&state, &.{ "hero", "viktor", "flik" });
-    const milich_recruited = for (state.reserves) |reserve| {
+    const milich_recruited = for (0..state.reserveCount()) |index| {
+        const reserve = state.reserveMember(index);
         if (reserve != null and std.mem.eql(u8, reserve.?.id, "milich")) break true;
     } else false;
     try std.testing.expect(milich_recruited);
@@ -5874,8 +5878,8 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     _ = try drainFieldEvent(&state, &.{0});
     try finishHeadquartersPartySelectionFill(&state, "tai_ho", &.{ "viktor", "cleo", "flik", "kwanda", "stallion", "valeria", "camille" }, 4);
     try std.testing.expectEqual(@as(usize, 4), state.combat.partyCount());
-    try std.testing.expectEqualStrings("hero", state.combat.progress.party[0].id);
-    try std.testing.expectEqualStrings("tai_ho", state.combat.progress.party[1].id);
+    try std.testing.expectEqualStrings("hero", state.combat.progress.party.at(0).id);
+    try std.testing.expectEqualStrings("tai_ho", state.combat.progress.party.at(1).id);
     try finishFieldOrEncountersUntilRoom(allocator, &state, &.{
         .{ .want = "vb5b3_room_2", .x = 328, .y = 56 },
         .{ .want = "vb5b2_room_0", .x = 136, .y = 224 },
@@ -5894,7 +5898,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, "vg1_room_3", 56, 184, &.{});
     try walkTo(allocator, &state, null, 168, 104, &.{});
     try interactService(&state, .up);
-    for (state.combat.progress.party, 0..) |*member, index| {
+    for (state.combat.progress.party.items(), 0..) |member, index| {
         if (member.inventory.count() < member.inventory.slots.len) try buyStockItem(&state, .sacrificial_buddha, index);
         for (0..2) |_| {
             if (member.inventory.count() == member.inventory.slots.len) break;
@@ -5938,7 +5942,7 @@ test "canonical continuous New Game story through both Pahn outcomes and partial
     try walkTo(allocator, &state, "vg1_room_3", 56, 184, &.{});
     try walkTo(allocator, &state, null, 168, 104, &.{});
     try interactService(&state, .up);
-    const hero_pack = &state.combat.progress.party[0].inventory;
+    const hero_pack = &state.combat.progress.party.at(0).inventory;
     for (0..3) |_| {
         if (hero_pack.count() == hero_pack.slots.len) break;
         try buyStockItem(&state, .sacrificial_buddha, 0);
@@ -5985,7 +5989,7 @@ test "canonical recruitment hand-in consumes the opal and recruits Esmeralda" {
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     defer state.deinitActiveModes();
     state.combat.progress.story.scenario.?.castle_tier = 2;
@@ -6014,7 +6018,7 @@ test "canonical scripted dragon flight lands in both Region F destinations" {
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     defer state.deinitActiveModes();
     setScenarioBit(&state, 207, 16);
@@ -6040,7 +6044,7 @@ test "canonical dragon ride home reaches the dock for each Toran tier" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
     for ([_]u8{ 2, 3, 4 }) |tier| {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         defer state.deinitActiveModes();
         state.combat.progress.story.scenario.?.castle_tier = tier;
@@ -6061,13 +6065,13 @@ test "canonical Pannu Yakuta recruits Valeria at the hero's level plus two advan
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
     for ([_]bool{ false, true }) |full| {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         defer state.deinitActiveModes();
         if (full) for ([_][]const u8{ "pahn", "cleo", "gremio", "viktor", "camille" }) |member| {
             try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, member);
         };
-        const expected_level = state.combat.progress.party[0].level + 3; // Valeria starts at level one.
+        const expected_level = state.combat.progress.party.at(0).level + 3; // Valeria starts at level one.
         setScenarioBit(&state, 18, 4);
         state.field_state.enterRoom(state.package.roomIndex("vc4_room_0").?, .{ .x = 248, .y = 464 });
         state.field_state.setWorldEntry(state.package, "world_c_point_3");
@@ -6081,7 +6085,8 @@ test "canonical Pannu Yakuta recruits Valeria at the hero's level plus two advan
         try std.testing.expect(state.field_state.progress.story.scenario.?.recruit_flags[36] & 1 != 0);
         try std.testing.expect(std.mem.indexOfScalar(u8, &state.field_state.auxiliary_party.?, 36) != null);
         if (full) {
-            for (state.reserves) |entry| {
+            for (0..state.reserveCount()) |index| {
+                const entry = state.reserveMember(index);
                 const owned = entry orelse continue;
                 if (!std.mem.eql(u8, owned.id, "valeria")) continue;
                 try std.testing.expectEqual(expected_level, owned.level);
@@ -6089,7 +6094,7 @@ test "canonical Pannu Yakuta recruits Valeria at the hero's level plus two advan
             } else return error.MissingValeriaReserve;
         } else {
             try expectPartyOrder(&state, &.{ "hero", "valeria" });
-            try std.testing.expectEqual(expected_level, state.combat.progress.party[1].level);
+            try std.testing.expectEqual(expected_level, state.combat.progress.party.at(1).level);
         }
     }
 }
@@ -6098,7 +6103,7 @@ test "canonical recruitment counts living recruits for Quincy's offer" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
     for ([_]bool{ false, true }) |pahn_alive| {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         defer state.deinitActiveModes();
         const story = &state.combat.progress.story.scenario.?;
@@ -6121,7 +6126,7 @@ test "canonical dragon audience checks whether Liukan is in the party" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
     for ([_]bool{ false, true }) |with_liukan| {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         defer state.deinitActiveModes();
         if (with_liukan) try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, "liukan");
@@ -6147,7 +6152,7 @@ test "canonical Pahn duel aftermath returns to the right castle tier" {
     };
     for (cases) |case| {
         errdefer std.debug.print("Pahn duel aftermath at castle tier {d}, result {d}\n", .{ case.tier, case.result });
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         defer state.deinitActiveModes();
         if (case.active) try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, "pahn");
@@ -6178,12 +6183,12 @@ test "canonical Pahn duel outcomes return to Toran through ordinary inputs" {
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
     for ([_]bool{ false, true }) |prepared| {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         defer state.deinitActiveModes();
         try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, "pahn");
         try expectPartyOrder(&state, &.{ "hero", "pahn" });
-        if (prepared) while (state.combat.progress.party[1].level < 75) {
+        if (prepared) while (state.combat.progress.party.at(1).level < 75) {
             var rolls: [7]u15 = undefined;
             for (&rolls) |*roll| roll.* = state.combat.roll();
             state.combat.levelUp(1, rolls);
@@ -6229,7 +6234,7 @@ test "canonical Pahn duel outcomes return to Toran through ordinary inputs" {
         try journey.save(io, allocator, save_dir.dir, state);
         var next_harness = try CanonicalHarness.load(allocator, io);
         defer next_harness.deinit();
-        var next_members: [6]battle.Member = undefined;
+        var next_members: [battle.Party.roster_capacity]battle.Member = undefined;
         var next = try next_harness.newState(&next_members);
         defer next.releaseRestoredSave();
         defer next.deinitActiveModes();
@@ -6264,7 +6269,7 @@ test "canonical smith recruitment earns the four prerequisite recruits" {
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     defer state.deinitActiveModes();
 
@@ -6297,7 +6302,7 @@ test "canonical Gremio revival requires 107 living recruits" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
     for ([_]bool{ false, true }) |pahn_survived| {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         defer state.deinitActiveModes();
         const story = &state.combat.progress.story.scenario.?;
@@ -6330,7 +6335,7 @@ test "canonical final field event runs the ending with partial and full rosters"
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
     for ([_]bool{ false, true }) |full_roster| {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         defer state.deinitActiveModes();
         state.combat.progress.story.scenario.?.recruit_flags = @splat(if (full_roster) 1 else 0);
@@ -6360,10 +6365,10 @@ test "canonical final field event runs the ending with partial and full rosters"
 test "canonical Soniere warehouse keeps equipped and capped items with Gremio" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, "gremio");
-    try std.testing.expect(try state.combat.progress.party[1].inventory.receive(.needle));
+    try std.testing.expect(try state.combat.progress.party.at(1).inventory.receive(.needle));
     state.combat.progress.storage.counts.needle = field.game_state.storage.capacity;
     state.combat.progress.story.scenario.?.recruit_flags[2] = 1;
     state.combat.progress.story.scenario.?.soul_eater_spell_slots = 2;
@@ -6377,7 +6382,8 @@ test "canonical Soniere warehouse keeps equipped and capped items with Gremio" {
     try std.testing.expectEqualStrings("vb5b4_room_3", currentRoomName(&state));
     try std.testing.expectEqual(1, state.combat.progress.storage.quantity(.medicine));
     try std.testing.expectEqual(field.game_state.storage.capacity, state.combat.progress.storage.quantity(.needle));
-    const gremio = for (state.reserves) |entry| {
+    const gremio = for (0..state.reserveCount()) |index| {
+        const entry = state.reserveMember(index);
         const member = entry orelse continue;
         if (std.mem.eql(u8, member.id, "gremio")) break member;
     } else return error.MissingGremioReserve;
@@ -6391,7 +6397,7 @@ test "canonical Soniere warehouse keeps equipped and capped items with Gremio" {
 test "canonical harbor briefing resumes an older save before departing for Rikon" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     state.field_state.enterRoom(state.package.roomIndex("vb4_room_0").?, .{ .x = 400, .y = 144 });
     state.enterEncounterRoom();
@@ -6409,7 +6415,7 @@ test "canonical harbor briefing resumes an older save before departing for Rikon
 test "canonical Region C entrance selects the later village after the story changes" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     setScenarioBit(&state, 17, 1);
     state.field_state.enterRoom(state.package.roomIndex("world_c").?, .{ .x = 624, .y = 544 });
@@ -6423,7 +6429,7 @@ test "canonical Region C entrance selects the later village after the story chan
 test "canonical Kirkis recruitment makes room in a full party" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     for ([_][]const u8{ "gremio", "cleo", "viktor", "pahn", "luc" }) |id| {
         try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, id);
@@ -6461,7 +6467,8 @@ test "canonical Kirkis recruitment makes room in a full party" {
     _ = try drainFieldEvent(&state, &.{});
     try expectPartyOrder(&state, &.{ "hero", "gremio", "cleo", "viktor", "pahn", "kirkis" });
     try std.testing.expect(scenarioBitSet(&state, 15, 4 | 8));
-    for (state.reserves) |entry| {
+    for (0..state.reserveCount()) |index| {
+        const entry = state.reserveMember(index);
         const owned = entry orelse continue;
         if (std.mem.eql(u8, owned.id, "luc")) {
             try std.testing.expectEqualDeep(luc, owned);
@@ -6475,7 +6482,7 @@ test "canonical M01-M03 route to VB6 Great Forest, spell barrier, and Kobold Vil
     const io = std.testing.io;
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
 
     // Traverse from world_a to Kwaba Fortress (va6_room_1 -> va6_room_0).
@@ -6537,7 +6544,7 @@ test "canonical M01-M03 route to VB6 Great Forest, spell barrier, and Kobold Vil
     try std.testing.expectEqualStrings("vb6_room_6", currentRoomName(&state));
 }
 
-fn enterVb6ForTest(state: *journey.State, members: *[6]battle.Member) !void {
+fn enterVb6ForTest(state: *journey.State, members: *[battle.Party.roster_capacity]battle.Member) !void {
     setScenarioBit(state, 10, 4 | 8 | 16);
     try state.joinPartyMember(members, state.party_catalog.?, state.party_bindings, "kirkis");
     const target_room = state.package.roomIndex("vb6_room_0").?;
@@ -6584,7 +6591,7 @@ test "canonical B01 B02 B04 VB6 and B20 live encounters, suppression, battlefiel
 
     // B01: Story suppression sampled at room load; mid-room clear remains suppressed until next room load; world exit clears bit.
     {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         try enterVb6ForTest(&state, &members);
 
@@ -6630,7 +6637,7 @@ test "canonical B01 B02 B04 VB6 and B20 live encounters, suppression, battlefiel
 
     // Trigger encounters across all five rooms and verify all eight formations.
     {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         try enterVb6ForTest(&state, &members);
 
@@ -6703,7 +6710,7 @@ test "canonical B01 B02 B04 VB6 and B20 live encounters, suppression, battlefiel
 
     // Verify a real victory with the supplied episode roster before saving.
     {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var boot: journey_boot.Boot = .{
             .allocator = allocator,
             .path = @constCast(""),
@@ -6742,7 +6749,7 @@ test "canonical B01 B02 B04 VB6 and B20 live encounters, suppression, battlefiel
 
         var reloaded_harness = try CanonicalHarness.load(allocator, io);
         defer reloaded_harness.deinit();
-        var reload_members: [6]battle.Member = undefined;
+        var reload_members: [battle.Party.roster_capacity]battle.Member = undefined;
         var reloaded = try reloaded_harness.newState(&reload_members);
         defer reloaded.releaseRestoredSave();
         try journey.restore(io, allocator, temp.dir, &reloaded);
@@ -6797,7 +6804,7 @@ test "canonical Chapter 1 Gregminster shops rune appraisal and optional Sarady c
     const io = std.testing.io;
     var harness = try CanonicalHarness.load(allocator, io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     state.combat.progress.money = 20000;
 
@@ -6864,7 +6871,7 @@ test "canonical Chapter 1 Gregminster shops rune appraisal and optional Sarady c
     _ = try state.tickWithFieldEvents(.{ .field = .{ .menu_direction = .up } }, .{});
     _ = try state.tickWithFieldEvents(.{ .field = .{ .action = true } }, .{});
     try std.testing.expectEqual(pause_menu.Phase.appraisal_notice, state.menu.phase);
-    try std.testing.expect(state.combat.progress.party[0].inventory.slots[urn_slot].?.identified);
+    try std.testing.expect(state.combat.progress.party.at(0).inventory.slots[urn_slot].?.identified);
     try std.testing.expectEqual(@as(u32, 9100), state.combat.progress.money);
     _ = try state.tickWithFieldEvents(.{ .field = .{ .action = true } }, .{});
     _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
@@ -6918,7 +6925,7 @@ test "canonical Chapter 1 Gregminster shops rune appraisal and optional Sarady c
 test "placed props start canonical interactions without character actors" {
     var harness = try CanonicalHarness.load(std.testing.allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     const room_index = state.package.roomIndex("va1_room_3").?;
     try std.testing.expect(state.package.rooms[room_index].canStand(192, 256));
@@ -6938,7 +6945,7 @@ test "interaction position follows the live actor for own and inherited records"
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     const binding = state.room_battles.?.bindingFor("vb1_room_0").?;
     const packet = binding.ordinary.?;
@@ -6963,7 +6970,7 @@ test "interaction position follows the live actor for own and inherited records"
     state.room_battles.?.settled_actors = .{ .room = binding.room, .visit = state.field_state.room_entries, .state = settled };
     const saved = try journey.Snapshot.capture(state);
     try std.testing.expect(saved.room_actors != null);
-    var fresh_members: [6]battle.Member = undefined;
+    var fresh_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&fresh_members);
     {
         const bytes = try std.json.Stringify.valueAlloc(allocator, saved, .{});
@@ -7020,7 +7027,7 @@ test "source actor initializers place residents on entry and preserve positions 
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     const binding = state.room_battles.?.bindingFor("va3_room_1").?;
     const packet = binding.ordinary.?;
@@ -7049,7 +7056,7 @@ test "source actor initializers place residents on entry and preserve positions 
     try std.testing.expectEqual(@as(u2, 2), actors.slots[index].?.avatar.?.variant);
     const saved = try journey.Snapshot.capture(state);
     try std.testing.expect(saved.room_actors != null);
-    var fresh_members: [6]battle.Member = undefined;
+    var fresh_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&fresh_members);
     {
         const bytes = try std.json.Stringify.valueAlloc(allocator, saved, .{});
@@ -7063,7 +7070,7 @@ test "source actor initializers place residents on entry and preserve positions 
     const retained = (try restored.room_battles.?.constructActorsForVisit(binding, restored.field_state.progress.story.scenario.?, restored.field_state.room_entries)).?;
     try std.testing.expectEqual(position, binding.interactionPosition(6, &retained).?);
     var active_binding = binding;
-    const party_ids = [_]u8{restored.combat.integration.?.host.characterId(restored.field_state.progress.party[0].id).?};
+    const party_ids = [_]u8{restored.combat.integration.?.host.characterId(restored.field_state.progress.party.at(0).id).?};
     active_binding.party = &party_ids;
     var interaction = try @import("field_events").Session.beginInteraction(active_binding, restored.field_state, 1, 14, retained);
     for (0..8) |_| {
@@ -7086,7 +7093,7 @@ test "source actor initializers retain constructor motion without changing anima
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     const binding = state.room_battles.?.bindingFor("va1_room_1").?;
     const packet = binding.ordinary.?;
@@ -7117,7 +7124,7 @@ test "source actor initializers retain constructor motion without changing anima
     }
     _ = try actors.settle(packet, binding.animations);
     const saved = try journey.Snapshot.capture(state);
-    var fresh_members: [6]battle.Member = undefined;
+    var fresh_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&fresh_members);
     try saved.apply(&restored);
     try restored.initializeRoomVisit();
@@ -7130,7 +7137,7 @@ test "source initializer first pumps keep Hero state and discard unarmed tails" 
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
     for (0..4) |sample| {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         const room_id = if (sample == 0) "va3_room_1" else if (sample == 3) "va1_room_1" else "va1_room_2";
         if (sample == 0) setScenarioBit(&state, 9, 32) else if (sample == 1) setScenarioBit(&state, 3, 16) else if (sample == 2) setScenarioBit(&state, 4, 8) else setScenarioBit(&state, 20, 4);
@@ -7201,7 +7208,7 @@ test "canonical interactions honor live room flag predicates before dispatch" {
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     for ([_]struct { room: []const u8, entity: u8, mask: u8 }{
         .{ .room = "va1_room_3", .entity = 12, .mask = 1 },
@@ -7209,7 +7216,7 @@ test "canonical interactions honor live room flag predicates before dispatch" {
     }) |sample| {
         var binding = state.room_battles.?.bindingFor(sample.room).?;
         var party_ids: [6]u8 = undefined;
-        for (state.field_state.progress.party, 0..) |member, i| party_ids[i] = state.combat.integration.?.host.characterId(member.id).?;
+        for (state.field_state.progress.party.items(), 0..) |member, i| party_ids[i] = state.combat.integration.?.host.characterId(member.id).?;
         binding.party = party_ids[0..state.field_state.progress.party.len];
         const construction = try binding.constructRoomActors(state.field_state.progress.story.scenario.?);
         state.field_state.enterRoom(state.package.roomIndex(sample.room).?, .{ .x = 80, .y = 80 });
@@ -7228,7 +7235,7 @@ test "canonical interactions honor live room flag predicates before dispatch" {
         var valid_save = saved;
         valid_save.x = @intCast(floor % columns * 8);
         valid_save.y = @intCast(floor / columns * 8);
-        var fresh_members: [6]battle.Member = undefined;
+        var fresh_members: [battle.Party.roster_capacity]battle.Member = undefined;
         var restored = try harness.newState(&fresh_members);
         try valid_save.apply(&restored);
         const restored_construction = try binding.constructRoomActors(restored.field_state.progress.story.scenario.?);
@@ -7242,10 +7249,10 @@ test "canonical source eligibility gates use live castle tier and recruitment fl
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     var binding = state.room_battles.?.bindingFor("vb1_room_4").?;
-    const party_ids = [_]u8{state.combat.integration.?.host.characterId(state.field_state.progress.party[0].id).?};
+    const party_ids = [_]u8{state.combat.integration.?.host.characterId(state.field_state.progress.party.at(0).id).?};
     binding.party = &party_ids;
     const room_index = state.package.roomIndex(binding.room).?;
     const room = state.package.rooms[room_index];
@@ -7259,7 +7266,7 @@ test "canonical source eligibility gates use live castle tier and recruitment fl
     construction = try binding.constructRoomActors(state.field_state.progress.story.scenario.?);
     _ = try @import("field_events").Session.beginInteraction(binding, state.field_state, 1, 1, construction);
     const saved = try journey.Snapshot.capture(state);
-    var fresh_members: [6]battle.Member = undefined;
+    var fresh_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&fresh_members);
     try saved.apply(&restored);
     _ = try @import("field_events").Session.beginInteraction(binding, restored.field_state, 1, 1, try binding.constructRoomActors(restored.field_state.progress.story.scenario.?));
@@ -7288,10 +7295,10 @@ test "canonical money predicates read current field funds before interaction" {
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     var binding = state.room_battles.?.bindingFor("vb6_room_12").?;
-    const party_ids = [_]u8{state.combat.integration.?.host.characterId(state.field_state.progress.party[0].id).?};
+    const party_ids = [_]u8{state.combat.integration.?.host.characterId(state.field_state.progress.party.at(0).id).?};
     binding.party = &party_ids;
     const room_index = state.package.roomIndex(binding.room).?;
     const room = state.package.rooms[room_index];
@@ -7312,7 +7319,7 @@ test "canonical money predicates read current field funds before interaction" {
     }
     state.field_state.progress.money = 10000;
     const saved = try journey.Snapshot.capture(state);
-    var fresh_members: [6]battle.Member = undefined;
+    var fresh_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&fresh_members);
     try saved.apply(&restored);
     _ = try @import("field_events").Session.beginInteraction(binding, restored.field_state, 1, 3, try binding.constructRoomActors(restored.field_state.progress.story.scenario.?));
@@ -7322,10 +7329,10 @@ test "canonical shared conversations use source props and fixed live actor owner
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     var binding = state.room_battles.?.bindingFor("vb2_room_5").?;
-    const party_ids = [_]u8{state.combat.integration.?.host.characterId(state.field_state.progress.party[0].id).?};
+    const party_ids = [_]u8{state.combat.integration.?.host.characterId(state.field_state.progress.party.at(0).id).?};
     binding.party = &party_ids;
     state.field_state.enterRoom(state.package.roomIndex(binding.room).?, .{ .x = 112, .y = 152 });
     var actors = (try binding.constructRoomActors(state.field_state.progress.story.scenario.?)).?;
@@ -7355,10 +7362,10 @@ test "canonical level predicates use live roster levels and select the source fa
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
     for ([_]u8{ 34, 35 }) |level| {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, "kirkis");
-        state.combat.progress.party[1].level = level;
+        state.combat.progress.party.at(1).level = level;
         setScenarioBit(&state, 19, 8);
         setScenarioBit(&state, 160, 8);
         state.field_state.progress.story.scenario.?.castle_tier = 2;
@@ -7368,7 +7375,7 @@ test "canonical level predicates use live roster levels and select the source fa
         const owner = state.field_event orelse return error.MissingLevelInteraction;
         try std.testing.expectEqualStrings(if (level == 34) "vb6_room_12_e06_interaction" else "vb6_room_12_e05_interaction", owner.session.instance.?.program_id);
         try std.testing.expectEqual(level, owner.binding.character_levels.?[4]);
-        try std.testing.expectEqual(state.combat.progress.party[0].level, owner.binding.character_levels.?[8]);
+        try std.testing.expectEqual(state.combat.progress.party.at(0).level, owner.binding.character_levels.?[8]);
         if (level == 35) {
             var missing = owner.binding.*;
             missing.character_levels = null;
@@ -7379,13 +7386,13 @@ test "canonical level predicates use live roster levels and select the source fa
             try std.testing.expectError(error.InvalidFieldCharacterLevel, missing.validateContext());
         }
     }
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     var seeded = try party_session.catalogue.materializeBound(state.combat.content.characterRules(), state.party_catalog.?, "kirkis", state.party_bindings);
     seeded.owned.level = 37;
     try state.retainReserve(seeded.owned);
     const saved = try journey.Snapshot.capture(state);
-    var fresh_members: [6]battle.Member = undefined;
+    var fresh_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&fresh_members);
     try saved.apply(&restored);
     _ = try restored.tickWithFieldEvents(.{}, .{});
@@ -7401,7 +7408,7 @@ test "Sarady inn staff are available after the tea scene" {
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     setScenarioBit(&state, 8, 4);
     const before_tea = state.field_state.progress.story.scenario.?;
@@ -7430,10 +7437,10 @@ test "canonical source chest preserves acquisition message and retries full bags
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
-    for (state.combat.progress.party) |*member| member.loadout = .{};
-    for (state.combat.progress.party) |*member| for (&member.inventory.slots) |*slot| {
+    for (state.combat.progress.party.items()) |member| member.loadout = .{};
+    for (state.combat.progress.party.items()) |member| for (&member.inventory.slots) |*slot| {
         slot.* = .{ .id = .medicine, .uses = 6 };
     };
     setScenarioBit(&state, 3, 32);
@@ -7444,7 +7451,7 @@ test "canonical source chest preserves acquisition message and retries full bags
     _ = try state.tickWithFieldEvents(.{}, .{});
     const open_chest: pause_menu.Input = .{ .field = .{ .action = true, .direction = .up } };
     for ([_]bool{ true, false }) |full| {
-        if (!full) state.field_state.progress.party[0].inventory.remove(0);
+        if (!full) state.field_state.progress.party.at(0).inventory.remove(0);
         _ = try state.tickWithFieldEvents(open_chest, .{});
         const owner = state.field_event orelse return error.MissingChestInteraction;
         try std.testing.expectEqualStrings("va2_room_3_e27_interaction", owner.session.instance.?.program_id);
@@ -7461,7 +7468,7 @@ test "canonical source chest preserves acquisition message and retries full bags
         try std.testing.expect(state.field_event == null and anchored);
         const flag_set = state.field_state.progress.story.scenario.?.scenario[172] & 0x10 != 0;
         try std.testing.expectEqual(!full, flag_set);
-        for (state.field_state.progress.party) |member| try std.testing.expectEqual(@as(usize, 9), member.inventory.count());
+        for (state.field_state.progress.party.items()) |member| try std.testing.expectEqual(@as(usize, 9), member.inventory.count());
     }
     _ = try state.tickWithFieldEvents(open_chest, .{});
     try std.testing.expect(state.field_event == null);
@@ -7472,12 +7479,12 @@ test "canonical item predicates use active bags and equipped gear" {
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
     for ([_]bool{ false, true }) |equipped| {
-        var members: [6]battle.Member = undefined;
+        var members: [battle.Party.roster_capacity]battle.Member = undefined;
         var state = try harness.newState(&members);
         inline for (.{ .head, .body, .shield, .accessory_one, .accessory_two }) |slot| try state.combat.equipSlot(0, slot, null);
-        state.combat.progress.party[0].inventory = .{};
-        try std.testing.expect(try state.combat.progress.party[0].inventory.receive(.medicine));
-        try std.testing.expect(try state.combat.progress.party[0].inventory.receive(.bandanna));
+        state.combat.progress.party.at(0).inventory = .{};
+        try std.testing.expect(try state.combat.progress.party.at(0).inventory.receive(.medicine));
+        try std.testing.expect(try state.combat.progress.party.at(0).inventory.receive(.bandanna));
         try state.combat.equipSlot(0, .head, if (equipped) state.combat.gearIndex(.bandanna).? else null);
         var reserve = try party_session.catalogue.materializeBound(state.combat.content.characterRules(), state.party_catalog.?, "kirkis", state.party_bindings);
         reserve.owned.loadout = .{};
@@ -7534,7 +7541,7 @@ test "world entry context survives rooms and reload before retained return" {
     const allocator = std.testing.allocator;
     var harness = try CanonicalHarness.load(allocator, std.testing.io);
     defer harness.deinit();
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     try std.testing.expectEqualStrings("world_a_point_9", state.field_state.worldEntry(state.package).?.id);
     state.field_state.enterRoom(state.package.roomIndex("world_a").?, .{ .x = 584, .y = 392 });
@@ -7553,7 +7560,7 @@ test "world entry context survives rooms and reload before retained return" {
     defer allocator.free(bytes);
     const parsed = try std.json.parseFromSlice(journey.Snapshot, allocator, bytes, .{});
     defer parsed.deinit();
-    var fresh_members: [6]battle.Member = undefined;
+    var fresh_members: [battle.Party.roster_capacity]battle.Member = undefined;
     var restored = try harness.newState(&fresh_members);
     try parsed.value.apply(&restored);
     try std.testing.expectEqualStrings("world_a_point_0", restored.field_state.worldEntry(restored.package).?.id);
@@ -7771,26 +7778,26 @@ noinline fn preparePahnForTeo(allocator: std.mem.Allocator, state: *journey.Stat
     _ = try state.tickWithFieldEvents(.{}, .{});
     _ = try drainFieldEvent(state, &.{0});
     try finishHeadquartersPartySelection(state, "pahn", null);
-    const pahn = for (state.combat.progress.party, 0..) |member, slot| {
+    const pahn = for (state.combat.progress.party.items(), 0..) |member, slot| {
         if (std.mem.eql(u8, member.id, "pahn")) break slot;
     } else return error.MissingPahnInParty;
-    const level_before = state.combat.progress.party[pahn].level;
+    const level_before = state.combat.progress.party.at(pahn).level;
     try crossToranToRegionD(allocator, state);
     // Cover the claw upgrade, armor, and the return stay.
     for (0..420) |pass| {
-        if (state.combat.progress.party[pahn].level >= 29 and state.combat.progress.money >= 124000) break;
-        if (state.combat.progress.party[pahn].hp == 0 or (pass > 0 and pass % 8 == 0)) {
+        if (state.combat.progress.party.at(pahn).level >= 29 and state.combat.progress.money >= 124000) break;
+        if (state.combat.progress.party.at(pahn).hp == 0 or (pass > 0 and pass % 8 == 0)) {
             try walkThroughEncounters(allocator, state, "vd2_room_0", 968, 456, &.{}, .retreat);
             try walkTo(allocator, state, "vd2_room_4", 144, 368, &.{});
             try walkTo(allocator, state, null, 176, 144, &.{});
             try interactFacing(state, .up, &.{0});
-            try std.testing.expectEqual(state.combat.progress.party[pahn].max_hp, state.combat.progress.party[pahn].hp);
+            try std.testing.expectEqual(state.combat.progress.party.at(pahn).max_hp, state.combat.progress.party.at(pahn).hp);
             try walkTo(allocator, state, "vd2_room_0", 184, 232, &.{});
             try walkTo(allocator, state, "world_d", 16, 128, &.{});
         }
         try walkThroughEncounters(allocator, state, null, if (pass % 2 == 0) 936 else 872, 472, &.{}, .prepared);
     }
-    try std.testing.expect(level_before < 29 and state.combat.progress.party[pahn].level >= 29);
+    try std.testing.expect(level_before < 29 and state.combat.progress.party.at(pahn).level >= 29);
     try std.testing.expect(state.combat.progress.money >= 124000);
 
     try walkThroughEncounters(allocator, state, "vd2_room_0", 968, 456, &.{}, .retreat);
@@ -7800,18 +7807,18 @@ noinline fn preparePahnForTeo(allocator: std.mem.Allocator, state: *journey.Stat
     try std.testing.expectEqual(.blacksmith, state.menu.phase);
     while (state.menu.member != pahn) _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
     const confirm: pause_menu.Input = .{ .field = .{ .action = true } };
-    while (state.combat.progress.party[pahn].weapon_level < 11) {
+    while (state.combat.progress.party.at(pahn).weapon_level < 11) {
         const price = try state.combat.sharpenPrice(pahn, state.menu.service_limit);
         if (state.combat.progress.money < price + 500) break;
-        const level = state.combat.progress.party[pahn].weapon_level;
+        const level = state.combat.progress.party.at(pahn).weapon_level;
         _ = try state.tickWithFieldEvents(confirm, .{});
         _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
-        try std.testing.expectEqual(level + 1, state.combat.progress.party[pahn].weapon_level);
+        try std.testing.expectEqual(level + 1, state.combat.progress.party.at(pahn).weapon_level);
     }
     _ = try state.tickWithFieldEvents(.{ .field = .{ .cancel = true } }, .{});
-    try std.testing.expectEqual(@as(u8, 11), state.combat.progress.party[pahn].weapon_level);
+    try std.testing.expectEqual(@as(u8, 11), state.combat.progress.party.at(pahn).weapon_level);
     try walkTo(allocator, state, "vd2_room_0", 184, 232, &.{});
     try walkTo(allocator, state, "world_d", 16, 128, &.{});
     try walkThroughEncounters(allocator, state, "vd1_room_0", 608, 408, &.{}, .retreat);
@@ -7832,14 +7839,14 @@ noinline fn preparePahnForTeo(allocator: std.mem.Allocator, state: *journey.Stat
     _ = try state.tickWithFieldEvents(confirm, .{});
     while (state.menu.member != pahn) _ = try state.tickWithFieldEvents(.{ .right = true }, .{});
     for (armor) |gear| {
-        const index = for (state.combat.progress.party[pahn].inventory.slots, 1..) |slot, item_index| {
+        const index = for (state.combat.progress.party.at(pahn).inventory.slots, 1..) |slot, item_index| {
             if (slot != null and slot.?.id == gear.item) break item_index;
         } else return error.MissingPahnEquipment;
         while (state.menu.equipment_slot != gear.slot) _ = try state.tickWithFieldEvents(.{ .field = .{ .menu_direction = .down } }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
         for (0..index) |_| _ = try state.tickWithFieldEvents(.{ .field = .{ .menu_direction = .down } }, .{});
         _ = try state.tickWithFieldEvents(confirm, .{});
-        try std.testing.expectEqual(state.combat.gearIndex(gear.item), state.combat.progress.party[pahn].loadout.get(gear.slot));
+        try std.testing.expectEqual(state.combat.gearIndex(gear.item), state.combat.progress.party.at(pahn).loadout.get(gear.slot));
         _ = try state.tickWithFieldEvents(confirm, .{});
     }
     _ = try state.tickWithFieldEvents(.{ .menu = true }, .{});
@@ -7945,7 +7952,7 @@ noinline fn playTeoRematchAndRegionE(allocator: std.mem.Allocator, state: *journ
     try finishBattleWithInput(state, .scripted_loss);
     try drainStoryAndEvents(state, "ve1_room_1", &.{});
     try std.testing.expectEqual(village_potch, state.combat.progress.money);
-    for (state.combat.progress.party) |member| {
+    for (state.combat.progress.party.items()) |member| {
         try std.testing.expectEqual(member.max_hp, member.hp);
         try std.testing.expect(member.status != .unconscious);
     }
@@ -7961,7 +7968,8 @@ noinline fn playTeoRematchAndRegionE(allocator: std.mem.Allocator, state: *journ
     try interactFacing(state, .up, &.{});
     try std.testing.expectEqual(cave_party_count, state.combat.partyCount());
     try std.testing.expect(state.combat.progress.story.scenario.?.recruit_flags[18] & 1 != 0);
-    const fukien_recruited = for (state.reserves) |entry| {
+    const fukien_recruited = for (0..state.reserveCount()) |index| {
+        const entry = state.reserveMember(index);
         if (entry) |member| if (std.mem.eql(u8, member.id, "fukien")) break true;
     } else false;
     try std.testing.expect(fukien_recruited);
@@ -8043,7 +8051,7 @@ noinline fn playTeoRematchAndRegionE(allocator: std.mem.Allocator, state: *journ
     try walkContinuousHop(allocator, state, "ve1_room_3", 560, 504, &.{});
     try walkContinuousHop(allocator, state, null, 168, 232, &.{});
     try interactFacing(state, .up, &.{0});
-    for (state.combat.progress.party) |member| {
+    for (state.combat.progress.party.items()) |member| {
         try std.testing.expectEqual(member.max_hp, member.hp);
         try std.testing.expectEqual(member.max_rune_charges, member.rune_charges);
     }
@@ -8051,7 +8059,7 @@ noinline fn playTeoRematchAndRegionE(allocator: std.mem.Allocator, state: *journ
     try walkContinuousHop(allocator, state, "ve1_room_5", 152, 536, &.{});
     try walkContinuousHop(allocator, state, null, 184, 216, &.{});
     try interactService(state, .up);
-    for (state.combat.progress.party, 0..) |*member, index| {
+    for (state.combat.progress.party.items(), 0..) |member, index| {
         for (0..2) |_| {
             if (member.inventory.count() == member.inventory.slots.len) break;
             try buyStockItem(state, .mega_medicine, index);
@@ -8163,7 +8171,7 @@ noinline fn playDragonKnightsAndMoravia(allocator: std.mem.Allocator, state: *jo
     _ = try drainFieldEvent(state, &.{0});
     if (state.combat.partyCount() == 6) try makeRoomForRecruit(state, null);
     try finishHeadquartersPartySelection(state, "liukan", null);
-    try std.testing.expectEqualStrings("liukan", state.combat.progress.party[state.combat.partyCount() - 1].id);
+    try std.testing.expectEqualStrings("liukan", state.combat.progress.party.at(state.combat.partyCount() - 1).id);
     try crossToranToRegionD(allocator, state);
     try walkContinuousRoute(allocator, state, &.{
         .{ .want = "vf1_room_0", .x = 240, .y = 264, .choices = &.{} },
@@ -8180,7 +8188,7 @@ noinline fn playDragonKnightsAndMoravia(allocator: std.mem.Allocator, state: *jo
     try walkContinuousHop(allocator, state, "vd1_room_6", 544, 448, &.{});
     try walkContinuousHop(allocator, state, null, 128, 120, &.{});
     try interactFacing(state, .up, &.{0});
-    for (state.combat.progress.party) |member| {
+    for (state.combat.progress.party.items()) |member| {
         try std.testing.expectEqual(member.max_hp, member.hp);
         try std.testing.expectEqual(member.max_rune_charges, member.rune_charges);
     }
@@ -8188,7 +8196,7 @@ noinline fn playDragonKnightsAndMoravia(allocator: std.mem.Allocator, state: *jo
     try walkContinuousHop(allocator, state, "vd1_room_4", 128, 128, &.{});
     try walkContinuousHop(allocator, state, null, 240, 120, &.{});
     try interactService(state, .up);
-    for (state.combat.progress.party, 0..) |*member, index| {
+    for (state.combat.progress.party.items(), 0..) |member, index| {
         while (member.inventory.count() < member.inventory.slots.len) {
             try buyStockItem(state, .mega_medicine, index);
         }
@@ -8374,7 +8382,7 @@ noinline fn playDragonKnightsAndMoravia(allocator: std.mem.Allocator, state: *jo
     });
     try interactService(state, .up);
     for ([_]usize{ 1, 2, 5 }) |member| {
-        const inventory = &state.combat.progress.party[member].inventory;
+        const inventory = &state.combat.progress.party.at(member).inventory;
         for (0..2) |_| {
             if (inventory.count() == inventory.slots.len) break;
             try buyStockItem(state, .mega_medicine, member);
@@ -8394,7 +8402,7 @@ fn buyGregminsterSupplies(allocator: std.mem.Allocator, state: *journey.State) !
     try walkContinuousHop(allocator, state, "vac_room_6", 1008, 608, &.{});
     try walkContinuousHop(allocator, state, null, 88, 152, &.{});
     try interactService(state, .up);
-    for (state.combat.progress.party, 0..) |*member, slot| {
+    for (state.combat.progress.party.items(), 0..) |member, slot| {
         if (member.hp == 0) continue;
         const revival_items: usize = switch (slot) {
             0 => 3,
@@ -8423,7 +8431,7 @@ fn restOutsideGregminster(allocator: std.mem.Allocator, state: *journey.State) !
         .{ .want = null, .x = 112, .y = 272, .choices = &.{} },
     });
     try interactFacing(state, .up, &.{0});
-    for (state.combat.progress.party) |member| {
+    for (state.combat.progress.party.items()) |member| {
         try std.testing.expectEqual(member.max_hp, member.hp);
         try std.testing.expectEqual(member.max_rune_charges, member.rune_charges);
     }
@@ -8532,7 +8540,7 @@ noinline fn playShasarazadeToCredits(allocator: std.mem.Allocator, state: *journ
     try drainStoryAndEvents(state, "vb5cg_room_0", &.{});
     try crossToranToKaku(allocator, state);
     try restInKaku(allocator, state);
-    const rested_hero = state.combat.progress.party[0];
+    const rested_hero = state.combat.progress.party.at(0).*;
     try std.testing.expectEqual(rested_hero.max_rune_charges, rested_hero.rune_charges);
     try crossKakuToToran(allocator, state, "vb5cg_room_0");
 
@@ -8665,14 +8673,14 @@ test "canonical duel art presentation and headless battle duel war transitions" 
         }
     }
 
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var state = try harness.newState(&members);
     defer state.deinitActiveModes();
     const baseline = try journey.Snapshot.capture(state);
 
     // 1. All 3 duels + Teo fire spear war round-trips back to field.
     for (0..50) |_| state.combat.levelUp(0, .{ 16, 16, 16, 16, 16, 16, 16 });
-    state.combat.progress.party[0].hp = state.combat.progress.party[0].max_hp;
+    state.combat.progress.party.at(0).hp = state.combat.progress.party.at(0).max_hp;
     const leveled = try journey.Snapshot.capture(state);
 
     try leveled.apply(&state);
@@ -8692,7 +8700,7 @@ test "canonical duel art presentation and headless battle duel war transitions" 
 
     try baseline.apply(&state);
     try state.joinPartyMember(&members, state.party_catalog.?, state.party_bindings, "pahn");
-    while (state.combat.progress.party[1].level < 75) {
+    while (state.combat.progress.party.at(1).level < 75) {
         var rolls: [7]u15 = undefined;
         for (&rolls) |*roll| roll.* = state.combat.roll();
         state.combat.levelUp(1, rolls);

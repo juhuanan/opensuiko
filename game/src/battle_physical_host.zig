@@ -15,9 +15,9 @@ pub fn beginSourcePhysicalRune(self: *State, owner: usize, recipient: usize) !vo
     if (owner >= self.partyCount() or recipient < self.partyCount() or recipient >= self.partyCount() + self.enemyCount() or self.sourcePhysicalRuneOwner(owner) or self.unite_vm.ownsActor(owner) or self.unite_vm.ownsActor(recipient)) return error.ActorAlreadyOwned;
     const binding = packet.find(technique).?;
     var allowed = false;
-    for (binding.members) |id| allowed = allowed or std.mem.eql(u8, id, self.progress.party[owner].id);
+    for (binding.members) |id| allowed = allowed or std.mem.eql(u8, id, self.progress.party.at(owner).id);
     if (!allowed) return error.InvalidPhysicalMember;
-    const resource = bundle.animations.find(self.progress.party[owner].id) orelse return error.MissingActorResource;
+    const resource = bundle.animations.find(self.progress.party.at(owner).id) orelse return error.MissingActorResource;
     const target = bundle.animations.find(self.enemy(recipient - self.partyCount()).id) orelse return error.MissingActorResource;
     try packet.validateProgram(binding.owner_program, resource);
     try packet.validateProgram(binding.recipient_program, target);
@@ -40,7 +40,7 @@ pub fn preparePhysicalRune(self: *State, owner: usize, runtime: *host.Runtime) !
     var positions: [2][3]i32 = undefined;
     for (ids, 0..) |actor, ordinal| positions[ordinal] = layout.worldPosition(self, actor).toQ12Rounded();
     for (ids, positions) |actor, position| {
-        const id = if (actor < self.partyCount()) self.progress.party[actor].id else self.enemy(actor - self.partyCount()).id;
+        const id = if (actor < self.partyCount()) self.progress.party.at(actor).id else self.enemy(actor - self.partyCount()).id;
         const index = for (bundle.animations.resources, 0..) |resource, index| {
             if (std.mem.eql(u8, resource.id, id)) break index;
         } else return error.MissingActorResource;

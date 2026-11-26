@@ -237,13 +237,13 @@ pub const CombatCaller = struct {
         var next = self.session.state;
         next.content = self.source.content;
         next.encounter = self.source.encounter;
-        next.progress.party = members[0..result.member_count];
+        next.progress.party = .init(members[0..result.member_count]);
         for (0..result.member_count) |index| {
             members[index] = self.admitted[index];
             next.setOwnedMember(index, result.members[index]);
         }
         next.progress.money = result.money;
-        next.formation = result.formation;
+        next.setFormation(result.formation);
         next.clearSleep();
         next.clearTemporaryStats();
         next.unbalanced = @splat(0);
@@ -251,8 +251,9 @@ pub const CombatCaller = struct {
         try next.progress.validate();
         var acknowledged = self.session;
         try acknowledged.acknowledge(draws);
-        @memcpy(self.source.progress.party, members[0..result.member_count]);
+        self.source.progress.party.copyFrom(members[0..result.member_count]);
         next.progress.party = self.source.progress.party;
+        next.setFormation(result.formation);
         self.source = next;
         self.session = acknowledged;
     }

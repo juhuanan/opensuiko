@@ -187,7 +187,7 @@ pub fn drawScene(context: *const ui.Context, state: field.State, package: field.
     var hp: u32 = 0;
     var max_hp: u32 = 0;
     var ailments: usize = 0;
-    for (state.progress.party) |member| {
+    for (state.progress.party.items()) |member| {
         hp += member.hp;
         max_hp += member.max_hp;
         if (member.status != .healthy or member.balloons > 0) ailments += 1;

@@ -22,6 +22,29 @@ pub const CharacterExtra = struct {
     weapon_fragments: [5]u8 = @splat(0),
     locked_equipment: [5]bool = @splat(false),
 };
+pub fn attachWeaponPiece(rules: character.CharacterRules, owner: *character.Character, slot: usize, target: *CharacterExtra, replace: bool) !void {
+    if (slot >= owner.inventory.count()) return error.InvalidItem;
+    const element: @FieldType(CharacterExtra, "weapon_element") = switch (owner.inventory.slots[slot].?.id) {
+        .fire_rune_piece => .fire,
+        .water_rune_piece => .water,
+        .wind_rune_piece => .wind,
+        .thunder_rune_piece => .thunder,
+        .earth_rune_piece => .earth,
+        else => return error.UnsupportedWeaponPiece,
+    };
+    const index: usize = @backingInt(element) - 1;
+    if (target.weapon_element != .none and target.weapon_element != element and !replace) return error.ReplacementConfirmationRequired;
+    const count = target.weapon_fragments[index];
+    if ((target.weapon_element == .none or target.weapon_element == element) and count >= 9) return error.WeaponPieceLimit;
+    var next = owner.*;
+    next.inventory.remove(slot);
+    try rules.validate(next);
+    owner.inventory = next.inventory;
+    target.weapon_element = element;
+    target.weapon_fragments = @splat(0);
+    target.weapon_fragments[index] = count +% 1;
+}
+
 pub const Snapshot = struct {
     schema: u8 = version,
     entry_id: []const u8,
@@ -300,25 +323,9 @@ pub const Session = struct {
         self.* = next;
     }
     fn weaponPiece(self: *Session, owner: []const u8, slot: usize, target: []const u8, replace: bool) !void {
-        var next = self.*;
-        const from = try next.activeIndex(owner);
-        const to = try next.activeIndex(target);
-        const bag = &next.current.members[from].?.inventory;
-        if (slot >= bag.count()) return error.InvalidItem;
-        const item_id = @tagName(bag.slots[slot].?.id);
-        const element: @TypeOf(next.current.extras[to].?.weapon_element) = if (eq(item_id, "fire_rune_piece")) .fire else if (eq(item_id, "water_rune_piece")) .water else if (eq(item_id, "wind_rune_piece")) .wind else if (eq(item_id, "thunder_rune_piece")) .thunder else if (eq(item_id, "earth_rune_piece")) .earth else return error.UnsupportedWeaponPiece;
-        const weapon = &next.current.extras[to].?;
-        const index: usize = @backingInt(element) - 1;
-        if (weapon.weapon_element != .none and weapon.weapon_element != element and !replace) return error.ReplacementConfirmationRequired;
-        if ((weapon.weapon_element == .none or weapon.weapon_element == element) and weapon.weapon_fragments[index] >= 9) return error.WeaponPieceLimit;
-        for (&weapon.weapon_fragments, 0..) |*count, i| if (i != index) {
-            count.* = 0;
-        };
-        weapon.weapon_fragments[index] +%= 1;
-        weapon.weapon_element = element;
-        bag.remove(slot);
-        try next.validate();
-        self.* = next;
+        const from = try self.activeIndex(owner);
+        const to = try self.activeIndex(target);
+        try attachWeaponPiece(self.rules, &self.current.members[from].?, slot, &self.current.extras[to].?, replace);
     }
     fn sceneOperation(self: *Session, id: []const u8) !void {
         var match: ?SceneOperation = null;

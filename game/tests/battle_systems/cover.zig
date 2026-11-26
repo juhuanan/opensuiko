@@ -49,16 +49,16 @@ test "Cover integrated source formation resolves relationship and Phero intercep
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| member.rune = null;
+        for (combat.progress.party.items()) |member| {
             member.max_hp = 5000;
             member.hp = 5000;
             member.inventory.slots = @splat(null);
         }
         const ward: usize = if (scenario == 0) 0 else 2;
         const guard: usize = 1;
-        combat.progress.party[ward].hp = 1;
-        if (scenario == 1) combat.progress.party[ward].rune = combat.content.systems.?.runeIndex("phero").?;
+        combat.progress.party.at(ward).hp = 1;
+        if (scenario == 1) combat.progress.party.at(ward).rune = combat.content.systems.?.runeIndex("phero").?;
         const attacker = combat.partyCount();
         combat.acted[attacker] = false;
         var values: [128]u15 = @splat(12345);

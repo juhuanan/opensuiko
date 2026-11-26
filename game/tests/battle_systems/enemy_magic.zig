@@ -282,10 +282,10 @@ test "Enemy magic live battle callback preserves protected lethal and exhausted-
         combat.phase = .resolving;
         combat.acted = @splat(true);
         for (combat.actions[0..combat.partyCount()]) |*action| action.* = .defend;
-        combat.progress.party[0].inventory.slots = @splat(null);
-        combat.progress.party[0].max_hp = 5000;
-        combat.progress.party[0].hp = if (scenario >= 2) 1 else 5000;
-        if (scenario == 3) combat.progress.party[0].inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
+        combat.progress.party.at(0).inventory.slots = @splat(null);
+        combat.progress.party.at(0).max_hp = 5000;
+        combat.progress.party.at(0).hp = if (scenario >= 2) 1 else 5000;
+        if (scenario == 3) combat.progress.party.at(0).inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
         if (scenario == 1) combat.actor_conditions[0].protection_rounds = 2;
         combat.coordinator = .{ .stage = .await_order, .current_actor = owner, .completed = false, .cached = .round_end, .elapsed = 0 };
         const hp = combat.hp(0);
@@ -329,7 +329,7 @@ test "Enemy magic live battle callback preserves protected lethal and exhausted-
         try std.testing.expect(combat.coordinator.?.completed);
         try std.testing.expectEqual(@as(i32, 30), combat.coordinator.?.remaining);
         try std.testing.expectEqual(@as(usize, 1), draws.cursor);
-        if (scenario == 2) try std.testing.expect(combat.progress.party[0].status == .unconscious);
+        if (scenario == 2) try std.testing.expect(combat.progress.party.at(0).status == .unconscious);
         if (scenario == 3) {
             combat.coordinator.?.stage = .await_order;
             for (0..200) |_| {
@@ -338,8 +338,8 @@ test "Enemy magic live battle callback preserves protected lethal and exhausted-
             }
             try std.testing.expect(!combat.hasPendingRevival());
             try std.testing.expectEqual(@as(u16, 2500), combat.hp(0));
-            try std.testing.expect(combat.progress.party[0].inventory.slots[0] == null);
-            try std.testing.expect(combat.progress.party[0].status == .healthy);
+            try std.testing.expect(combat.progress.party.at(0).inventory.slots[0] == null);
+            try std.testing.expect(combat.progress.party.at(0).status == .healthy);
             try std.testing.expectEqual(@as(usize, 1), draws.cursor);
         }
     }
@@ -400,7 +400,7 @@ test "Enemy magic normal AI and shared native frame use source C formation and a
             var projected = battle.drops.project(block, world_point);
             if (graphic.kind == .impact) {
                 const pose = combat.unite_vm.pose(0) orelse battle.layout.actorLayout(combat, 0).source_pose.?;
-                projected.x += @floatFromInt(art.center(combat.progress.party[0].id, pose).?);
+                projected.x += @floatFromInt(art.center(combat.progress.party.at(0).id, pose).?);
             }
             const size: f32 = @floatFromInt(@divTrunc(scene_scale * graphic.size, 4096));
             // The zero-angle packet projects raw wm/hm; texture samples include the last texel.
@@ -451,7 +451,7 @@ test "Source Kobold scans wait for a pending front knockout before skipping" {
         const owner = combat.partyCount() + scenario.enemy;
         combat.coordinator = .{ .stage = .dispatch, .current_actor = owner };
         combat.acted = @splat(true);
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| {
             member.hp = 0;
             member.status = .unconscious;
         }
@@ -466,8 +466,8 @@ test "Source Kobold scans wait for a pending front knockout before skipping" {
         combat.active = null;
         combat.party_knockouts[0].pending = false;
         if (restored) {
-            combat.progress.party[0].hp = 100;
-            combat.progress.party[0].status = .healthy;
+            combat.progress.party.at(0).hp = 100;
+            combat.progress.party.at(0).status = .healthy;
         }
         combat.sourceEnemyDecision(owner);
         try std.testing.expect(combat.pending_enemy_actor == null and combat.acted[owner]);
@@ -502,9 +502,9 @@ test "Enemy magic AI threshold retains selected target and waits for another par
         for (combat.actions[0..combat.partyCount()]) |*action| action.* = .defend;
         combat.coordinator = .{ .stage = .dispatch, .current_actor = owner, .completed = false, .cached = .{ .actor = owner }, .elapsed = 0 };
         if (scenario == 2) {
-            combat.progress.party[1].hp = 0;
-            combat.progress.party[1].inventory.slots = @splat(null);
-            combat.progress.party[1].inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
+            combat.progress.party.at(1).hp = 0;
+            combat.progress.party.at(1).inventory.slots = @splat(null);
+            combat.progress.party.at(1).inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
             combat.markPartyKnockout(1);
             try std.testing.expect(!combat.commitPartyKnockout(1) and combat.coordinatorLocked(1));
         }
@@ -562,17 +562,17 @@ test "Enemy magic retains a target knocked out during its wait" {
     combat.acted = @splat(true);
     for (combat.actions[0..combat.partyCount()]) |*action| action.* = .defend;
     combat.coordinator = .{ .stage = .dispatch, .current_actor = owner, .completed = false, .cached = .{ .actor = owner }, .elapsed = 0 };
-    combat.progress.party[1].hp = 0;
-    combat.progress.party[1].inventory.slots = @splat(null);
-    combat.progress.party[1].inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
+    combat.progress.party.at(1).hp = 0;
+    combat.progress.party.at(1).inventory.slots = @splat(null);
+    combat.progress.party.at(1).inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
     combat.markPartyKnockout(1);
     try std.testing.expect(!combat.commitPartyKnockout(1));
     var draws = battle.systems.Draws{ .values = &.{ 51, 16712, 50 } };
     combat.replay_draws = &draws;
     combat.sourceEnemyDecision(owner);
     try std.testing.expectEqual(@as(u8, 0), combat.enemy_branch_selection.?.recipient);
-    combat.progress.party[0].hp = 0;
-    combat.progress.party[0].inventory.slots = @splat(null);
+    combat.progress.party.at(0).hp = 0;
+    combat.progress.party.at(0).inventory.slots = @splat(null);
     combat.markPartyKnockout(0);
     combat.sourceEnemyDecision(owner);
     try std.testing.expect(combat.active == null and combat.enemy_branch_selection.?.recipient == 0 and draws.cursor == 2);
@@ -581,7 +581,7 @@ test "Enemy magic retains a target knocked out during its wait" {
     unselected.enemy_branch_selection = null;
     try std.testing.expectError(error.InvalidActorBinding, unselected.beginEnemyMagic(owner, 0));
     // A second Buddha cannot be consumed by damage to an already inactive actor.
-    combat.progress.party[0].inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
+    combat.progress.party.at(0).inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
     for (0..combat.rules.automatic_revival.?.release_delay) |_| {
         combat.sourceEnemyDecision(owner);
         try std.testing.expect(combat.active == null and draws.cursor == 2);
@@ -608,7 +608,7 @@ test "Enemy magic retains a target knocked out during its wait" {
     try std.testing.expectEqual(@as(usize, 3), draws.cursor);
     try std.testing.expect(combat.enemy_magic_damage[0] != null and combat.hp(0) == 0);
     try std.testing.expect(!combat.party_knockouts[0].pending and combat.party_knockouts[0].revival == null);
-    try std.testing.expect(combat.progress.party[0].inventory.slots[0] != null and combat.progress.party[0].status == .unconscious);
+    try std.testing.expect(combat.progress.party.at(0).inventory.slots[0] != null and combat.progress.party.at(0).status == .unconscious);
     try std.testing.expectEqual(combat.partyProfile(0).revival_art.?.down.frames[0].source_pose, battle.layout.actorLayout(combat, 0).source_pose);
 }
 
@@ -723,12 +723,12 @@ test "Enemy magic mixed source formations finish queued rounds with every mage a
         combat.integration = .{ .host = rules_host };
         try combat.attachUniteActors(&actors.value);
         try combat.attachSpellScenes(&scenes.value);
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| {
             member.max_hp = 5000;
             member.hp = 5000;
         }
         var charges: [6][4]u16 = undefined;
-        for (combat.progress.party, 0..) |member, index| charges[index] = member.rune_charges;
+        for (combat.progress.party.items(), 0..) |member, index| charges[index] = member.rune_charges;
         combat.camera_ticks = 300;
         var seen: u16 = 0;
         var draws = battle.systems.Draws{ .values = values };
@@ -749,7 +749,7 @@ test "Enemy magic mixed source formations finish queued rounds with every mage a
             }
             try std.testing.expect(combat.phase == .battle_menu);
             try std.testing.expect(!combat.unite_vm.hasActors() and combat.active == null and combat.enemy_branch_selection == null);
-            for (combat.progress.party, 0..) |member, index| try std.testing.expectEqualDeep(charges[index], member.rune_charges);
+            for (combat.progress.party.items(), 0..) |member, index| try std.testing.expectEqualDeep(charges[index], member.rune_charges);
         }
         var expected: u16 = 0;
         for (0..combat.enemyCount()) |enemy| if (std.mem.eql(u8, combat.enemy(enemy).id, "kobold_type_3")) {
@@ -786,12 +786,12 @@ test "Enemy magic status rounds retain all six recipients through protected cont
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
+        for (combat.progress.party.items()) |member| member.rune = null;
         const owner = combat.partyCount() + 3;
         try std.testing.expectEqualStrings("kobold_type_3", combat.enemy(3).id);
         combat.acted[owner] = false;
         combat.coordinator = .{ .stage = .dispatch, .current_actor = owner, .cached = .{ .actor = owner } };
-        for (combat.progress.party, 0..) |*member, index| {
+        for (combat.progress.party.items(), 0..) |member, index| {
             member.max_hp = 5000;
             member.hp = if (index == target) 5000 else 0;
             member.status = if (index != target) .unconscious else if (mode == 3) .poisoned else .healthy;

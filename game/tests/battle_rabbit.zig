@@ -416,13 +416,13 @@ test "Rabbit live contact rolls back and checkpoints restore projectile and hurt
         for (0..at) |_| try original.tick(.{}, &draws);
         if (at == 63) {
             const before = original.state;
-            const before_members = original.state.progress.party[0..6].*;
+            const before_members = original.state.progress.party.values();
             var short = battle.systems.Draws{ .values = &.{} };
             try std.testing.expectError(error.RandomInputExhausted, original.state.tickReplay(.{}, &short));
             try std.testing.expectEqual(@as(usize, 0), short.cursor);
             try std.testing.expectEqual(before.camera_ticks, original.state.camera_ticks);
             try std.testing.expectEqualDeep(before.unite_vm, original.state.unite_vm);
-            try std.testing.expectEqualDeep(before_members, original.state.progress.party[0..6].*);
+            try std.testing.expectEqualDeep(before_members, original.state.progress.party.values());
         }
         var checkpoint = try original.capture(draws);
         const bytes = try std.json.Stringify.valueAlloc(alloc, checkpoint.state.unite_vm, .{});

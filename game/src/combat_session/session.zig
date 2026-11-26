@@ -74,7 +74,7 @@ pub const Session = struct {
         const actual_fingerprint = try fingerprint(source);
         if (!std.mem.eql(u8, entry.content_fingerprint, &actual_fingerprint)) return error.CombatContentMismatch;
         if (source.content.systems == null) return error.MissingBattleSystems;
-        const src_start = @intFromPtr(source.progress.party.ptr);
+        const src_start = @intFromPtr(source.progress.party.backing().ptr);
         const dst_start = @intFromPtr(scratch.ptr);
         const bytes = scratch.len * @sizeOf(battle.Member);
         if (src_start < dst_start + bytes and dst_start < src_start + bytes) return error.AliasedCombatParty;
@@ -82,9 +82,10 @@ pub const Session = struct {
             if (std.mem.eql(u8, entry.encounter_id, encounter.id)) break i;
         } else return error.UnknownEncounter;
         for (0..source.partyCount()) |i| try source.validateOwnedMember(source.ownedMember(i));
-        @memcpy(scratch, source.progress.party);
+        source.progress.party.copyTo(scratch);
         var state = source;
-        state.progress.party = scratch;
+        state.progress.party = .init(scratch);
+        state.setFormation(source.formationOrder());
         state.encounter = index;
         state.escape_allowed = state.content.encounters[index].escape_allowed;
         state.reward_drop = false;
@@ -131,7 +132,7 @@ pub const Session = struct {
         };
         var result_members: [6]battle.OwnedMember = @splat(self.state.ownedMember(0));
         for (0..self.state.partyCount()) |i| result_members[i] = self.state.ownedMember(i);
-        return .{ .entry = self.entry, .outcome = outcome, .money = self.state.progress.money, .members = result_members, .member_count = self.state.partyCount(), .formation = self.state.formation, .draws = draws };
+        return .{ .entry = self.entry, .outcome = outcome, .money = self.state.progress.money, .members = result_members, .member_count = self.state.partyCount(), .formation = self.state.formationOrder(), .draws = draws };
     }
 
     // Call only after the host has durably committed the result and receipt.
@@ -143,7 +144,7 @@ pub const Session = struct {
     pub fn capture(self: Session, draws: rules.Draws) !Checkpoint {
         if (self.finished or self.state.replay_draws != null or !draws.valid() or !sameDraws(self.draws, draws)) return error.InvalidCombatCheckpoint;
         var members: [6]battle.Member = undefined;
-        @memcpy(members[0..self.state.partyCount()], self.state.progress.party);
+        self.state.progress.party.copyTo(members[0..self.state.partyCount()]);
         return .{ .entry = self.entry, .state = self.state, .members = members, .member_count = self.state.partyCount(), .draws = draws };
     }
 
@@ -174,7 +175,7 @@ pub const Session = struct {
         self.state.rules = item_rules;
         self.state.progress.party = party;
         self.state.integration = if (self.integration) |host| .{ .host = host } else null;
-        @memcpy(party, checkpoint.members[0..checkpoint.member_count]);
+        party.copyFrom(checkpoint.members[0..checkpoint.member_count]);
         draws.* = restored_draws;
         self.draws = restored_draws;
     }

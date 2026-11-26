@@ -185,7 +185,7 @@ pub fn acknowledgeTedAdd(self: *Session, old_binding: Binding, new_binding: Bind
     if (!semanticEqual(expected, request) or !semanticEqual(request, proposal.request) or
         proposal.after.count == 0 or proposal.after.count > 6 or
         !std.mem.eql(u8, new_binding.party, proposal.active_ids[0..proposal.after.count]) or
-        !semanticEqual(@as([]const field.game_state.Member, state.progress.party), proposal.after.active[0..proposal.after.count])) return error.InvalidFieldEventReceipt;
+        !semanticEqual(state.progress.party.values()[0..state.progress.party.len], proposal.after.active[0..proposal.after.count])) return error.InvalidFieldEventReceipt;
     var roster: field_records.Owner = .{ .state = proposal.before };
     try roster.validate();
     var prior_ids: [6]u8 = @splat(0xff);

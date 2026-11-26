@@ -222,7 +222,7 @@ pub noinline fn tickPad(self: *Session, binding: Binding, state: *field.State, p
         for (&next.boxes) |*box| box.tick();
         if (next.text_job) |*job| if (next.boxes[job.box].phase == .open and (job.kind == .prefix or job.kind == .body)) {
             const text = binding.dialogue.texts[job.text];
-            const player_name = binding.player_name orelse if (std.mem.indexOfScalar(u8, binding.party, 8)) |hero_index| next_state.progress.party[hero_index].name else "";
+            const player_name = binding.player_name orelse if (std.mem.indexOfScalar(u8, binding.party, 8)) |hero_index| next_state.progress.party.at(hero_index).name else "";
             if (player_name.len == 0) for (text.tokens) |token| {
                 if (token.kind == .player_name) return error.MissingSourcePartyIdentity;
             };

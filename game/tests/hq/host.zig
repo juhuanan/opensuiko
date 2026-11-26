@@ -98,7 +98,7 @@ const Fixture = struct {
         self.members[0].inventory.slots[0].?.uses = self.rules.value.medicine.uses;
         self.progress = .{
             .money = 2000,
-            .party = self.members[0..2],
+            .party = .init(self.members[0..2]),
             .story = .{ .scenario = self.story, .recruitment_tier = stage_byte, .village_south_exit_reached = true },
         };
         self.state = .{
@@ -356,12 +356,12 @@ test "ordinary service play transacts through the real engines and returns to th
     // The shop's second service is `shop_sell`; the real game_state engine
     // prices and removes the bag entry and credits the money.
     const before_money = f.progress.money;
-    const before_items = f.state.progress.party[0].inventory.count();
+    const before_items = f.state.progress.party.at(0).inventory.count();
     try host.step(.down);
     try host.step(.confirm);
     try std.testing.expect(host.field_state.progress == &f.progress);
     try std.testing.expect(f.progress.money > before_money);
-    try std.testing.expectEqual(before_items - 1, f.state.progress.party[0].inventory.count());
+    try std.testing.expectEqual(before_items - 1, f.state.progress.party.at(0).inventory.count());
 
     // Cancel returns to the caller's field interaction, not another screen.
     try host.step(.cancel);

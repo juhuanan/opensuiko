@@ -97,7 +97,7 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
     }
     if (menu.tablet_view) |*view| {
         const page = pause.tablet.source.page(view.cursor).?;
-        const hero_name = for (game.progress.party) |member| {
+        const hero_name = for (game.progress.party.items()) |member| {
             if (std.mem.eql(u8, member.id, "hero")) break member.name;
         } else "Hero";
         context.window(12, 12, 488, 408);
@@ -140,7 +140,7 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
         const y: i32 = 48 + @as(i32, @intCast(index / 2)) * 104;
         frame(context, layout.party(index));
         if (index >= game.progress.party.len) continue;
-        const member = game.progress.party[index];
+        const member = game.progress.party.at(index).*;
         rl.beginScissorMode(x + 4, y + 4, 162, 90);
         context.text(member.name, x + 10, y + 11, 17, .ray_white);
         context.numberText("HP {d}/{d}", .{ member.hp, member.max_hp }, x + 10, y + 37, 15, .ray_white);
@@ -168,8 +168,8 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
         .appraisal, .confirm_appraisal, .appraisal_notice => {
             frame(context, layout.detail);
             context.text("Appraisal", 174, 65, 22, .gold);
-            const inventory = game.progress.party[menu.member].inventory;
-            context.numberText("< {s} >", .{game.progress.party[menu.member].name}, 174, 100, 18, .sky_blue);
+            const inventory = game.progress.party.at(menu.member).inventory;
+            context.numberText("< {s} >", .{game.progress.party.at(menu.member).name}, 174, 100, 18, .sky_blue);
             for (inventory.slots, 0..) |slot, i| if (slot) |item| {
                 context.numberText("{s}{s}", .{ if (i == menu.slot) "> " else "  ", item.name() }, 168, 142 + @as(i32, @intCast(i)) * 23, 15, if (item.identified) .gray else .ray_white);
             };
@@ -197,13 +197,13 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
         .storage_items, .confirm_storage, .storage_notice => {
             frame(context, layout.detail);
             context.text(if (menu.storage_withdraw) "Withdraw" else "Deposit", 174, 65, 22, .gold);
-            context.numberText("< {s} >", .{game.progress.party[menu.member].name}, 174, 103, 18, .sky_blue);
-            const count = if (menu.storage_withdraw) game.progress.storage.count() else game.progress.party[menu.member].inventory.count();
+            context.numberText("< {s} >", .{game.progress.party.at(menu.member).name}, 174, 103, 18, .sky_blue);
+            const count = if (menu.storage_withdraw) game.progress.storage.count() else game.progress.party.at(menu.member).inventory.count();
             const start = menu.slot -| 7;
             if (count == 0) context.text("No items.", 174, 153, 18, .light_gray);
             for (start..@min(count, start + 9)) |i| {
-                const item = if (menu.storage_withdraw) game.progress.storage.itemAt(i).? else game.progress.party[menu.member].inventory.slots[i].?.id;
-                context.numberText("{s}{s}  x{d}", .{ if (i == menu.slot) "> " else "  ", if (menu.storage_withdraw) item.name() else game.progress.party[menu.member].inventory.slots[i].?.name(), game.progress.storage.quantity(item) }, 168, 142 + @as(i32, @intCast(i - start)) * 23, 14, .ray_white);
+                const item = if (menu.storage_withdraw) game.progress.storage.itemAt(i).? else game.progress.party.at(menu.member).inventory.slots[i].?.id;
+                context.numberText("{s}{s}  x{d}", .{ if (i == menu.slot) "> " else "  ", if (menu.storage_withdraw) item.name() else game.progress.party.at(menu.member).inventory.slots[i].?.name(), game.progress.storage.quantity(item) }, 168, 142 + @as(i32, @intCast(i - start)) * 23, 14, .ray_white);
             }
             if (menu.phase == .confirm_storage) {
                 frame(context, layout.dialog);
@@ -258,7 +258,7 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
             context.text("Formation", 174, 64, 22, .gold);
             context.text(if (menu.phase == .formation) "Choose a position to swap." else "Choose its new position.", 174, 98, 15, .ray_white);
             for (0..game.progress.party.len) |slot| {
-                const member = combat.formation[slot];
+                const member = combat.formationMember(slot);
                 context.numberText("{s}{d} {s}  {s}", .{ if ((if (menu.phase == .formation) menu.member else menu.target) == slot) "> " else "  ", slot + 1, if (slot < 3) "Front" else "Back", combat.name(member) }, 174, 134 + @as(i32, @intCast(slot)) * 27, 18, if (menu.phase == .formation_target and slot == menu.member) .sky_blue else .ray_white);
             }
             context.text("Up/Down: position   Enter: select", 174, 318, 14, .light_gray);
@@ -271,14 +271,14 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
             const names = [_][]const u8{ "Head", "Body", "Shield", "Accessory 1", "Accessory 2" };
             if (menu.phase == .equipment) {
                 for (std.enums.values(@TypeOf(menu.equipment_slot)), 0..) |slot, i| {
-                    const current = combat.progress.party[menu.member].loadout.get(slot);
+                    const current = combat.progress.party.at(menu.member).loadout.get(slot);
                     context.numberText("{s}{s}: {s}", .{ if (slot == menu.equipment_slot) "> " else "  ", names[i], if (current) |id| rules.equipment[id].name else "None" }, 174, 110 + @as(i32, @intCast(i)) * 31, 16, .ray_white);
                 }
                 context.text("Left/Right: member   Up/Down: slot", 174, 303, 14, .light_gray);
                 context.text("Z: select slot   X: back", 174, 331, 14, .light_gray);
             } else {
                 context.numberText("{s} - choose carried item", .{names[@backingInt(menu.equipment_slot)]}, 174, 99, 16, .gold);
-                const inventory = game.progress.party[menu.member].inventory;
+                const inventory = game.progress.party.at(menu.member).inventory;
                 const start = menu.slot -| 5;
                 for (start..@min(start + 6, inventory.count() + 1)) |index| {
                     const gear = if (index == 0) null else combat.gearIndex(inventory.slots[index - 1].?.id);
@@ -289,7 +289,7 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
                     context.numberText("{s}{s}", .{ if (index == menu.slot) "> " else "  ", if (index == 0) "Remove" else inventory.slots[index - 1].?.name() }, 174, 133 + @as(i32, @intCast(index - start)) * 23, 16, if (enabled) .ray_white else .gray);
                 }
                 const selected = if (menu.slot == 0) null else combat.gearIndex(inventory.slots[menu.slot - 1].?.id);
-                var preview = combat.progress.party[menu.member];
+                var preview = combat.progress.party.at(menu.member).*;
                 const available = if (menu.slot == 0 or selected != null) checked: {
                     combat.checkEquipment(menu.member, menu.equipment_slot, selected) catch break :checked false;
                     break :checked true;
@@ -311,7 +311,7 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
                 for (rune.spell_names, rune.spells, 0..) |name, spell, i| {
                     const usable = spell != null and combat.content.systems.?.spells[spell.?].allies and combat.content.systems.?.spells[spell.?].field_use and combat.canCast(menu.member, spell.?);
                     context.numberText("{s}{s}", .{ if (menu.slot == i) "> " else "  ", name }, 174, 140 + @as(i32, @intCast(i)) * 35, 16, if (usable) .ray_white else .gray);
-                    context.numberText("{d}/{d}", .{ game.progress.party[menu.member].rune_charges[i], game.progress.party[menu.member].max_rune_charges[i] }, 427, 140 + @as(i32, @intCast(i)) * 35, 14, .sky_blue);
+                    context.numberText("{d}/{d}", .{ game.progress.party.at(menu.member).rune_charges[i], game.progress.party.at(menu.member).max_rune_charges[i] }, 427, 140 + @as(i32, @intCast(i)) * 35, 14, .sky_blue);
                 }
                 context.text("Dimmed: battle-only/unavailable spells.", 174, 310, 12, .light_gray);
                 context.text(combat.runeHint(menu.member), 174, 329, 12, .sky_blue);
@@ -322,11 +322,11 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
                 context.window(158, 92, 344, 254);
                 const spell = combat.content.systems.?.spells[combat.rune(menu.member).?.spells[menu.slot].?];
                 context.text(if (spell.group) "All allies" else "Rune target", 174, 108, 20, .gold);
-                for (game.progress.party, 0..) |member, i| context.numberText("{s}{s}  HP {d}/{d}", .{ if (spell.group or menu.target == i) "> " else "  ", member.name, member.hp, member.max_hp }, 174, 144 + @as(i32, @intCast(i)) * 29, 16, .ray_white);
+                for (game.progress.party.items(), 0..) |member, i| context.numberText("{s}{s}  HP {d}/{d}", .{ if (spell.group or menu.target == i) "> " else "  ", member.name, member.hp, member.max_hp }, 174, 144 + @as(i32, @intCast(i)) * 29, 16, .ray_white);
             }
         },
         .strength => {
-            const member = game.progress.party[@min(menu.member, game.progress.party.len - 1)];
+            const member = game.progress.party.at(@min(menu.member, game.progress.party.len - 1)).*;
             frame(context, layout.item_panel);
             context.text("Strength", 178, 64, 18, .ray_white);
             context.text(member.name, 178, 100, 22, .gold);
@@ -336,18 +336,18 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
                 if (menu.strength_details) {
                     const labels = [_][]const u8{ "Head", "Body", "Shield", "Accessory 1", "Accessory 2" };
                     for (std.enums.values(@TypeOf(menu.equipment_slot)), 0..) |slot, i| {
-                        const item = combat.progress.party[menu.member].loadout.get(slot);
+                        const item = combat.progress.party.at(menu.member).loadout.get(slot);
                         context.numberText("{s}: {s}", .{ labels[i], if (item) |id| combat.content.systems.?.equipment[id].name else "None" }, 178, 195 + @as(i32, @intCast(i)) * 22, 15, .ray_white);
                     }
                     context.numberText("Rune: {s}", .{if (combat.rune(menu.member)) |rune| rune.name else "None"}, 178, 309, 15, .sky_blue);
                 } else {
                     const stats = combat.stats(menu.member);
-                    context.numberText("Level {d}    EXP {d}/1000", .{ combat.progress.party[menu.member].level, combat.progress.party[menu.member].experience }, 178, 195, 16, .sky_blue);
+                    context.numberText("Level {d}    EXP {d}/1000", .{ combat.progress.party.at(menu.member).level, combat.progress.party.at(menu.member).experience }, 178, 195, 16, .sky_blue);
                     context.numberText("ATK {d}  DEF {d}  SKL {d}", .{ stats.attack, stats.defense, stats.skill }, 178, 222, 16, .ray_white);
                     context.numberText("SPD {d}  MGC {d}  LUK {d}", .{ stats.speed, stats.magic, stats.luck }, 178, 248, 16, .ray_white);
                     context.numberText("{s} row  /  {s} reach", .{ combat.partyRow(menu.member).label(), combat.weaponRange(menu.member).label() }, 178, 276, 15, .ray_white);
-                    context.numberText("{s} LV {d}", .{ combat.weaponName(menu.member), combat.progress.party[menu.member].weapon_level }, 178, 303, 15, .gold);
-                    if (combat.progress.party[menu.member].level == 99) context.text("Maximum level", 178, 329, 14, .light_gray) else context.numberText("Next level: {d} EXP", .{1000 - combat.progress.party[menu.member].experience}, 178, 329, 14, .sky_blue);
+                    context.numberText("{s} LV {d}", .{ combat.weaponName(menu.member), combat.progress.party.at(menu.member).weapon_level }, 178, 303, 15, .gold);
+                    if (combat.progress.party.at(menu.member).level == 99) context.text("Maximum level", 178, 329, 14, .light_gray) else context.numberText("Next level: {d} EXP", .{1000 - combat.progress.party.at(menu.member).experience}, 178, 329, 14, .sky_blue);
                 }
             } else {
                 context.text("Rune charges", 178, 204, 16, .ray_white);
@@ -368,7 +368,7 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
                 context.text("Left/Right: member   Z: choose   X: leave", 48, 334, 14, .light_gray);
             } else if (menu.phase == .rune_attach) {
                 context.numberText("Attach to {s}", .{combat.name(menu.target)}, 48, 113, 19, .gold);
-                const inventory = game.progress.party[menu.member].inventory;
+                const inventory = game.progress.party.at(menu.member).inventory;
                 context.numberText("Crystals carried by {s}", .{combat.name(menu.member)}, 48, 144, 16, .ray_white);
                 const start = menu.slot -| 5;
                 if (inventory.count() == 0) context.text("No items", 48, 185, 17, .light_gray);
@@ -382,20 +382,20 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
                 context.text("Left/Right: bag   Up/Down: item   Z: select", 48, 334, 14, .light_gray);
             } else {
                 context.numberText("{s} {s}'s rune?", .{ if (menu.phase == .confirm_rune_remove) "Remove" else "Change", combat.name(menu.target) }, 48, 131, 19, .ray_white);
-                if (menu.phase == .confirm_rune_attach) context.text(game.progress.party[menu.member].inventory.slots[menu.slot].?.name(), 48, 180, 18, .gold);
+                if (menu.phase == .confirm_rune_attach) context.text(game.progress.party.at(menu.member).inventory.slots[menu.slot].?.name(), 48, 180, 18, .gold);
                 context.text("No service fee.", 48, 228, 16, .light_gray);
                 context.text(if (menu.yes) "> Yes     No" else "  Yes   > No", 48, 288, 20, .ray_white);
             }
         },
         .blacksmith, .confirm_blacksmith => {
             const combat = menu.combat.?;
-            const level = combat.progress.party[menu.member].weapon_level;
+            const level = combat.progress.party.at(menu.member).weapon_level;
             frame(context, layout.wide);
             context.numberText("Blacksmith - up to level {d}", .{menu.service_limit}, 48, 72, 21, .gold);
             context.numberText("{s}: {s}", .{ combat.name(menu.member), combat.weaponName(menu.member) }, 48, 120, 20, .ray_white);
             context.numberText("Weapon level {d}   ATK {d}", .{ level, combat.stats(menu.member).attack }, 48, 163, 18, .ray_white);
             if (combat.sharpenPrice(menu.member, menu.service_limit)) |price| {
-                var preview = combat.progress.party[menu.member];
+                var preview = combat.progress.party.at(menu.member).*;
                 preview.weapon_level += 1;
                 const next = combat.withTemporaryStats(menu.member, battle.equippedStats(combat.content, preview, preview.weapon_augment)).attack;
                 context.numberText("Level {d} -> {d}   ATK {d} -> {d}", .{ level, level + 1, combat.stats(menu.member).attack, next }, 48, 211, 18, .sky_blue);
@@ -413,7 +413,7 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
                 context.text("Nine inventory slots per member.", 28, 276, 15, .light_gray);
                 context.text("Z: choose    X: back", 28, 344, 14, .light_gray);
             } else {
-                const member = game.progress.party[menu.member];
+                const member = game.progress.party.at(menu.member).*;
                 const rules = game.item_rules.?;
                 const stock = menu.shopStock(rules);
                 const stock_start = menu.stock_slot -| 2;
@@ -441,7 +441,7 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
         },
         .items, .item_action, .item_target, .item_transfer, .confirm_discard, .confirm_weapon_piece, .sell_items, .confirm_sell => {
             frame(context, layout.detail_344);
-            const member = game.progress.party[menu.member];
+            const member = game.progress.party.at(menu.member).*;
             context.numberText("{s}    {d}/9", .{ member.name, member.inventory.count() }, 174, 64, 18, .gold);
             if (member.inventory.count() == 0) context.text("No items", 180, 110, 18, .light_gray);
             for (member.inventory.slots, 0..) |slot, index| {
@@ -489,7 +489,7 @@ pub fn draw(menu: pause.State, game: field.State, room: field.Room, shared_items
             if (menu.phase == .item_target or menu.phase == .item_transfer) {
                 context.window(158, 92, 344, 254);
                 if (menu.phase == .item_transfer) context.text("Give item to:", 174, 108, 19, .gold) else context.numberText("Use {s} on:", .{member.inventory.slots[menu.slot].?.name()}, 174, 108, 19, .gold);
-                for (game.progress.party, 0..) |target, index| {
+                for (game.progress.party.items(), 0..) |target, index| {
                     const y = 144 + @as(i32, @intCast(index)) * 29;
                     if (index == menu.target) context.text(">", 170, y, 17, .ray_white);
                     context.numberText("{s}  HP {d}/{d}", .{ target.name, target.hp, target.max_hp }, 190, y, 16, .ray_white);

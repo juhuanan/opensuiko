@@ -139,21 +139,21 @@ test "Cover live queued hits retain ward HP through protection KO Buddha and rev
         var combat = try battle.State.init(content, items.value, &members, 17);
         try combat.attachUniteActors(&bundle.value);
         try combat.attachSpellScenes(&scenes.value);
-        if (scenario == 4 or scenario == 6) std.mem.swap(battle.Member, &combat.progress.party[0], &combat.progress.party[1]);
+        if (scenario == 4 or scenario == 6) std.mem.swap(battle.Member, combat.progress.party.at(0), combat.progress.party.at(1));
         const ward: usize = if (scenario == 4 or scenario == 6) 1 else 0;
         const guard: usize = 1 - ward;
         combat.phase = .resolving;
         combat.acted = @splat(true);
-        for (combat.progress.party, 0..) |*member, index| {
+        for (combat.progress.party.items(), 0..) |member, index| {
             member.max_hp = 5000;
             member.hp = 5000;
             member.inventory.slots = @splat(null);
             combat.actions[index] = .defend;
         }
-        combat.progress.party[ward].hp = 1;
+        combat.progress.party.at(ward).hp = 1;
         if (scenario == 1) combat.actor_conditions[guard].protection_rounds = 2;
-        if (scenario == 2 or scenario == 3 or scenario == 6) combat.progress.party[guard].hp = 1;
-        if (scenario == 3 or scenario == 6) combat.progress.party[guard].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
+        if (scenario == 2 or scenario == 3 or scenario == 6) combat.progress.party.at(guard).hp = 1;
+        if (scenario == 3 or scenario == 6) combat.progress.party.at(guard).inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
         if (scenario == 5) combat.actions[guard] = .{ .attack = 0 };
         const initial_guard_hp = combat.hp(guard);
         const attacker = combat.partyCount();

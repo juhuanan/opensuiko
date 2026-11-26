@@ -88,11 +88,11 @@ pub const Campaign = struct {
         if (self.content_sha.isZero()) self.content_sha = try contentSha(allocator, state);
         // Roster characters are the reviewed 78-record domain.  The six owned
         // route members must resolve by the same names the battle owner uses.
-        for (state.combat.progress.party) |member| _ = try graph.character(member.id);
+        for (state.combat.progress.party.items()) |member| _ = try graph.character(member.id);
         // Item identities come from the reviewed item-ledger graph.  A stack
         // whose id is not in the graph stays a typed unbound identity rather
         // than being silently projected as zero.
-        for (state.combat.progress.party) |member| {
+        for (state.combat.progress.party.items()) |member| {
             for (member.inventory.slots) |maybe| if (maybe) |stack| {
                 _ = try graph.item(@tagName(stack.id));
             };

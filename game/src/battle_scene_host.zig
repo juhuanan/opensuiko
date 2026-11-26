@@ -145,7 +145,7 @@ pub fn attachUniteActors(self: *State, bundle: *const actor_host.Bundle) !void {
             if (melee.special) |special| try art.checkProgramArt(self.*, bundle.library(), resource, special.attack_program, 0, 0, false);
             if (self.spell_scenes != null) try art.checkProgramArt(self.*, bundle.library(), resource, dodge.response_program, 0, 0, false);
             for (0..self.partyCount()) |slot| {
-                const party_id = self.progress.party[slot].id;
+                const party_id = self.progress.party.at(slot).id;
                 const party_res = bundle.animations.find(party_id) orelse return error.MissingActorResource;
                 if (regional.direct_attack) {
                     const reaction = packet.partyReaction(party_id) orelse return error.MissingCounterProgram;
@@ -199,7 +199,7 @@ pub fn hasStatusIcons(self: State) bool {
 pub fn hasStatusIconsFor(self: State, actor: usize) bool {
     const packet = self.spell_scenes orelse return false;
     if (actor >= self.partyCount() or packet.status_icons.len == 0 or self.hasDrops() or (self.departed[actor] and self.departures[actor] == null) or self.status_icons[actor].active == 0) return false;
-    const anchors = packet.statusAnchors(self.progress.party[actor].id) orelse return false;
+    const anchors = packet.statusAnchors(self.progress.party.at(actor).id) orelse return false;
     const pose = layout.actorLayout(self, actor).source_pose orelse return false;
     return pose < anchors.offsets.len;
 }
@@ -295,7 +295,7 @@ pub fn uniteRecipientLocked(self: State, index: usize) bool {
 }
 pub fn uniteReactionPose(self: State, index: usize) ?spell_scene.HurtPose {
     const packet = self.spell_scenes orelse return null;
-    const id = if (index < self.partyCount()) self.progress.party[index].id else self.enemy(index - self.partyCount()).id;
+    const id = if (index < self.partyCount()) self.progress.party.at(index).id else self.enemy(index - self.partyCount()).id;
     return packet.reactionPose(id);
 }
 pub fn uniteActorPosition(self: *const State, index: usize) ?Position {
@@ -360,7 +360,7 @@ fn baseSpellReaction(self: State, index: usize) ?spell_scene.ReactionSample {
     if (self.content.systems.?.spells[effect.spell].kind == .sleep and index >= self.partyCount() and (self.enemy(index - self.partyCount()).death_immune orelse false)) return null;
     if (index < self.partyCount() and self.spell_scenes.?.spells[instance.spell].program.?.party_reaction != null) {
         if (!self.participates(index)) return null;
-        return spell_scene.partyReactionAt(self.spell_scenes.?, instance, self.effectTicks(), self.progress.party[index].id);
+        return spell_scene.partyReactionAt(self.spell_scenes.?, instance, self.effectTicks(), self.progress.party.at(index).id);
     }
     if (self.spell_scenes.?.spells[instance.spell].program.?.actor_motion != null) {
         var eligible = false;
@@ -379,7 +379,7 @@ fn baseSpellReaction(self: State, index: usize) ?spell_scene.ReactionSample {
         };
         if (!found) return null;
     } else if (effect.target != index) return null;
-    const id = if (index < self.partyCount()) self.progress.party[index].id else self.enemy(index - self.partyCount()).id;
+    const id = if (index < self.partyCount()) self.progress.party.at(index).id else self.enemy(index - self.partyCount()).id;
     if (index >= self.partyCount() and self.hp(index) == 0 and effect.affected & (@as(u16, 1) << @intCast(index)) != 0) {
         const start = spell_scene.knockoutStart(self.spell_scenes.?.spells[instance.spell].program.?);
         if (self.effectTicks() >= start) for (self.spell_scenes.?.hurt_poses) |pose| if (std.mem.eql(u8, id, pose.id)) return spell_scene.knockoutAt(pose, self.spell_scenes.?.spells[instance.spell].program.?, self.effectTicks() - start);
@@ -489,7 +489,7 @@ fn appendEnemyMagic(self: *const State, result: *spell_scene.Frame) void {
                 if (graphic.kind == .impact or graphic.kind == .golem_impact) {
                     const member: usize = if (graphic.kind == .golem_impact) graphic.index else action.recipient;
                     if (member >= self.partyCount()) continue;
-                    const id = self.progress.party[member].id;
+                    const id = self.progress.party.at(member).id;
                     const pose = self.unite_vm.pose(member) orelse layout.actorLayout(self.*, member).source_pose orelse bundle.animations.find(id).?.find(0).?.frames[0].pose;
                     anchor.x += @floatFromInt(art.center(id, pose) orelse continue);
                 }
@@ -531,7 +531,7 @@ fn appendEnemyMagic(self: *const State, result: *spell_scene.Frame) void {
             for (graphic.position_q12, 0..) |local, axis| world[axis] += @as(i16, @truncate(local >> 12));
             var anchor = @import("battle_camera").projectScene(block, world, .{}) orelse continue;
             if (graphic.kind == .impact) {
-                const id = self.progress.party[action.recipient].id;
+                const id = self.progress.party.at(action.recipient).id;
                 const pose = self.unite_vm.pose(action.recipient) orelse layout.actorLayout(self.*, action.recipient).source_pose orelse bundle.animations.find(id).?.find(0).?.frames[0].pose;
                 anchor.x += @floatFromInt(art.center(id, pose) orelse continue);
             }
@@ -554,7 +554,7 @@ fn appendStatusIcons(self: *const State, result: *spell_scene.Frame) void {
     for (0..self.partyCount()) |actor| {
         if (self.departed[actor] and self.departures[actor] == null) continue;
         if (self.spellReaction(actor)) |response| if (!response.visible) continue;
-        const anchors = packet.statusAnchors(self.progress.party[actor].id) orelse continue;
+        const anchors = packet.statusAnchors(self.progress.party.at(actor).id) orelse continue;
         const body = layout.actorLayout(self.*, actor);
         const source_pose = body.source_pose orelse continue;
         if (source_pose >= anchors.offsets.len) continue;

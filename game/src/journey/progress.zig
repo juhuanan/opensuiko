@@ -11,15 +11,16 @@ pub fn current(state: *const journey.State) *const field.game_state.Progress {
 pub fn stageField(state: *const journey.State, scratch: *field.game_state.Progress, members: *[6]battle.Member) field.State {
     const staged = state.field_state.stageProgress(scratch);
     const party = members[0..scratch.party.len];
-    @memcpy(party, scratch.party);
-    scratch.party = party;
+    scratch.party.copyTo(party);
+    scratch.party = .init(party);
     return staged;
 }
 
 pub fn commitFieldTransaction(state: *journey.State, next_field: field.State) void {
     const party = state.combat.progress.party;
     // Field transactions edit members in place. Roster changes own their backing.
-    @memcpy(party, next_field.progress.party);
+    const values = next_field.progress.party.values();
+    party.copyFrom(values[0..party.len]);
     next_field.progress.party = party;
     state.field_state.commitProgress(next_field);
 }
@@ -34,8 +35,4 @@ pub fn completeStoryFlag(state: *journey.State, flag: field.game_state.StoryFlag
 
 pub fn recordPahnDuel(state: *journey.State, outcome: u8) void {
     if (state.combat.progress.story.scenario) |*story| roster.recordPahnDuel(story, outcome);
-}
-
-pub fn replacePartySlice(state: *journey.State, members: []battle.Member) void {
-    state.combat.progress.party = members;
 }

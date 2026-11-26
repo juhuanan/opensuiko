@@ -154,7 +154,7 @@ fn applyMoneyEdit(binding: Binding, command: runtime.Command, state: *field.Stat
         },
         1 => state.progress.money -|= amt,
         2 => {
-            for (state.progress.party) |*member| {
+            for (state.progress.party.items()) |member| {
                 member.hp = member.max_hp;
                 member.status = .healthy;
                 member.balloons = 0;

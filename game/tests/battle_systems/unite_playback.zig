@@ -239,7 +239,7 @@ test "Blacksmith delayed members and early returns retain all five source clock 
             var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
             combat.integration = .{ .host = host };
             try combat.attachSpellScenes(&packet.value);
-            combat.progress.party[owner].base_stats.speed = 999;
+            combat.progress.party.at(owner).base_stats.speed = 999;
             combat.enterRoundMenu();
             combat.choose(owner);
             combat.queue(.{ .unite = 0 });
@@ -253,8 +253,8 @@ test "Blacksmith delayed members and early returns retain all five source clock 
             if (case.record == 5 and owner == 0) {
                 var missing = combat;
                 var missing_members: [6]battle.Member = undefined;
-                @memcpy(&missing_members, combat.progress.party);
-                missing.progress.party = &missing_members;
+                combat.progress.party.copyTo(&missing_members);
+                missing.progress.party = .init(&missing_members);
                 missing.spell_scenes = null;
                 var missing_draws = draws;
                 var refused = false;
@@ -328,8 +328,8 @@ test "Blacksmith delayed members and early returns retain all five source clock 
                 if (case.record == 5 and owner == 0 and tick + 1 == reactions[0]) {
                     var clear_flag = combat;
                     var clear_members: [6]battle.Member = undefined;
-                    @memcpy(&clear_members, combat.progress.party);
-                    clear_flag.progress.party = &clear_members;
+                    combat.progress.party.copyTo(&clear_members);
+                    clear_flag.progress.party = .init(&clear_members);
                     clear_flag.unite_flags[0] &= ~unite_mod.rules.hit_flag;
                     var clear_draws = draws;
                     try clear_flag.tickReplay(.{}, &clear_draws);
@@ -658,8 +658,8 @@ test "live qualified Unite batches retain source clocks and independent member o
             if (record == 5 and extra == 0 and owner == 0) {
                 var missing = combat;
                 var missing_members: [6]battle.Member = undefined;
-                @memcpy(&missing_members, combat.progress.party);
-                missing.progress.party = &missing_members;
+                combat.progress.party.copyTo(&missing_members);
+                missing.progress.party = .init(&missing_members);
                 missing.spell_scenes = null;
                 var missing_draws = draws;
                 const flags = missing.unite_flags;
@@ -707,8 +707,8 @@ test "live qualified Unite batches retain source clocks and independent member o
                 if (record == 5 and extra == 0 and owner == 0 and age + 1 == hits[damage_member]) {
                     var exhausted = combat;
                     var exhausted_members: [6]battle.Member = undefined;
-                    @memcpy(&exhausted_members, combat.progress.party);
-                    exhausted.progress.party = &exhausted_members;
+                    combat.progress.party.copyTo(&exhausted_members);
+                    exhausted.progress.party = .init(&exhausted_members);
                     var empty_draws = draws;
                     empty_draws.values = empty_draws.values[0..empty_draws.cursor];
                     const before = exhausted.unite_vm;

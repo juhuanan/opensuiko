@@ -136,13 +136,13 @@ pub const Owner = struct {
                 // No detached mutation operation is admitted by this bounded owner.
                 if (!entry.same(m, try initialMember(records[idx]))) return error.InvalidState;
                 var one = [_]Member{m};
-                try (field.game_state.Progress{ .money = 0, .party = &one }).validate();
+                try (field.game_state.Progress{ .money = 0, .party = .init(&one) }).validate();
                 seen[idx] = true;
             }
         }
         for (seen) |present| if (!present) return error.InvalidState;
         var active = s.active;
-        try (field.game_state.Progress{ .money = 0, .party = active[0..s.count] }).validate();
+        try (field.game_state.Progress{ .money = 0, .party = .init(active[0..s.count]) }).validate();
         if (s.area_party) |area| {
             var expected: [6]u8 = @splat(0xff);
             var i: usize = 0;

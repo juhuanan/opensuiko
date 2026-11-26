@@ -19,7 +19,7 @@ pub const Hero = struct {
 
     fn validate(self: Hero) !void {
         var members = [_]field.game_state.Member{self.member.character()};
-        try (field.game_state.Progress{ .party = &members, .money = 0 }).validate();
+        try (field.game_state.Progress{ .party = .init(&members), .money = 0 }).validate();
         if (!std.mem.eql(u8, self.member.id, "hero") or self.level == 0 or self.level > 99 or self.weapon_level == 0 or self.weapon_level > 16) return error.InvalidOpeningHero;
         // Only the rune-free opening seed is integrated; later attachment needs shared rune rules.
         if (self.rune != null) return error.UnsupportedOpeningRune;

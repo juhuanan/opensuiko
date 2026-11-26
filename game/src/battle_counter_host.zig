@@ -124,8 +124,8 @@ fn beginReaction(self: *State, attacker: usize, defender: usize, kind: battle.co
     const leader = if (self.unite_vm.counter_actions[preferred] == null) preferred else for (self.unite_vm.counter_actions, 0..) |value, index| {
         if (value == null) break index;
     } else return error.NoCounterController;
-    const attacker_id = if (attacker < self.partyCount()) self.progress.party[attacker].id else self.enemy(attacker - self.partyCount()).id;
-    const defender_id = if (defender < self.partyCount()) self.progress.party[defender].id else self.enemy(defender - self.partyCount()).id;
+    const attacker_id = if (attacker < self.partyCount()) self.progress.party.at(attacker).id else self.enemy(attacker - self.partyCount()).id;
+    const defender_id = if (defender < self.partyCount()) self.progress.party.at(defender).id else self.enemy(defender - self.partyCount()).id;
     const origin = packet.attackerFor(attacker_id, kind) orelse return error.MissingCounterProgram;
     const attacker_resource = packet.animations.find(origin.id) orelse return error.MissingActorResource;
     const defender_resource = packet.animations.find(defender_id) orelse return error.MissingActorResource;
@@ -145,7 +145,7 @@ fn beginReaction(self: *State, attacker: usize, defender: usize, kind: battle.co
     };
     if (guard) |index| {
         const cover = packet.cover orelse return error.MissingCounterProgram;
-        const resource = packet.animations.find(self.progress.party[index].id) orelse return error.MissingActorResource;
+        const resource = packet.animations.find(self.progress.party.at(index).id) orelse return error.MissingActorResource;
         const melee = packet.meleeEnemy(attacker_id) orelse return error.MissingCounterProgram;
         for ([_][]const u8{ cover.guard_program, melee.hurt_program }) |program| {
             try packet.validateProgram(program, resource);
@@ -201,7 +201,7 @@ pub fn prepareCounter(self: *State, leader: usize, runtime: *host.Runtime) !void
     for (ids, 0..) |maybe, ordinal| {
         const actor = maybe orelse continue;
         const position = positions[ordinal];
-        const id = if (actor < self.partyCount()) self.progress.party[actor].id else self.enemy(actor - self.partyCount()).id;
+        const id = if (actor < self.partyCount()) self.progress.party.at(actor).id else self.enemy(actor - self.partyCount()).id;
         const resource = for (bundle.animations.resources, 0..) |value, index| {
             if (std.mem.eql(u8, value.id, id)) break index;
         } else return error.MissingActorResource;
@@ -244,14 +244,14 @@ pub fn applyCounterContact(self: *State, leader: usize) !void {
         const hit_amount = if (self.actor_conditions[victim].protection_rounds == 0) amount else 0;
         const applied: u32 = if (self.hp(victim) == 0) 0 else hit_amount;
         if (victim < self.partyCount()) {
-            self.progress.party[victim].hp = @intCast(@as(u32, self.hp(victim)) -| applied);
+            self.progress.party.at(victim).hp = @intCast(@as(u32, self.hp(victim)) -| applied);
             if (self.hp(victim) == 0) self.markPartyKnockout(victim);
         } else self.enemy_hp[victim - self.partyCount()] = @intCast(@as(u32, self.hp(victim)) -| applied);
         break :blk playback.amount +| applied;
     } else blk: {
         const settled = if (self.actor_conditions[victim].protection_rounds == 0) amount else 0;
         if (victim < self.partyCount()) {
-            self.progress.party[victim].hp = @intCast(@as(u32, self.hp(victim)) -| settled);
+            self.progress.party.at(victim).hp = @intCast(@as(u32, self.hp(victim)) -| settled);
             if (self.hp(victim) == 0) self.markPartyKnockout(victim);
         } else self.enemy_hp[victim - self.partyCount()] = @intCast(@as(u32, self.hp(victim)) -| settled);
         break :blk settled;
@@ -439,7 +439,7 @@ pub fn dispatchPartyTailReturn(self: *State, actor: usize, runtime: *host.Runtim
     if (binding.family != .counter) return error.InvalidActorBinding;
     const playback = self.unite_vm.counter_actions[binding.leader] orelse return error.InvalidActorBinding;
     const packet = (self.unite_actors orelse return error.MissingActorLibrary).counterPacket() orelse return error.MissingCounterProgram;
-    const reaction = packet.partyReaction(self.progress.party[actor].id) orelse return error.InvalidCounterBindings;
+    const reaction = packet.partyReaction(self.progress.party.at(actor).id) orelse return error.InvalidCounterBindings;
     const ret = reaction.return_program orelse return error.InvalidCounterBindings;
     try runtime.dispatch(@intCast(actor), playback.attacker, packet.programs.find(ret).?);
 }

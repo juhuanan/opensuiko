@@ -354,7 +354,7 @@ fn drawPartySelectionScene(context: *const ui.Context, state: *const journey.Sta
     res.party_background.?.draw(active.menu.fade);
     var projection: journey.party_selection.View = .{};
     const roster_view = try projection.read(state);
-    const hero_name = for (state.combat.progress.party) |member| {
+    const hero_name = for (state.combat.progress.party.items()) |member| {
         if (std.mem.eql(u8, member.id, "hero")) break member.name;
     } else return error.MissingSelectorName;
     var details: ?journey.party_selection.selector.Details = null;

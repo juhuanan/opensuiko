@@ -16,15 +16,15 @@ pub fn tick(travel: *world.State, content: world.Content, input: world.Input, pa
         if (content.encounter(id) == null) return error.InvalidWorldState;
     }
     if (travel.mode == .field_pending and travel.pending_entrance == null) return error.InvalidWorldState;
-    if (party.members.len != battle_source.partyCount() or party.members.ptr != battle_source.progress.party.ptr or party.members.len > 6) return error.WorldPartyMismatch;
+    if (!party.members.equal(battle_source.progress.party) or party.members.len > 6) return error.WorldPartyMismatch;
     const old_travel = travel.*;
     const old_draws = draws.*;
     var old_members: [6]battle.Member = undefined;
-    @memcpy(old_members[0..party.members.len], party.members);
+    party.members.copyTo(old_members[0..party.members.len]);
     errdefer {
         travel.* = old_travel;
         draws.* = old_draws;
-        @memcpy(party.members, old_members[0..party.members.len]);
+        party.members.copyFrom(old_members[0..party.members.len]);
     }
     const event = try travel.tick(content, input, draws, party);
     return switch (event) {

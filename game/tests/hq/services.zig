@@ -60,7 +60,7 @@ fn initState(t: *TestState, money: u32) void {
         .goods = &.{},
         .stock = &.{ .medicine, .antitoxin },
     };
-    t.progress = .{ .money = money, .party = t.members[0..1] };
+    t.progress = .{ .money = money, .party = .init(t.members[0..1]) };
     t.state = .{
         .room = 0,
         .x = 0,
@@ -185,7 +185,7 @@ test "cancel preserves ownership and returns to the caller menu" {
     _ = host.cancel();
     try std.testing.expectEqual(services_mod.Phase.returned, host.phase);
     try std.testing.expectEqual(@as(u32, 1000), t.state.progress.money);
-    try std.testing.expectEqual(@as(usize, 0), t.state.progress.party[0].inventory.count());
+    try std.testing.expectEqual(@as(usize, 0), t.state.progress.party.at(0).inventory.count());
     try std.testing.expectEqualStrings(caller.id, host.returnTarget());
 }
 
@@ -201,8 +201,8 @@ test "successful shop purchase commits through the current engine" {
     const result = host.buy(&engine, 0, 25);
     try std.testing.expect(result == .ok);
     try std.testing.expectEqual(@as(u32, 900), t.state.progress.money);
-    try std.testing.expectEqual(@as(usize, 1), t.state.progress.party[0].inventory.count());
-    try std.testing.expectEqual(items.Id.medicine, t.state.progress.party[0].inventory.slots[0].?.id);
+    try std.testing.expectEqual(@as(usize, 1), t.state.progress.party.at(0).inventory.count());
+    try std.testing.expectEqual(items.Id.medicine, t.state.progress.party.at(0).inventory.slots[0].?.id);
     try std.testing.expectEqual(@as(u32, 1), host.receipt.serial);
     try std.testing.expectEqual(caller.id, host.receipt.caller_id);
 }
@@ -220,21 +220,21 @@ test "insufficient funds and full bag leave money and bag untouched" {
     const funds = poor_host.buy(&poor_engine, 0, 25);
     try std.testing.expect(funds == .failed and funds.failed.reason == .insufficient_funds);
     try std.testing.expectEqual(@as(u32, 50), poor.state.progress.money);
-    try std.testing.expectEqual(@as(usize, 0), poor.state.progress.party[0].inventory.count());
+    try std.testing.expectEqual(@as(usize, 0), poor.state.progress.party.at(0).inventory.count());
     try std.testing.expectEqual(services_mod.Phase.menu, poor_host.phase);
     try std.testing.expectEqualStrings(caller.id, poor_host.returnTarget());
 
     var full: TestState = undefined;
     initState(&full, 1000);
-    for (0..full.state.progress.party[0].inventory.slots.len) |i| {
-        full.state.progress.party[0].inventory.slots[i] = .{ .id = .medicine, .uses = 6 };
+    for (0..full.state.progress.party.at(0).inventory.slots.len) |i| {
+        full.state.progress.party.at(0).inventory.slots[i] = .{ .id = .medicine, .uses = 6 };
     }
     var full_host = opened(services_mod.open(p, caller.id, accessFor(caller), 3));
     const full_engine = full.adapter.engine();
     const bag = full_host.buy(&full_engine, 0, 25);
     try std.testing.expect(bag == .failed and bag.failed.reason == .inventory_full);
     try std.testing.expectEqual(@as(u32, 1000), full.state.progress.money);
-    try std.testing.expectEqual(@as(usize, 9), full.state.progress.party[0].inventory.count());
+    try std.testing.expectEqual(@as(usize, 9), full.state.progress.party.at(0).inventory.count());
     try std.testing.expectEqual(services_mod.Phase.menu, full_host.phase);
 }
 
@@ -295,25 +295,25 @@ test "appraisal funds failure preserves the unidentified slot; success reveals i
 
     var poor: TestState = undefined;
     initState(&poor, 400);
-    poor.state.progress.party[0].inventory.slots[0] = .{ .id = .failure_urn, .uses = 0, .identified = false };
+    poor.state.progress.party.at(0).inventory.slots[0] = .{ .id = .failure_urn, .uses = 0, .identified = false };
     var poor_host = opened(services_mod.open(p, caller.id, accessFor(caller), 3));
     var poor_engine = poor.adapter.engine();
     const refused = poor_host.appraise(&poor_engine, 0, 0);
     try std.testing.expect(refused == .failed and refused.failed.reason == .insufficient_funds);
     try std.testing.expectEqual(@as(u32, 400), poor.state.progress.money);
-    try std.testing.expect(!poor.state.progress.party[0].inventory.slots[0].?.identified);
+    try std.testing.expect(!poor.state.progress.party.at(0).inventory.slots[0].?.identified);
     try std.testing.expectEqual(services_mod.Phase.menu, poor_host.phase);
 
     var rich: TestState = undefined;
     initState(&rich, 500);
-    rich.state.progress.party[0].inventory.slots[0] = .{ .id = .failure_urn, .uses = 0, .identified = false };
+    rich.state.progress.party.at(0).inventory.slots[0] = .{ .id = .failure_urn, .uses = 0, .identified = false };
     var rich_host = opened(services_mod.open(p, caller.id, accessFor(caller), 3));
     var rich_engine = rich.adapter.engine();
     const result = rich_host.appraise(&rich_engine, 0, 0);
     try std.testing.expect(result == .ok);
     try std.testing.expectEqual(@as(u32, 0), rich.state.progress.money);
-    try std.testing.expect(rich.state.progress.party[0].inventory.slots[0].?.identified);
-    try std.testing.expectEqual(items.Id.failure_urn, rich.state.progress.party[0].inventory.slots[0].?.id);
+    try std.testing.expect(rich.state.progress.party.at(0).inventory.slots[0].?.identified);
+    try std.testing.expectEqual(items.Id.failure_urn, rich.state.progress.party.at(0).inventory.slots[0].?.id);
 }
 
 test "warehouse deposit/withdraw full failures preserve both owners and stay module-only" {
@@ -332,23 +332,23 @@ test "warehouse deposit/withdraw full failures preserve both owners and stay mod
 
     // Warehouse full: 254 is the source cap.  The current Storage maps it per id.
     t.state.progress.storage.counts.medicine = 254;
-    t.state.progress.party[0].inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
+    t.state.progress.party.at(0).inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
     const engine = t.adapter.engine();
     const full = host.deposit(&engine, 0, 0);
     try std.testing.expect(full == .failed and full.failed.reason == .warehouse_full);
     try std.testing.expectEqual(@as(u16, 254), t.state.progress.storage.quantity(.medicine));
-    try std.testing.expectEqual(@as(usize, 1), t.state.progress.party[0].inventory.count());
+    try std.testing.expectEqual(@as(usize, 1), t.state.progress.party.at(0).inventory.count());
     try std.testing.expectEqual(services_mod.Phase.menu, host.phase);
 
     // Bag full on withdraw leaves the warehouse count intact.
     t.state.progress.storage.counts.medicine = 1;
-    for (0..t.state.progress.party[0].inventory.slots.len) |i| {
-        t.state.progress.party[0].inventory.slots[i] = .{ .id = .medicine, .uses = 6 };
+    for (0..t.state.progress.party.at(0).inventory.slots.len) |i| {
+        t.state.progress.party.at(0).inventory.slots[i] = .{ .id = .medicine, .uses = 6 };
     }
     const bag = host.withdraw(&engine, 0, 25);
     try std.testing.expect(bag == .failed and bag.failed.reason == .inventory_full);
     try std.testing.expectEqual(@as(u16, 1), t.state.progress.storage.quantity(.medicine));
-    try std.testing.expectEqual(@as(usize, 9), t.state.progress.party[0].inventory.count());
+    try std.testing.expectEqual(@as(usize, 9), t.state.progress.party.at(0).inventory.count());
 }
 
 test "blacksmith and rune admission stays locked until their required facts exist" {

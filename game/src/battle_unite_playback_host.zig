@@ -26,10 +26,10 @@ pub fn enemy(self: *const State, index: usize) Profile {
     return self.content.enemies[self.content.enemyIndex(self.content.encounters[self.encounter].enemies[index]).?];
 }
 pub fn name(self: *const State, index: usize) []const u8 {
-    return if (index < self.partyCount()) self.progress.party[index].name else self.enemy(index - self.partyCount()).name;
+    return if (index < self.partyCount()) self.progress.party.at(index).name else self.enemy(index - self.partyCount()).name;
 }
 pub fn hp(self: *const State, index: usize) u16 {
-    return if (index < self.partyCount()) self.progress.party[index].hp else self.enemy_hp[index - self.partyCount()];
+    return if (index < self.partyCount()) self.progress.party.at(index).hp else self.enemy_hp[index - self.partyCount()];
 }
 pub fn participates(self: *const State, index: usize) bool {
     return self.hp(index) > 0 and (index >= self.partyCount() or !self.departed[index]);
@@ -266,9 +266,9 @@ pub fn uniteVmPose(self: *const State, member: usize) ?Pose {
     const pose = self.unite_vm.pose(member) orelse return null;
     const palette = self.unite_vm.actors[member].palette;
     const record = self.unite_vm.members[member].?.record;
-    if (palette == .shared and palette.shared == 0) return (self.content.uniteGraphicPose(self.progress.party[member].id, pose, record) orelse return null).white;
+    if (palette == .shared and palette.shared == 0) return (self.content.uniteGraphicPose(self.progress.party.at(member).id, pose, record) orelse return null).white;
     if (palette == .shared and palette.shared >= 1 and palette.shared <= 3) {
-        const variants = (self.content.uniteGraphicPose(self.progress.party[member].id, pose, record) orelse return null).flash orelse return null;
+        const variants = (self.content.uniteGraphicPose(self.progress.party.at(member).id, pose, record) orelse return null).flash orelse return null;
         return variants[palette.shared - 1];
     }
     return self.uniteProgramPose(member, self.unite_vm.members[member].?.record, pose);
@@ -318,7 +318,7 @@ pub fn beginUniteActors(self: *State, record: u8, leader: usize, target: usize) 
         } else if (program.group or program.cameras.len != 0 or !self.hasUniteReactionBinding(record, if (spec.mode == .orbit) spec.recipient_variant else 0, target)) return error.InvalidUniteSceneBinding;
     }
     for (binding.members) |member| {
-        const slot = for (self.progress.party, 0..) |party, index| {
+        const slot = for (self.progress.party.items(), 0..) |party, index| {
             if (std.mem.eql(u8, party.id, member.id)) break index;
         } else return error.MissingUniteParticipant;
         // shortcut: rotated Master–Pupil and Kai Flash bodies need the rotated packet footprint.
@@ -362,7 +362,7 @@ pub fn beginUniteActors(self: *State, record: u8, leader: usize, target: usize) 
     }
     var party_ids: [6][]const u8 = undefined;
     var homes: [12][3]i32 = undefined;
-    for (self.progress.party, 0..) |member, index| party_ids[index] = member.id;
+    for (self.progress.party.items(), 0..) |member, index| party_ids[index] = member.id;
     const count = self.partyCount() + self.enemyCount();
     for (0..count) |actor| {
         const home = self.uniteVmHome(actor);
@@ -419,7 +419,7 @@ pub fn advanceUniteActors(self: *State) void {
             self.unite_vm.members[actor] = null;
         } else {
             // shortcut: rotated Master–Pupil and Kai Flash bodies need the rotated packet footprint.
-            if ((member.record == 31 or (member.record == 10 and std.mem.eql(u8, self.progress.party[actor].id, "kai"))) and !std.mem.eql(i16, &self.actor_transforms[actor].node_angles, &.{ 0, 0, 0 })) {
+            if ((member.record == 31 or (member.record == 10 and std.mem.eql(u8, self.progress.party.at(actor).id, "kai"))) and !std.mem.eql(i16, &self.actor_transforms[actor].node_angles, &.{ 0, 0, 0 })) {
                 self.replay_unsupported = .coordinator_action;
                 return;
             }

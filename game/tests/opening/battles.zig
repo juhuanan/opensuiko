@@ -265,7 +265,7 @@ test "real combat defeat is game over without a source continuation" {
     try fixture.initialize();
     var story = admittedStory();
     var caller = try fixture.begin(parsed.value, parsed.value.entries[2], &story);
-    for (caller.session.state.progress.party) |*member| member.hp = 1;
+    for (caller.session.state.progress.party.items()) |member| member.hp = 1;
     const money = caller.source.progress.money;
     try drive(&fixture, &caller, .defend);
     try std.testing.expectEqual(engine.Phase.defeat, caller.session.state.phase);

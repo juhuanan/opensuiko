@@ -623,8 +623,8 @@ test "Master pupil source programs claim targets and repeat independently" {
         if (scenario_index == 0) {
             var rotated = combat;
             var rotated_members: [6]battle.Member = undefined;
-            @memcpy(&rotated_members, combat.progress.party);
-            rotated.progress.party = &rotated_members;
+            combat.progress.party.copyTo(&rotated_members);
+            rotated.progress.party = .init(&rotated_members);
             rotated.actor_transforms[0].node_angles[2] = 1;
             var rotated_draws = draws;
             try std.testing.expectError(error.UnsupportedCoordinatorAction, rotated.tickReplay(.{}, &rotated_draws));
@@ -637,8 +637,8 @@ test "Master pupil source programs claim targets and repeat independently" {
         if (scenario_index == 0) {
             var rotated = combat;
             var rotated_members: [6]battle.Member = undefined;
-            @memcpy(&rotated_members, combat.progress.party);
-            rotated.progress.party = &rotated_members;
+            combat.progress.party.copyTo(&rotated_members);
+            rotated.progress.party = .init(&rotated_members);
             rotated.actor_transforms[1].node_angles[0] = 1;
             var rotated_draws = draws;
             try std.testing.expectError(error.UnsupportedCoordinatorAction, rotated.tickReplay(.{}, &rotated_draws));
@@ -648,8 +648,8 @@ test "Master pupil source programs claim targets and repeat independently" {
         if (scenario_index == 0) {
             var empty = combat;
             var copied_members: [6]battle.Member = undefined;
-            @memcpy(&copied_members, combat.progress.party);
-            empty.progress.party = &copied_members;
+            combat.progress.party.copyTo(&copied_members);
+            empty.progress.party = .init(&copied_members);
             empty.unite_boundaries[owner].?.sequence.?.pending = @splat(false);
             var empty_draws = draws;
             for (0..250) |_| {
@@ -662,8 +662,8 @@ test "Master pupil source programs claim targets and repeat independently" {
         if (scenario_index == 0) for (0..2) |scenario| {
             var simultaneous = combat;
             var copied_members: [6]battle.Member = undefined;
-            @memcpy(&copied_members, combat.progress.party);
-            simultaneous.progress.party = &copied_members;
+            combat.progress.party.copyTo(&copied_members);
+            simultaneous.progress.party = .init(&copied_members);
             var simultaneous_draws = draws;
             for (0..100) |_| {
                 const queue = simultaneous.uniteBoundaryFor(owner).?.sequence.?;
@@ -808,8 +808,8 @@ test "Flash normal owners run single-target damage and delayed source returns" {
         if (case == 0) {
             var rotated = combat;
             var rotated_members: [6]battle.Member = undefined;
-            @memcpy(&rotated_members, combat.progress.party);
-            rotated.progress.party = &rotated_members;
+            combat.progress.party.copyTo(&rotated_members);
+            rotated.progress.party = .init(&rotated_members);
             rotated.actor_transforms[2].node_angles[2] = 1;
             var rotated_draws = draws;
             try std.testing.expectError(error.UnsupportedCoordinatorAction, rotated.tickReplay(.{}, &rotated_draws));
@@ -840,8 +840,8 @@ test "Flash normal owners run single-target damage and delayed source returns" {
         if (case == 0) {
             var rotated = combat;
             var rotated_members: [6]battle.Member = undefined;
-            @memcpy(&rotated_members, combat.progress.party);
-            rotated.progress.party = &rotated_members;
+            combat.progress.party.copyTo(&rotated_members);
+            rotated.progress.party = .init(&rotated_members);
             rotated.actor_transforms[2].node_angles[0] = 1;
             var rotated_draws = draws;
             try std.testing.expectError(error.UnsupportedCoordinatorAction, rotated.tickReplay(.{}, &rotated_draws));
@@ -1100,7 +1100,7 @@ test "Bandit normal owners retain the first recipient lock through Sydonia and c
         view.initial_party = &.{ "varkas", "sydonia", "hero", "pahn", "gremio", "camille" };
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(view, items.value, &members, 17);
-        combat.progress.party[0].weapon_augment = .{ .rune = .fire, .fragments = 3 };
+        combat.progress.party.at(0).weapon_augment = .{ .rune = .fire, .fragments = 3 };
         combat.integration = .{ .host = host };
         if (protected) combat.actor_conditions[6].protection_rounds = 3;
         try combat.attachUniteActors(&library.value);
@@ -1393,8 +1393,8 @@ test "Elf Unite runs member and arrow programs without flattened tracks for ever
             if (owner == 0 and combat.camera_ticks - selected_at == 80) {
                 var exhausted = combat;
                 var saved_members: [6]battle.Member = undefined;
-                @memcpy(&saved_members, combat.progress.party);
-                exhausted.progress.party = &saved_members;
+                combat.progress.party.copyTo(&saved_members);
+                exhausted.progress.party = .init(&saved_members);
                 var exhausted_draws = draws;
                 exhausted_draws.values = draws.values[0 .. draws.cursor + 2];
                 try std.testing.expectError(error.RandomInputExhausted, exhausted.tickReplay(.{}, &exhausted_draws));
@@ -1513,8 +1513,8 @@ test "Wild Arrow scenes bind source profiles group damage fans and returns for e
             if (age == hit and record == 2 and owner == 0) {
                 var failed = combat;
                 var failed_members: [6]battle.Member = undefined;
-                @memcpy(&failed_members, combat.progress.party);
-                failed.progress.party = &failed_members;
+                combat.progress.party.copyTo(&failed_members);
+                failed.progress.party = .init(&failed_members);
                 var short = draws;
                 short.values = short.values[0 .. short.cursor + 3];
                 try std.testing.expectError(error.RandomInputExhausted, failed.tickReplay(.{}, &short));
@@ -1590,8 +1590,8 @@ test "Wild Arrow scenes bind source profiles group damage fans and returns for e
                 try std.testing.expectError(error.InvalidActorPlayback, rebound.rebind(&bundle));
                 var cancelled = combat;
                 var cancelled_members: [6]battle.Member = undefined;
-                @memcpy(&cancelled_members, combat.progress.party);
-                cancelled.progress.party = &cancelled_members;
+                combat.progress.party.copyTo(&cancelled_members);
+                cancelled.progress.party = .init(&cancelled_members);
                 cancelled.choose(owner);
                 for (0..2) |member| {
                     try std.testing.expect(cancelled.unite_vm.members[member] == null);
@@ -2327,8 +2327,8 @@ test "Pretty Girl normal owners retain Tengaar redispatch airborne recipient and
             if (age == 193 and loss != 0) {
                 const victim: usize = if (loss == 1) 0 else 2;
                 try std.testing.expect(combat.unite_vm.members[victim] == null and !combat.coordinatorLocked(victim));
-                combat.progress.party[victim].hp = 0;
-                combat.progress.party[victim].inventory.slots = @splat(null);
+                combat.progress.party.at(victim).hp = 0;
+                combat.progress.party.at(victim).inventory.slots = @splat(null);
                 combat.markPartyKnockout(victim);
                 try std.testing.expect(combat.commitPartyKnockout(victim));
             }
@@ -2613,12 +2613,12 @@ test "Martial arts source actors recipient handoff and delayed HP run as one bat
             if (combat.martial_queue != null) saw |= 1;
             for (0..3) |member| if (combat.unite_vm.owns(member)) {
                 if (combat.unite_vm.pose(member)) |pose| if (combat.unite_vm.actors[member].palette == .resource) {
-                    const expected = combat.content.uniteGraphicPose(combat.progress.party[member].id, pose, 29).?;
+                    const expected = combat.content.uniteGraphicPose(combat.progress.party.at(member).id, pose, 29).?;
                     try std.testing.expectEqualDeep(expected.sprite, combat.uniteVmPose(member).?);
                 };
                 if (combat.unite_trails[member].visible) {
                     const trail = combat.unite_vm.actors[member].blue_trail.?;
-                    const expected = combat.content.uniteGraphicPose(combat.progress.party[member].id, trail.pose, 29).?.trail.?;
+                    const expected = combat.content.uniteGraphicPose(combat.progress.party.at(member).id, trail.pose, 29).?.trail.?;
                     const quads = battle.layout.uniteTrail(combat, member).?;
                     for (quads, 0..) |quad, index| try std.testing.expectEqualDeep(expected[7 - index], quad.sprite);
                     drawn |= @as(u3, 1) << @as(u2, @intCast(member));
@@ -2696,7 +2696,7 @@ test "Added Unite journey members keep ordinary hurt and Clone action graphics" 
         if (kind == 0) {
             try combat.beginMelee(target, member, true);
         } else {
-            combat.progress.party[member].rune = for (view.systems.?.runes, 0..) |rune, index| {
+            combat.progress.party.at(member).rune = for (view.systems.?.runes, 0..) |rune, index| {
                 if (std.mem.eql(u8, rune.id, "clone")) break index;
             } else return error.MissingCloneRune;
             try combat.beginSourcePhysicalRune(member, target);
@@ -3072,7 +3072,7 @@ test "all normal journey Unite rosters finish every owner mixed rounds and rejec
         combat.integration = .{ .host = host };
         try combat.attachUniteActors(&actors.value);
         try combat.attachSpellScenes(&packet);
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| {
             member.max_hp = 5000;
             member.hp = 5000;
         }
@@ -3092,19 +3092,19 @@ test "all normal journey Unite rosters finish every owner mixed rounds and rejec
         const lost_member = (owner + 1) % binding.members.len;
         if (cancelled) {
             for (0..binding.members.len) |member| combat.acted[member] = false;
-            combat.progress.party[lost_member].hp = 0;
-            combat.progress.party[lost_member].inventory.slots = @splat(null);
+            combat.progress.party.at(lost_member).hp = 0;
+            combat.progress.party.at(lost_member).inventory.slots = @splat(null);
             combat.markPartyKnockout(lost_member);
             try std.testing.expect(combat.commitPartyKnockout(lost_member));
         }
         if (lethal) combat.enemy_hp[0] = 1;
         if (mixed) {
-            combat.progress.party[item_owner].inventory.slots = @splat(null);
-            combat.progress.party[item_owner].inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
-            combat.progress.party[item_owner].hp = 4000;
+            combat.progress.party.at(item_owner).inventory.slots = @splat(null);
+            combat.progress.party.at(item_owner).inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
+            combat.progress.party.at(item_owner).hp = 4000;
             combat.actions[item_owner] = .{ .item = .{ .slot = 0, .target = item_owner } };
             combat.acted[item_owner] = false;
-            combat.progress.party[if (mode == 4) item_owner else owner].base_stats.speed = 999;
+            combat.progress.party.at(if (mode == 4) item_owner else owner).base_stats.speed = 999;
             for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |enemy| combat.acted[enemy] = false;
         }
         if (protected) for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |enemy| {
@@ -3183,7 +3183,7 @@ test "all normal journey Unite rosters finish every owner mixed rounds and rejec
         if (cancelled) {
             try std.testing.expect(saw_assists_finish);
             try std.testing.expect(combat.uniteBoundaryFor(owner) == null);
-            try std.testing.expectEqual(@as(u16, 0), combat.progress.party[lost_member].hp);
+            try std.testing.expectEqual(@as(u16, 0), combat.progress.party.at(lost_member).hp);
             for (combat.unbalanced[0..combat.partyCount()]) |recovery| try std.testing.expectEqual(@as(u8, 0), recovery);
         }
         if (lethal) {
@@ -3193,7 +3193,7 @@ test "all normal journey Unite rosters finish every owner mixed rounds and rejec
         if (mixed) {
             try std.testing.expect(saw_item);
             try std.testing.expectEqual(@as(?bool, mode == 4), first_item);
-            try std.testing.expectEqual(@as(u16, 5), combat.progress.party[item_owner].inventory.slots[0].?.uses);
+            try std.testing.expectEqual(@as(u16, 5), combat.progress.party.at(item_owner).inventory.slots[0].?.uses);
             try std.testing.expect(item_completed);
         }
         for (charges, members) |before, after| try std.testing.expectEqualDeep(before.rune_charges, after.rune_charges);
@@ -3254,7 +3254,7 @@ test "current Region C catalogue binds all formations and batch Unite rosters" {
         var members: [6]battle.Member = undefined;
         const seed = try battle.State.init(base, items.value, &members, 17);
         try std.testing.expect(region.value.supports(encounter));
-        const bound = try region.value.bindPresentation(allocator, base, encounter_index, seed.progress.party, seed.formation);
+        const bound = try region.value.bindPresentation(allocator, base, encounter_index, seed.progress.party.values()[0..seed.partyCount()], seed.formationOrder());
         var view = bound.content;
         try view.validateAtlas(region.value.presentation.?.atlas_width, region.value.presentation.?.atlas_height);
         const enemies = try arena.allocator().dupe(battle.Profile, view.enemies);
@@ -3266,7 +3266,7 @@ test "current Region C catalogue binds all formations and batch Unite rosters" {
         combat.integration = .{ .host = host };
         try combat.attachUniteActors(&actors.value);
         try combat.attachSpellScenes(&packet);
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| {
             member.max_hp = 5000;
             member.hp = 5000;
         }

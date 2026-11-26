@@ -250,7 +250,7 @@ pub const CharacterRules = struct {
 
     pub fn validate(self: CharacterRules, owned: Character) !void {
         var members = [_]Member{owned};
-        try (Progress{ .money = 0, .party = &members }).validate();
+        try (Progress{ .money = 0, .party = .init(&members) }).validate();
         const member = owned;
         const template = self.profile(member.id) orelse return error.InvalidMember;
         if (member.max_hp > 9999 or (member.hp == 0) != (member.status == .unconscious) or !std.mem.eql(u8, member.name, template.name) or owned.level == 0 or owned.level > 99 or owned.experience >= 1000) return error.InvalidMember;
@@ -344,11 +344,146 @@ pub fn wearsItem(equipment: []const character_rules.Equipment, member: Character
     return worn > 0;
 }
 
-// The caller owns the members; changes survive scene transitions for this session.
+pub const Party = struct {
+    pub const capacity = 6;
+    pub const roster_capacity = 78;
+    pub const Slot = u8;
+
+    buffer: [*]Member = @as([]Member, &.{}).ptr,
+    buffer_len: usize = 0,
+    selected: [capacity]?*Member = @splat(null),
+    len: usize = 0,
+
+    pub fn init(members: []Member) Party {
+        return selectInitial(members, members.len);
+    }
+
+    pub fn selectInitial(members: []Member, count: usize) Party {
+        std.debug.assert(count <= capacity and count <= members.len and members.len <= roster_capacity);
+        var party: Party = .{ .buffer = members.ptr, .buffer_len = members.len, .len = count };
+        for (party.selected[0..count], 0..) |*member, i| member.* = &members[i];
+        return party;
+    }
+
+    pub fn items(self: *const Party) []const *Member {
+        // The occupied prefix contains non-null roster references.
+        return @ptrCast(self.selected[0..self.len]);
+    }
+
+    pub fn backing(self: *const Party) []Member {
+        return self.buffer[0..self.buffer_len];
+    }
+
+    pub fn at(self: *const Party, index: usize) *Member {
+        return self.items()[index];
+    }
+
+    pub fn slot(self: *const Party, index: usize) Slot {
+        return @intCast((@intFromPtr(self.at(index)) - @intFromPtr(self.buffer)) / @sizeOf(Member));
+    }
+
+    pub fn indexOf(self: *const Party, slot_id: Slot) ?usize {
+        if (slot_id >= self.buffer_len) return null;
+        return std.mem.indexOfScalar(*Member, self.items(), &self.buffer[slot_id]);
+    }
+
+    pub fn select(self: *Party, index: usize, slot_id: Slot) void {
+        std.debug.assert(index <= self.len and index < capacity and slot_id < self.buffer_len);
+        self.selected[index] = &self.buffer[slot_id];
+        if (index == self.len) self.len += 1;
+    }
+
+    pub fn remove(self: *Party, index: usize) void {
+        std.debug.assert(index < self.len);
+        std.mem.copyForwards(?*Member, self.selected[index .. self.len - 1], self.selected[index + 1 .. self.len]);
+        self.len -= 1;
+        self.selected[self.len] = null;
+    }
+
+    pub fn copyTo(self: *const Party, destination: []Member) void {
+        for (self.items(), destination) |member, *out| out.* = member.*;
+    }
+
+    pub fn copyFrom(self: *const Party, source: []const Member) void {
+        for (self.items(), source) |member, value| member.* = value;
+    }
+
+    pub fn values(self: *const Party) [capacity]Member {
+        var result: [capacity]Member = @splat(if (self.len == 0) std.mem.zeroes(Member) else self.at(0).*);
+        self.copyTo(result[0..self.len]);
+        return result;
+    }
+
+    pub fn equal(self: Party, other: Party) bool {
+        return self.buffer == other.buffer and self.buffer_len == other.buffer_len and
+            std.mem.eql(*Member, self.items(), other.items());
+    }
+
+    pub fn jsonStringify(self: Party, writer: anytype) !void {
+        try writer.write(self.items());
+    }
+};
+
+pub const Formation = struct {
+    const Position = union(enum) { member: Party.Slot, empty: u8 };
+    positions: [Party.capacity]Position = .{
+        .{ .empty = 0 }, .{ .empty = 1 }, .{ .empty = 2 },
+        .{ .empty = 3 }, .{ .empty = 4 }, .{ .empty = 5 },
+    },
+
+    pub const default_order = [Party.capacity]u8{ 0, 1, 2, 3, 4, 5 };
+
+    pub fn fromOrder(party: Party, order: [Party.capacity]u8) Formation {
+        var result: Formation = undefined;
+        for (&result.positions, order) |*position, i| {
+            position.* = if (i < party.len) .{ .member = party.slot(i) } else .{ .empty = i };
+        }
+        return result;
+    }
+
+    pub fn ordered(self: Formation, party: Party) [Party.capacity]u8 {
+        var result: [Party.capacity]u8 = undefined;
+        for (self.positions, &result) |position, *index| index.* = switch (position) {
+            .member => |id| @intCast(party.indexOf(id).?),
+            .empty => |i| i,
+        };
+        return result;
+    }
+
+    pub fn positionOf(self: Formation, slot_id: Party.Slot) usize {
+        for (self.positions, 0..) |position, i| if (position == .member and position.member == slot_id) return i;
+        unreachable;
+    }
+
+    pub fn replace(self: *Formation, old_id: Party.Slot, new_id: Party.Slot) void {
+        self.positions[self.positionOf(old_id)] = .{ .member = new_id };
+    }
+
+    pub fn append(self: *Formation, count: usize, id: Party.Slot) void {
+        const previous = for (self.positions[count..], count..) |position, i| {
+            if (position.empty == count) break i;
+        } else unreachable;
+        self.positions[previous] = self.positions[count];
+        self.positions[count] = .{ .member = id };
+    }
+
+    pub fn remove(self: *Formation, count: usize, id: Party.Slot) void {
+        const index = self.positionOf(id);
+        const last = count - 1;
+        std.mem.copyForwards(Position, self.positions[index..last], self.positions[index + 1 .. count]);
+        self.positions[last] = .{ .empty = @intCast(last) };
+    }
+
+    pub fn swap(self: *Formation, first: usize, second: usize) void {
+        std.mem.swap(Position, &self.positions[first], &self.positions[second]);
+    }
+};
+
+// The caller owns the roster storage.
 pub const Progress = struct {
     storage: storage.Storage = .{},
     money: u32,
-    party: []Member,
+    party: Party,
     story: Story = .initial,
 
     pub fn validate(self: Progress) !void {
@@ -361,10 +496,10 @@ pub const Progress = struct {
         }
         try self.storage.validate();
         if (self.party.len == 0 or self.party.len > 6) return error.InvalidParty;
-        for (self.party, 0..) |member, index| {
+        for (self.party.items(), 0..) |member, index| {
             try member.inventory.validate();
             if (!validName(member.id) or !validName(member.name) or member.max_hp == 0 or member.hp > member.max_hp or member.balloons > 3) return error.InvalidMember;
-            for (self.party[0..index]) |other| {
+            for (self.party.items()[0..index]) |other| {
                 if (std.mem.eql(u8, member.id, other.id)) return error.DuplicateMember;
             }
             for (member.rune_charges, member.max_rune_charges) |current, maximum| {
@@ -379,8 +514,8 @@ pub const Progress = struct {
     pub fn appraise(self: *Progress, rules: items.Rules, owner: usize, slot: usize) !void {
         try self.validate();
         try rules.validate();
-        if (owner >= self.party.len or slot >= self.party[owner].inventory.count()) return error.InvalidItem;
-        const item = &self.party[owner].inventory.slots[slot].?;
+        if (owner >= self.party.len or slot >= self.party.at(owner).inventory.count()) return error.InvalidItem;
+        const item = &self.party.at(owner).inventory.slots[slot].?;
         if (item.identified or !item.id.decoration()) return error.AlreadyIdentified;
         for (rules.appraisals) |record| if (record.id == item.id) {
             if (self.money < record.fee) return error.InsufficientFunds;
@@ -411,7 +546,7 @@ pub const Progress = struct {
         };
         if (!in_stock) return error.InvalidItem;
         if (member >= self.party.len) return error.InvalidMember;
-        const inventory = &self.party[member].inventory;
+        const inventory = &self.party.at(member).inventory;
         const count = inventory.count();
         if (count == inventory.slots.len) return error.InventoryFull;
         if (self.money < item.price) return error.InsufficientFunds;
@@ -420,17 +555,17 @@ pub const Progress = struct {
     }
 
     pub fn useMedicine(self: *Progress, rules: items.Rules, owner: usize, slot: usize, target: usize) !void {
-        if (owner >= self.party.len or slot >= self.party[owner].inventory.count() or self.party[owner].inventory.slots[slot].?.id != .medicine) return error.InvalidItem;
+        if (owner >= self.party.len or slot >= self.party.at(owner).inventory.count() or self.party.at(owner).inventory.slots[slot].?.id != .medicine) return error.InvalidItem;
         try self.useItem(rules, owner, slot, target);
     }
 
     pub fn checkItemTarget(self: Progress, rules: items.Rules, owner: usize, slot: usize, target: usize) !void {
         try rules.validate();
         try self.validate();
-        if (owner >= self.party.len or target >= self.party.len or slot >= self.party[owner].inventory.count()) return error.InvalidItem;
-        const item = rules.consumable(self.party[owner].inventory.slots[slot].?.id) orelse return error.InvalidItem;
+        if (owner >= self.party.len or target >= self.party.len or slot >= self.party.at(owner).inventory.count()) return error.InvalidItem;
+        const item = rules.consumable(self.party.at(owner).inventory.slots[slot].?.id) orelse return error.InvalidItem;
         if (!item.field_usable) return error.BattleOnlyItem;
-        const member = self.party[target];
+        const member = self.party.at(target).*;
         if (member.status == .unconscious) return error.InvalidTarget;
         if (item.heal_hp > 0 and member.hp == member.max_hp) return error.FullHealth;
         if (item.cure) |cure| switch (cure) {
@@ -441,10 +576,10 @@ pub const Progress = struct {
 
     pub fn useItem(self: *Progress, rules: items.Rules, owner: usize, slot: usize, target: usize) !void {
         try self.checkItemTarget(rules, owner, slot, target);
-        const item = rules.consumable(self.party[owner].inventory.slots[slot].?.id).?;
-        const inventory = &self.party[owner].inventory;
+        const item = rules.consumable(self.party.at(owner).inventory.slots[slot].?.id).?;
+        const inventory = &self.party.at(owner).inventory;
         try inventory.spendUse(slot, item.id);
-        _ = item.applyTo(&self.party[target], false);
+        _ = item.applyTo(self.party.at(target), false);
     }
 
     pub fn salePrice(self: Progress, rules: items.Rules, owner: usize, slot: usize) !u32 {
@@ -458,43 +593,43 @@ pub const Progress = struct {
     fn salePriceWithCatalog(self: Progress, rules: items.Rules, allow_equipment: bool, owner: usize, slot: usize) !u32 {
         try rules.validate();
         try self.validate();
-        if (owner >= self.party.len or slot >= self.party[owner].inventory.count()) return error.InvalidItem;
-        if (!self.party[owner].inventory.slots[slot].?.identified) return error.CannotSell;
-        const id = self.party[owner].inventory.slots[slot].?.id;
+        if (owner >= self.party.len or slot >= self.party.at(owner).inventory.count()) return error.InvalidItem;
+        if (!self.party.at(owner).inventory.slots[slot].?.identified) return error.CannotSell;
+        const id = self.party.at(owner).inventory.slots[slot].?.id;
         const item = (if (allow_equipment) rules.offerGood(id) else rules.good(id)) orelse return error.CannotSell;
         if (item.price == 0) return error.CannotSell;
-        if (self.party[owner].inventory.slots[slot].?.uses != item.uses) return error.CannotSell;
+        if (self.party.at(owner).inventory.slots[slot].?.uses != item.uses) return error.CannotSell;
         return item.price / 2;
     }
 
     pub fn sellItem(self: *Progress, rules: items.Rules, owner: usize, slot: usize) !void {
         const price = try self.salePrice(rules, owner, slot);
         if (price > max_money or self.money > max_money - price) return error.MoneyLimit;
-        self.party[owner].inventory.remove(slot);
+        self.party.at(owner).inventory.remove(slot);
         self.money += price;
     }
 
     pub fn sellShopItem(self: *Progress, rules: items.Rules, owner: usize, slot: usize) !void {
         const price = try self.shopSalePrice(rules, owner, slot);
         if (price > max_money or self.money > max_money - price) return error.MoneyLimit;
-        self.party[owner].inventory.remove(slot);
+        self.party.at(owner).inventory.remove(slot);
         self.money += price;
     }
 
     pub fn transfer(self: *Progress, owner: usize, slot: usize, recipient: usize) !void {
         try self.validate();
-        if (owner >= self.party.len or recipient >= self.party.len or owner == recipient or slot >= self.party[owner].inventory.count()) return error.InvalidItem;
-        const destination = &self.party[recipient].inventory;
+        if (owner >= self.party.len or recipient >= self.party.len or owner == recipient or slot >= self.party.at(owner).inventory.count()) return error.InvalidItem;
+        const destination = &self.party.at(recipient).inventory;
         const count = destination.count();
         if (count == destination.slots.len) return error.InventoryFull;
-        destination.slots[count] = self.party[owner].inventory.slots[slot];
-        self.party[owner].inventory.remove(slot);
+        destination.slots[count] = self.party.at(owner).inventory.slots[slot];
+        self.party.at(owner).inventory.remove(slot);
     }
 
     pub fn discard(self: *Progress, owner: usize, slot: usize) !void {
         try self.validate();
-        if (owner >= self.party.len or slot >= self.party[owner].inventory.count()) return error.InvalidItem;
-        self.party[owner].inventory.remove(slot);
+        if (owner >= self.party.len or slot >= self.party.at(owner).inventory.count()) return error.InvalidItem;
+        self.party.at(owner).inventory.remove(slot);
     }
 
     pub fn cost(self: Progress, price_per_member: u16) u32 {
@@ -512,14 +647,14 @@ pub const Progress = struct {
     pub fn restoreParty(self: *Progress, hp_only: bool) !void {
         try self.validate();
         if (!hp_only) return self.restoreMembers();
-        for (self.party) |*member| {
+        for (self.party.items()) |member| {
             member.hp = member.max_hp;
             if (member.status == .unconscious) member.status = .healthy;
         }
     }
 
     fn restoreMembers(self: *Progress) void {
-        for (self.party) |*member| {
+        for (self.party.items()) |member| {
             member.hp = member.max_hp;
             member.status = .healthy;
             member.balloons = 0;

@@ -17,10 +17,10 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) pause
         },
         .equipment_items => {
             const combat = state.combat.?;
-            const choices = game.progress.party[state.member].inventory.count() + 1;
+            const choices = game.progress.party.at(state.member).inventory.count() + 1;
             nav.cycleUpDown(&state.slot, choices, input.field.menu_direction);
             if (input.field.action) {
-                const item = if (state.slot == 0) null else combat.gearIndex(game.progress.party[state.member].inventory.slots[state.slot - 1].?.id) orelse {
+                const item = if (state.slot == 0) null else combat.gearIndex(game.progress.party.at(state.member).inventory.slots[state.slot - 1].?.id) orelse {
                     state.message = "This is not wearable equipment.";
                     state.character_page = .equipment_items;
                     state.phase = .character_notice;

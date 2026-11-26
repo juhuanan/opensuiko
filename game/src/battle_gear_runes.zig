@@ -13,7 +13,7 @@ const Input = types_mod.Input;
 
 pub fn headEquipment(self: State) [6]?usize {
     var result: [6]?usize = @splat(null);
-    for (self.progress.party, 0..) |member, i| result[i] = member.loadout.head;
+    for (self.progress.party.items(), 0..) |member, i| result[i] = member.loadout.head;
     return result;
 }
 pub fn equip(self: *State, member: usize, item: ?usize) !void {
@@ -23,16 +23,16 @@ pub fn equipSlot(self: *State, member: usize, slot: systems.EquipmentSlot, item:
     const rules = self.content.systems orelse return error.InvalidEquipment;
     if (member >= self.partyCount()) return error.InvalidMember;
     if (item) |id| if (id >= rules.equipment.len or !rules.equipment[id].allows(self.partyProfile(member).id, slot)) return error.InvalidEquipment;
-    self.progress.party[member].loadout.set(slot, item);
+    self.progress.party.at(member).loadout.set(slot, item);
     refreshMagicCapacity(self, member);
 }
 
 pub fn refreshMagicCapacity(self: *State, member: usize) void {
-    self.progress.party[member].refreshRuneCapacity(self.content.systems.?);
+    self.progress.party.at(member).refreshRuneCapacity(self.content.systems.?);
 }
 pub fn rune(self: *const State, member: usize) ?systems.Rune {
     const rules = self.content.systems orelse return null;
-    var result = if (self.progress.party[member].rune) |i| rules.runes[i] else return null;
+    var result = if (self.progress.party.at(member).rune) |i| rules.runes[i] else return null;
     if (std.mem.eql(u8, result.id, "soul_eater")) if (self.progress.story.scenario) |story| {
         for (&result.spells, 0..) |*spell, tier| if (tier >= story.soul_eater_spell_slots) {
             spell.* = null;
@@ -44,22 +44,22 @@ pub fn rune(self: *const State, member: usize) ?systems.Rune {
 pub fn checkRuneAttachment(self: State, member: usize, owner: usize, slot: usize) !usize {
     if (member >= self.partyCount() or owner >= self.partyCount()) return error.InvalidRune;
     const rules = self.content.characterRules();
-    try rules.checkRuneTarget(self.progress.party[member]);
-    if (self.progress.party[member].rune != null) return error.RuneOccupied;
+    try rules.checkRuneTarget(self.progress.party.at(member).*);
+    if (self.progress.party.at(member).rune != null) return error.RuneOccupied;
     try self.progress.validate();
-    return rules.attachmentRune(self.progress.party[member].id, self.progress.party[owner].inventory, slot);
+    return rules.attachmentRune(self.progress.party.at(member).id, self.progress.party.at(owner).inventory, slot);
 }
 pub fn attachRune(self: *State, member: usize, owner: usize, slot: usize) !void {
     const index = try self.checkRuneAttachment(member, owner, slot);
-    self.progress.party[member].rune = index;
-    self.progress.party[owner].inventory.remove(slot);
+    self.progress.party.at(member).rune = index;
+    self.progress.party.at(owner).inventory.remove(slot);
 }
 pub fn detachRune(self: *State, member: usize) !void {
     if (member >= self.partyCount()) return error.InvalidRune;
     const rules = self.content.characterRules();
-    try rules.checkRuneTarget(self.progress.party[member]);
+    try rules.checkRuneTarget(self.progress.party.at(member).*);
     try self.progress.validate();
-    try rules.detachRune(&self.progress.party[member]);
+    try rules.detachRune(self.progress.party.at(member));
 }
 pub fn hasRune(self: *const State, member: usize, id: []const u8) bool {
     const owned = self.rune(member) orelse return false;
@@ -94,7 +94,7 @@ pub fn canCast(self: *const State, member: usize, spell: usize) bool {
     if (member >= self.partyCount() or spell >= rules.spells.len) return false;
     if (rules.spells[spell].kind == .source_rule and self.integration == null) return false;
     const tier = self.spellTier(member, spell) orelse return false;
-    return self.canStartAttack(member) and !self.actor_conditions[member].rune_blocked and self.progress.party[member].rune_charges[tier] > 0;
+    return self.canStartAttack(member) and !self.actor_conditions[member].rune_blocked and self.progress.party.at(member).rune_charges[tier] > 0;
 }
 pub fn physicalRune(self: *const State, member: usize) ?systems.PhysicalRune {
     const owned = self.rune(member) orelse return null;
@@ -104,7 +104,7 @@ pub fn canPhysicalRune(self: *const State, member: usize) bool {
     if (!self.canStartAttack(member) or self.actor_conditions[member].rune_blocked) return false;
     if (self.unite_actors) |bundle| if (bundle.physicalPacket()) |packet| {
         const technique = technique_systems.physical.techniqueForRune(self.runeByteFor(member) orelse return false) orelse return false;
-        for (packet.find(technique).?.members) |id| if (std.mem.eql(u8, id, self.progress.party[member].id)) return true;
+        for (packet.find(technique).?.members) |id| if (std.mem.eql(u8, id, self.progress.party.at(member).id)) return true;
         return false;
     };
     if (self.partyProfile(member).motion == null and self.partyProfile(member).attack.len == 0) return false;
@@ -128,7 +128,7 @@ pub fn hasMagic(self: *const State, member: usize) bool {
     return false;
 }
 pub fn refillMagic(self: *State, member: usize) void {
-    self.progress.party[member].refillRuneCharges(self.content.systems.?);
+    self.progress.party.at(member).refillRuneCharges(self.content.systems.?);
 }
 pub fn uniteDefinition(self: *const State, actor: usize) ?systems.Unite {
     const rules = self.content.systems orelse return null;
@@ -156,7 +156,7 @@ pub fn unitePartner(self: *const State, actor: usize) ?usize {
     const definition = self.uniteDefinition(actor) orelse return null;
     const id = self.partyProfile(actor).id;
     const other = if (std.mem.eql(u8, id, definition.members[0])) definition.members[1] else definition.members[0];
-    for (self.progress.party, 0..) |member, i| if (std.mem.eql(u8, member.id, other) and self.canStartAttack(i) and member.status != .poisoned) return i;
+    for (self.progress.party.items(), 0..) |member, i| if (std.mem.eql(u8, member.id, other) and self.canStartAttack(i) and member.status != .poisoned) return i;
     return null;
 }
 pub fn actionMotion(self: *const State, member: usize) ?presentation.Motion {
@@ -174,7 +174,7 @@ pub fn attackFrames(self: *const State, member: usize) []const Frame {
 pub fn canUnite(self: *const State, actor: usize) bool {
     if (self.integration != null) return self.canUniteIntegrated(actor);
     const partner = self.unitePartner(actor) orelse return false;
-    return self.canStartAttack(actor) and self.progress.party[actor].status != .poisoned and (self.actions[partner] == null or (self.actions[partner].? == .assist and self.actions[partner].?.assist == actor));
+    return self.canStartAttack(actor) and self.progress.party.at(actor).status != .poisoned and (self.actions[partner] == null or (self.actions[partner].? == .assist and self.actions[partner].?.assist == actor));
 }
 pub fn roll(self: *State) u15 {
     if (self.replay_draws) |draws| return draws.next() catch {
@@ -189,7 +189,7 @@ pub fn tickReplay(self: *State, input: Input, draws: *systems.Draws) !void {
     const before = self.*;
     const saved_draws = draws.*;
     var members: [6]Member = undefined;
-    @memcpy(members[0..self.partyCount()], self.progress.party);
+    self.progress.party.copyTo(members[0..self.partyCount()]);
     self.replay_draws = draws;
     self.replay_exhausted = false;
     self.replay_unsupported = null;
@@ -203,7 +203,7 @@ pub fn tickReplay(self: *State, input: Input, draws: *systems.Draws) !void {
             .enemy_policy => error.UnsupportedWorldEnemyPolicy,
         };
         self.* = before;
-        @memcpy(self.progress.party, members[0..self.partyCount()]);
+        self.progress.party.copyFrom(members[0..self.partyCount()]);
         draws.* = saved_draws;
         return failure;
     }

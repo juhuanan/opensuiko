@@ -21,15 +21,15 @@ pub const Active = struct {
 };
 
 fn wornSlot(state: *const State, member: usize, slot: usize) !?battle.systems.EquipmentSlot {
-    if (member >= state.combat.partyCount() or slot >= state.combat.progress.party[member].inventory.count()) return error.InvalidItem;
+    if (member >= state.combat.partyCount() or slot >= state.combat.progress.party.at(member).inventory.count()) return error.InvalidItem;
     if (!state.combat.itemEquipped(member, slot)) return null;
-    const id = state.combat.progress.party[member].inventory.slots[slot].?.id;
+    const id = state.combat.progress.party.at(member).inventory.slots[slot].?.id;
     const gear = state.combat.gearIndex(id) orelse return error.InvalidEquipment;
     var ordinal: usize = 0;
-    for (state.combat.progress.party[member].inventory.slots[0..slot]) |item| if (item != null and item.?.id == id) {
+    for (state.combat.progress.party.at(member).inventory.slots[0..slot]) |item| if (item != null and item.?.id == id) {
         ordinal += 1;
     };
-    for (std.enums.values(battle.systems.EquipmentSlot)) |place| if (state.combat.progress.party[member].loadout.get(place) == gear) {
+    for (std.enums.values(battle.systems.EquipmentSlot)) |place| if (state.combat.progress.party.at(member).loadout.get(place) == gear) {
         if (ordinal == 0) return place;
         ordinal -= 1;
     };
@@ -37,12 +37,12 @@ fn wornSlot(state: *const State, member: usize, slot: usize) !?battle.systems.Eq
 }
 
 pub fn canDrop(state: *const State, member: usize, slot: usize) !bool {
-    if (member >= state.combat.partyCount() or slot >= state.combat.progress.party[member].inventory.count()) return error.InvalidItem;
+    if (member >= state.combat.partyCount() or slot >= state.combat.progress.party.at(member).inventory.count()) return error.InvalidItem;
     const packet = state.shared_item_catalogue orelse return error.MissingSharedItemCatalogue;
-    const id = state.combat.progress.party[member].inventory.slots[slot].?.id;
+    const id = state.combat.progress.party.at(member).inventory.slots[slot].?.id;
     const item = catalogue.findById(packet, @tagName(id)) orelse return error.UnknownFieldEventItem;
     if (item.ownership != .appraisal and item.price == 0) return false;
-    if (try wornSlot(state, member, slot)) |place| if (state.extras[member].locked_equipment[@backingInt(place)]) return false;
+    if (try wornSlot(state, member, slot)) |place| if (state.activeExtra(member).locked_equipment[@backingInt(place)]) return false;
     return true;
 }
 
@@ -62,7 +62,7 @@ pub fn begin(state: *State) !void {
     const owner = state.field_event orelse return error.MissingFieldEvent;
     const request = owner.session.queuedItemOverload() orelse return error.MissingItemOverload;
     const item = std.meta.stringToEnum(field.items.Id, request.item_name) orelse return error.UnknownFieldEventItem;
-    for (state.combat.progress.party) |member| {
+    for (state.combat.progress.party.items()) |member| {
         try member.inventory.validate();
         if (member.inventory.count() != 9) return error.UnexpectedItemOverload;
     }
@@ -117,7 +117,7 @@ pub fn tick(state: *State, input: pause.Input) !void {
             }
         },
         .items => {
-            if (move(&next.slot, state.combat.progress.party[next.member].inventory.count(), input)) cue = 0x502;
+            if (move(&next.slot, state.combat.progress.party.at(next.member).inventory.count(), input)) cue = 0x502;
             if (cancel) {
                 next.phase = .members;
                 cue = 0x504;

@@ -13,7 +13,7 @@ pub const Revival = struct {
 
 pub fn hasBuddha(self: battle.State, actor: usize) bool {
     if (actor >= self.partyCount() or self.rules.automatic_revival == null) return false;
-    const inventory = self.progress.party[actor].inventory;
+    const inventory = self.progress.party.at(actor).inventory;
     for (inventory.slots[0..inventory.count()]) |item| if (item.?.id == .sacrificial_buddha) return true;
     return false;
 }
@@ -23,14 +23,14 @@ pub fn committedPartyInactive(self: battle.State, actor: usize) bool {
 }
 
 pub fn markPartyKnockout(self: *battle.State, actor: usize) void {
-    if (self.progress.party[actor].hp != 0) return;
+    if (self.progress.party.at(actor).hp != 0) return;
     if (self.medicine_action) |*item| {
         if (item.ticks < item.timing.impact_tick) item.interrupt(actor);
     }
     const knockout = &self.party_knockouts[actor];
-    if (!knockout.pending) knockout.prior_status = self.progress.party[actor].status;
+    if (!knockout.pending) knockout.prior_status = self.progress.party.at(actor).status;
     knockout.pending = true;
-    self.progress.party[actor].status = .unconscious;
+    self.progress.party.at(actor).status = .unconscious;
 }
 
 pub fn hasPendingRevival(self: battle.State) bool {
@@ -47,13 +47,13 @@ pub fn commitPartyKnockout(self: *battle.State, actor: usize) bool {
         const origin = battle.layout.worldPosition(self, actor);
         const generic_offset = self.uniteScreenOffset(actor);
         const screen_offset = if (self.content.world_art) |art| battle.world_art.actorSample(art, self, actor).sample.offset else [2]i16{ generic_offset[0], generic_offset[1] };
-        const inventory = &self.progress.party[actor].inventory;
+        const inventory = &self.progress.party.at(actor).inventory;
         for (0..inventory.count()) |slot| if (inventory.slots[slot].?.id == .sacrificial_buddha) {
             inventory.remove(slot);
             if (self.actions[actor]) |*queued| {
                 if (queued.* == .item and queued.item.slot > slot) queued.item.slot -= 1;
             }
-            knockout.revival = .{ .started_at = self.camera_ticks, .origin = origin, .screen_offset = screen_offset, .original_status = knockout.prior_status orelse self.progress.party[actor].status };
+            knockout.revival = .{ .started_at = self.camera_ticks, .origin = origin, .screen_offset = screen_offset, .original_status = knockout.prior_status orelse self.progress.party.at(actor).status };
             knockout.pending = true;
             if (self.active) |*effect| if (effect.protector == actor) {
                 effect.protector_revival_delay += self.rules.automatic_revival.?.release_delay;
@@ -62,7 +62,7 @@ pub fn commitPartyKnockout(self: *battle.State, actor: usize) bool {
         };
     }
     knockout.* = .{};
-    self.progress.party[actor].status = .unconscious;
+    self.progress.party.at(actor).status = .unconscious;
     status.clearKnockoutStatuses(self, actor);
     return true;
 }
@@ -73,9 +73,9 @@ pub fn advanceRevivals(self: *battle.State) void {
         if (knockout.revival) |*instance| {
             const spec = self.rules.automatic_revival.?;
             const age = self.camera_ticks -% instance.started_at;
-            if (age == spec.pending_delay) instance.amount = if (self.actor_conditions[actor].protection_rounds == 0) self.progress.party[actor].max_hp / spec.hp_divisor else 0;
+            if (age == spec.pending_delay) instance.amount = if (self.actor_conditions[actor].protection_rounds == 0) self.progress.party.at(actor).max_hp / spec.hp_divisor else 0;
             if (age == spec.impact_delay and instance.amount != 0) {
-                const member = &self.progress.party[actor];
+                const member = self.progress.party.at(actor);
                 const before = member.*;
                 member.hp = @min(member.max_hp, member.hp +| instance.amount);
                 if (member.status == .unconscious) member.status = if (instance.original_status == .unconscious) .healthy else instance.original_status;

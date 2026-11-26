@@ -26,7 +26,7 @@ test "all source appraisal goods preserve names prices hidden state and inventor
         var member = hero();
         try std.testing.expect(try member.inventory.receive(id));
         var party = [_]field.game_state.Member{member};
-        var progress = field.game_state.Progress{ .party = &party, .money = 500 };
+        var progress = field.game_state.Progress{ .party = .init(&party), .money = 500 };
         try progress.validate();
         const encoded = try std.json.Stringify.valueAlloc(allocator, member.inventory, .{});
         defer allocator.free(encoded);
@@ -69,7 +69,7 @@ test "healing and cure items agree with independent native vectors" {
         members[0].balloons = row.balloons_before;
         members[0].inventory.slots[0] = .{ .id = row.id, .uses = row.uses_before };
         members[0].inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
-        var progress = field.game_state.Progress{ .money = 350, .party = &members };
+        var progress = field.game_state.Progress{ .money = 350, .party = .init(&members) };
         if (row.changed) try progress.useItem(rules.value, 0, 0, 0) else {
             try std.testing.expectError(if (rules.value.consumable(row.id).?.heal_hp > 0) error.FullHealth else error.NoEffect, progress.useItem(rules.value, 0, 0, 0));
         }
@@ -119,7 +119,7 @@ test "catalog validation, legacy rules and purchase boundaries preserve inventor
     for (rules.stock) |id| {
         const item = rules.good(id).?;
         var members = [_]field.game_state.Member{hero()};
-        var progress = field.game_state.Progress{ .money = item.price - 1, .party = &members };
+        var progress = field.game_state.Progress{ .money = item.price - 1, .party = .init(&members) };
         try std.testing.expectError(error.InsufficientFunds, progress.buyItem(rules, id, 0));
         try std.testing.expectEqual(@as(usize, 0), members[0].inventory.count());
         try std.testing.expectEqual(item.price - 1, progress.money);
@@ -148,7 +148,7 @@ test "selling supported supplies pays the native bundle price and rejects unsafe
             var members = [_]field.game_state.Member{hero()};
             members[0].inventory.slots[0] = .{ .id = item.id, .uses = uses };
             members[0].inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
-            var progress = field.game_state.Progress{ .money = 123, .party = &members };
+            var progress = field.game_state.Progress{ .money = 123, .party = .init(&members) };
             if (uses != item.uses) {
                 const before = members;
                 try std.testing.expectError(error.CannotSell, progress.sellItem(rules.value, 0, 0));
@@ -189,7 +189,7 @@ test "Medicine agrees with original effect and consumption instructions" {
         members[0].hp = row.hp_before;
         members[0].max_hp = row.max_hp;
         members[0].inventory.slots[0] = .{ .id = .medicine, .uses = row.uses_before };
-        var progress = field.game_state.Progress{ .money = 350, .party = &members };
+        var progress = field.game_state.Progress{ .money = 350, .party = .init(&members) };
         if (row.hp_before == row.max_hp) {
             try std.testing.expectError(error.FullHealth, progress.useMedicine(rules.value, 0, 0, 0));
         } else try progress.useMedicine(rules.value, 0, 0, 0);
@@ -205,7 +205,7 @@ test "purchase is atomic for funds and capacity and item removal compacts slots"
     defer rules.deinit();
     var members = [_]field.game_state.Member{ hero(), hero() };
     members[1].id = "friend";
-    var progress = field.game_state.Progress{ .money = 99, .party = &members };
+    var progress = field.game_state.Progress{ .money = 99, .party = .init(&members) };
     try std.testing.expectError(error.InsufficientFunds, progress.buyMedicine(rules.value, 0));
     try std.testing.expectEqual(@as(usize, 0), members[0].inventory.count());
     try std.testing.expectEqual(@as(u32, 99), progress.money);
@@ -234,7 +234,7 @@ test "item menu and shop confirm, cancel, freeze and consume once" {
     const parsed = try field.load(allocator, @embedFile("fixtures/room.json"));
     defer parsed.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(parsed.value, &game_progress);
     game.item_rules = rules.value;
     var menu = pause.State{ .phase = .shop };
@@ -282,7 +282,7 @@ test "inventory save validates uses, gaps, version and restores independently" {
     const rules = try field.items.load(allocator, field.items.json);
     defer rules.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(parsed.value, &game_progress);
     game.item_rules = rules.value;
     try game.progress.buyMedicine(rules.value, 0);
@@ -294,15 +294,15 @@ test "inventory save validates uses, gaps, version and restores independently" {
     const loaded = try saves.restore(allocator, std.testing.io, dir.dir, parsed.value, &game);
     defer loaded.deinit();
     try std.testing.expectEqual(@as(u32, 250), game.progress.money);
-    try std.testing.expectEqual(@as(u16, 100), game.progress.party[0].hp);
-    try std.testing.expectEqual(@as(u16, 5), game.progress.party[0].inventory.slots[0].?.uses);
+    try std.testing.expectEqual(@as(u16, 100), game.progress.party.at(0).hp);
+    try std.testing.expectEqual(@as(u16, 5), game.progress.party.at(0).inventory.slots[0].?.uses);
     try std.testing.expect(game.item_rules != null);
-    game.progress.party[0].inventory.slots[0].?.uses = 7;
+    game.progress.party.at(0).inventory.slots[0].?.uses = 7;
     try std.testing.expectError(error.InvalidInventory, saves.Snapshot.capture(game, parsed.value));
-    game.progress.party[0].inventory.slots[0].?.uses = 0;
+    game.progress.party.at(0).inventory.slots[0].?.uses = 0;
     try std.testing.expectError(error.InvalidInventory, saves.Snapshot.capture(game, parsed.value));
-    game.progress.party[0].inventory.slots[0] = null;
-    game.progress.party[0].inventory.slots[1] = .{ .id = .medicine, .uses = 1 };
+    game.progress.party.at(0).inventory.slots[0] = null;
+    game.progress.party.at(0).inventory.slots[1] = .{ .id = .medicine, .uses = 1 };
     try std.testing.expectError(error.InvalidInventory, saves.Snapshot.capture(game, parsed.value));
     try std.testing.expectError(error.MissingInventory, saves.decode(allocator,
         \\{"schema":"suikoden-save/3","room":"inn","x":16,"y":16,"facing":"down","money":350,"story":{"village_south_exit_reached":false},"party":[{"id":"hero"}]}
@@ -326,10 +326,10 @@ test "version-two saves load empty inventories and upgrade without losing story"
     ;
     const decoded = try saves.decode(allocator, bytes, package.value);
     defer decoded.deinit();
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(package.value, &game_progress);
     try decoded.value.apply(package.value, &game);
-    try std.testing.expectEqual(@as(usize, 0), game.progress.party[0].inventory.count());
+    try std.testing.expectEqual(@as(usize, 0), game.progress.party.at(0).inventory.count());
     try std.testing.expectEqual(@as(u32, 173), game.progress.money);
     try std.testing.expect(game.progress.story.village_south_exit_reached);
     const upgraded = try saves.Snapshot.capture(game, package.value);
@@ -365,7 +365,7 @@ test "Incense is a reusable battle-only tool with validated party effect data" {
     var members = [_]field.game_state.Member{hero()};
     members[0].hp = 1;
     members[0].inventory.slots[0] = .{ .id = .dragon_seal_incense, .uses = 0 };
-    var progress = field.game_state.Progress{ .money = 123, .party = &members };
+    var progress = field.game_state.Progress{ .money = 123, .party = .init(&members) };
     const before = members;
     try progress.validate();
     try std.testing.expectError(error.BattleOnlyItem, progress.useItem(rules, 0, 0, 0));
@@ -420,7 +420,7 @@ test "Buddha is an automatic whole-slot item with a checked source profile" {
     try std.testing.expectError(error.InvalidItems, invalid.validate());
     var members = [_]field.game_state.Member{hero()};
     members[0].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
-    var progress = field.game_state.Progress{ .money = 0, .party = &members };
+    var progress = field.game_state.Progress{ .money = 0, .party = .init(&members) };
     try progress.validate();
     const before = members;
     try std.testing.expectError(error.InvalidItem, progress.useItem(rules, 0, 0, 0));
@@ -434,7 +434,7 @@ test "Incense field menus show the battle-only notice without target selection o
     defer room.deinit();
     var members = [_]field.game_state.Member{hero()};
     members[0].inventory.slots[0] = .{ .id = .dragon_seal_incense, .uses = 0 };
-    var game_progress: field.game_state.Progress = .{ .money = 0, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 0, .party = .init(&members) };
     var game = field.State.init(room.value, &game_progress);
     game.item_rules = rules.value;
     const before = members;
@@ -454,7 +454,7 @@ test "Buddha menus explain automatic revival without queuing manual use" {
     defer room.deinit();
     var members = [_]field.game_state.Member{hero()};
     members[0].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
-    var game_progress: field.game_state.Progress = .{ .money = 0, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 0, .party = .init(&members) };
     var game = field.State.init(room.value, &game_progress);
     game.item_rules = rules.value;
     const before = members;

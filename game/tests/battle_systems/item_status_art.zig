@@ -53,7 +53,7 @@ test "Item status art retains poison phase and bursts only the highest balloon t
             var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
             try combat.attachSpellScenes(&parsed.value);
             if (with_world) combat.content.world_art = art.value;
-            for (combat.progress.party) |*member| {
+            for (combat.progress.party.items()) |member| {
                 member.status = .healthy;
                 member.balloons = 0;
             }
@@ -63,12 +63,12 @@ test "Item status art retains poison phase and bursts only the highest balloon t
             } else for (0..balloons) |_| try std.testing.expect(combat.inflictStatus(target, .balloon));
             const birth = combat.status_icons[target].started_at[if (id == .antitoxin) @as(usize, 0) else balloons];
             combat.camera_ticks += 5;
-            combat.progress.party[owner].inventory.slots = @splat(null);
-            combat.progress.party[owner].inventory.slots[0] = .{ .id = id, .uses = 1 };
-            combat.progress.party[owner].inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
+            combat.progress.party.at(owner).inventory.slots = @splat(null);
+            combat.progress.party.at(owner).inventory.slots[0] = .{ .id = id, .uses = 1 };
+            combat.progress.party.at(owner).inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
             combat.actions[owner] = .{ .item = .{ .slot = 0, .target = target, .id = id } };
             try std.testing.expect(combat.beginMedicine(owner));
-            try std.testing.expect(combat.progress.party[owner].inventory.slots[0].?.id == .bandanna);
+            try std.testing.expect(combat.progress.party.at(owner).inventory.slots[0].?.id == .bandanna);
             const timing = combat.medicine_action.?.timing;
             for (0..@max(timing.owner_release, timing.target_release)) |_| {
                 combat.camera_ticks += 1;
@@ -108,7 +108,7 @@ test "Item status art retains poison phase and bursts only the highest balloon t
                         const block = battle.layout.currentCamera(combat);
                         const point = battle.drops.project(block, .{ @intFromFloat(@floor(origin.x)), @intFromFloat(@floor(origin.y)), @intFromFloat(@floor(z)) });
                         const scale = @divTrunc(block.scale[0] << 10, block.translation[2]);
-                        const anchors = parsed.value.statusAnchors(combat.progress.party[target].id).?;
+                        const anchors = parsed.value.statusAnchors(combat.progress.party.at(target).id).?;
                         const offset = anchors.offsets[anchors.idle_pose];
                         const entry = parsed.value.entries[command.texture.?];
                         const dx = @divTrunc(@as(i32, offset[0]) * scale, 4096) + ((entry.dx * scale) >> 12);
@@ -119,11 +119,11 @@ test "Item status art retains poison phase and bursts only the highest balloon t
                 }
                 try std.testing.expectEqual(@as(usize, @intFromBool(visible)), detached);
                 if (age < (if (id == .antitoxin) @as(u16, 31) else 12)) {
-                    if (id == .antitoxin) try std.testing.expect(combat.progress.party[target].status == .poisoned) else try std.testing.expectEqual(balloons, combat.progress.party[target].balloons);
+                    if (id == .antitoxin) try std.testing.expect(combat.progress.party.at(target).status == .poisoned) else try std.testing.expectEqual(balloons, combat.progress.party.at(target).balloons);
                 }
             }
             try std.testing.expect(combat.medicine_action.?.owner_released and combat.medicine_action.?.target_released);
-            if (id == .antitoxin) try std.testing.expect(combat.progress.party[target].status == .healthy) else try std.testing.expectEqual(balloons - 1, combat.progress.party[target].balloons);
+            if (id == .antitoxin) try std.testing.expect(combat.progress.party.at(target).status == .healthy) else try std.testing.expectEqual(balloons - 1, combat.progress.party.at(target).balloons);
         }
     };
 }
@@ -140,8 +140,8 @@ test "Item status art leaves ineffective cures and interrupted symbols attached"
         if (interrupted) {
             if (id == .antitoxin) try std.testing.expect(combat.inflictStatus(1, .poison)) else try std.testing.expect(combat.inflictStatus(1, .balloon));
         }
-        combat.progress.party[0].inventory.slots = @splat(null);
-        combat.progress.party[0].inventory.slots[0] = .{ .id = id, .uses = 1 };
+        combat.progress.party.at(0).inventory.slots = @splat(null);
+        combat.progress.party.at(0).inventory.slots[0] = .{ .id = id, .uses = 1 };
         combat.actions[0] = .{ .item = .{ .slot = 0, .target = 1, .id = id } };
         try std.testing.expect(combat.beginMedicine(0));
         const start = combat.medicine_action.?.timing.target_start;
@@ -166,6 +166,6 @@ test "Item status art leaves ineffective cures and interrupted symbols attached"
         try std.testing.expect(combat.recentItemImpact(1) == null);
         try std.testing.expectEqual(@as(usize, @intFromBool(interrupted)), frame.count);
         if (interrupted) try std.testing.expectEqual(@as(u8, 255), frame.commands[0].opacity) else try std.testing.expect(combat.medicine_action.?.detached_status == null);
-        try std.testing.expect(combat.progress.party[0].inventory.slots[0] == null);
+        try std.testing.expect(combat.progress.party.at(0).inventory.slots[0] == null);
     };
 }

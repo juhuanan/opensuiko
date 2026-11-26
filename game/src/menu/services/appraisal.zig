@@ -7,7 +7,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
     switch (state.phase) {
         .appraisal => {
             nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
-            const inventory = game.progress.party[state.member].inventory;
+            const inventory = game.progress.party.at(state.member).inventory;
             const count = inventory.count();
             if (count == 0) {
                 state.slot = 0;
@@ -33,7 +33,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
                     state.phase = .appraisal;
                 } else {
                     if (game.progress.appraise(game.item_rules.?, state.member, state.slot)) |_| {
-                        state.message = game.progress.party[state.member].inventory.slots[state.slot].?.name();
+                        state.message = game.progress.party.at(state.member).inventory.slots[state.slot].?.name();
                     } else |err| state.message = if (err == error.InsufficientFunds) "Not enough bits for appraisal." else "This item cannot be appraised here.";
                     state.phase = .appraisal_notice;
                 }

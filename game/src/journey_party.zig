@@ -22,12 +22,14 @@ pub fn takeWindowOpenCues(state: *State) u8 {
 }
 
 pub fn inspect(state: *const State, id: []const u8) !selector.Details {
-    for (state.combat.progress.party, 0..) |member, index| if (std.mem.eql(u8, member.id, id)) {
-        return selector.Details.derive(state.combat.content.characterRules(), state.combat.ownedMember(index), state.extras[index]);
+    for (state.combat.progress.party.items(), 0..) |member, index| if (std.mem.eql(u8, member.id, id)) {
+        return selector.Details.derive(state.combat.content.characterRules(), state.combat.ownedMember(index), state.activeExtra(index));
     };
-    for (state.reserves, state.reserve_extras) |maybe, extra| if (maybe) |owned| {
-        if (std.mem.eql(u8, owned.id, id)) return selector.Details.derive(state.combat.content.characterRules(), owned, extra orelse .{ .member_id = "" });
-    };
+    for (state.reserve_slots[0..state.reserveCount()]) |slot| {
+        const owned = state.combat.progress.party.backing()[slot.?];
+        const extra = state.roster_extras[slot.?];
+        if (std.mem.eql(u8, owned.id, id)) return selector.Details.derive(state.combat.content.characterRules(), owned, extra);
+    }
     const catalogue = state.party_catalog orelse return error.MissingPartyCatalogue;
     const seed = try party.catalogue.materializeBound(state.combat.content.characterRules(), catalogue, id, state.party_bindings);
     return selector.Details.derive(state.combat.content.characterRules(), seed.owned, seed.extra);
@@ -57,7 +59,7 @@ pub const View = struct {
         const host = (state.combat.integration orelse return error.MissingBattleIntegration).host;
         const auxiliary = state.field_state.auxiliary_party orelse return error.MissingAuxiliaryPartyState;
         const required = if (owner.session.pendingPartySelectCommand()) |command| command.required_party orelse &.{} else &.{};
-        for (state.combat.progress.party, 0..) |member, index| {
+        for (state.combat.progress.party.items(), 0..) |member, index| {
             self.active[index] = member.id;
             const source_id = host.characterId(member.id) orelse return error.UnknownFieldEventPartyMember;
             if (source_id != owner.binding.party[index]) return error.FieldEventPartyMismatch;

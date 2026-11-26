@@ -11,7 +11,7 @@ pub const Snapshot = struct {
     y: i32,
     facing: field.Direction,
     money: u32,
-    party: []field.game_state.Member,
+    party: field.game_state.Party,
     story: ?field.game_state.Story = null,
 
     const Wire = struct {
@@ -28,7 +28,7 @@ pub const Snapshot = struct {
     pub fn jsonStringify(self: Snapshot, writer: *std.json.Stringify) !void {
         var party: [6]field.game_state.CharacterRecord = undefined;
         if (self.party.len > party.len) return error.WriteFailed;
-        for (self.party, 0..) |member, i| party[i] = member.record();
+        for (self.party.items(), 0..) |member, i| party[i] = member.record();
         try writer.write(Wire{
             .schema = self.schema,
             .room = self.room,
@@ -43,6 +43,7 @@ pub const Snapshot = struct {
 
     pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !Snapshot {
         const wire = try std.json.innerParse(Wire, allocator, source, options);
+        if (wire.party.len > field.game_state.Party.capacity) return error.LengthMismatch;
         const party = try allocator.alloc(field.game_state.Member, wire.party.len);
         for (party, wire.party) |*member, record| member.* = record.character();
         return .{
@@ -52,7 +53,7 @@ pub const Snapshot = struct {
             .y = wire.y,
             .facing = wire.facing,
             .money = wire.money,
-            .party = party,
+            .party = .init(party),
             .story = wire.story,
         };
     }
@@ -64,7 +65,7 @@ pub const Snapshot = struct {
             if (self.story == null) return error.MissingStoryState;
         } else return error.UnsupportedSaveVersion;
         if (!std.mem.eql(u8, self.schema, "suikoden-save/3")) {
-            for (self.party) |member| if (member.inventory.count() != 0) return error.InvalidLegacySave;
+            for (self.party.items()) |member| if (member.inventory.count() != 0) return error.InvalidLegacySave;
         }
         const room = package.roomIndex(self.room) orelse return error.UnknownSaveRoom;
         if (!package.rooms[room].canStand(self.x, self.y)) return error.InvalidSavePosition;

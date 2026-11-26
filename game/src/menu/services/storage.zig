@@ -20,7 +20,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
         },
         .storage_items => {
             nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
-            const count = if (state.storage_withdraw) game.progress.storage.count() else game.progress.party[state.member].inventory.count();
+            const count = if (state.storage_withdraw) game.progress.storage.count() else game.progress.party.at(state.member).inventory.count();
             if (count == 0) {
                 state.slot = 0;
                 return;
@@ -28,7 +28,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
             state.slot = @min(state.slot, count - 1);
             nav.cycleUpDown(&state.slot, count, input.field.menu_direction);
             if (input.field.action) {
-                state.storage_id = if (state.storage_withdraw) game.progress.storage.itemAt(state.slot) else game.progress.party[state.member].inventory.slots[state.slot].?.id;
+                state.storage_id = if (state.storage_withdraw) game.progress.storage.itemAt(state.slot) else game.progress.party.at(state.member).inventory.slots[state.slot].?.id;
                 state.phase = .confirm_storage;
                 state.yes = false;
             }
@@ -40,7 +40,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
                     state.phase = .storage_items;
                 } else {
                     const result = if (state.storage_withdraw)
-                        game.progress.storage.withdraw(&game.progress.party[state.member].inventory, state.storage_id.?)
+                        game.progress.storage.withdraw(&game.progress.party.at(state.member).inventory, state.storage_id.?)
                     else
                         state.combat.?.depositToStorage(&game.progress.storage, state.member, state.slot);
                     if (result) |_| {

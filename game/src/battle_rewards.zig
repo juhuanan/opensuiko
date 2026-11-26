@@ -11,7 +11,7 @@ pub fn commitRewards(state: *State) void {
     if (state.rewards_committed) return;
     state.rewards_committed = true;
     state.reward_levels = @splat(1);
-    for (state.progress.party, 0..) |member, i| state.reward_levels[i] = member.level;
+    for (state.progress.party.items(), 0..) |member, i| state.reward_levels[i] = member.level;
     if (state.content.encounters[state.encounter].reward_policy == .none) return;
     state.reward_money = 0;
     for (0..state.enemyCount()) |index| state.reward_money +|= state.enemy(index).money;
@@ -25,7 +25,7 @@ pub fn commitRewards(state: *State) void {
         if (!state.participates(index)) continue;
         const award = experienceAward(state, index);
         state.award_exp[index] = award;
-        state.progress.party[index].experience +|= award;
+        state.progress.party.at(index).experience +|= award;
         if (state.content.systems != null) state.applyExperience(index);
     }
     for (0..state.enemyCount()) |i| {
@@ -39,7 +39,7 @@ pub fn commitRewards(state: *State) void {
     }
     if (state.dropped_item != null or state.reward_drop) {
         if (state.dropped_item == null) state.dropped_item = .{ .id = .medicine, .uses = state.rules.medicine.uses };
-        for (state.progress.party, 0..) |*member, recipient| {
+        for (state.progress.party.items(), 0..) |member, recipient| {
             const count = member.inventory.count();
             if (count == 9) continue;
             member.inventory.slots[count] = state.dropped_item.?;
@@ -56,7 +56,7 @@ pub fn experienceAward(state: *const State, index: usize) u32 {
     if (!state.participates(index)) return 0;
     var award: u32 = 0;
     for (0..state.enemyCount()) |enemy_index| {
-        const difference = std.math.clamp(@as(i32, state.enemy(enemy_index).level) - state.progress.party[index].level, -14, 15);
+        const difference = std.math.clamp(@as(i32, state.enemy(enemy_index).level) - state.progress.party.at(index).level, -14, 15);
         award +|= rules.experience[@intCast(difference + 14)];
     }
     return @max(5, award / @as(u32, @intCast(state.partyCount()))) * @as(u32, if (state.hasRune(index, "fortune")) 2 else 1);

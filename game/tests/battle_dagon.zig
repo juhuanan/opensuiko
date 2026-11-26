@@ -184,7 +184,7 @@ test "Dagon actor special preserves half damage poison spin return and primary-c
         }
         if (mode == 1) state.actions[target] = .defend;
         if (mode == 2) state.actor_conditions[target].protection_rounds = 2;
-        if (mode == 3) state.progress.party[target].rune = data.systems.?.runeIndex("turtle").?;
+        if (mode == 3) state.progress.party.at(target).rune = data.systems.?.runeIndex("turtle").?;
         if (mode == 5) {
             members[target].hp = 1;
             members[target].inventory.slots = @splat(null);

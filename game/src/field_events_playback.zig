@@ -13,7 +13,7 @@ const ItemGrant = struct { member: usize, inventory: field.items.Inventory };
 fn prepareChestItem(state: field.State, command: runtime.Command) !?ItemGrant {
     const name = command.item_name orelse return error.UnknownFieldEventItem;
     const item_id = std.meta.stringToEnum(field.items.Id, name) orelse return error.UnknownFieldEventItem;
-    for (state.progress.party, 0..) |member, index| {
+    for (state.progress.party.items(), 0..) |member, index| {
         var inventory = member.inventory;
         if (try inventory.receive(item_id)) return .{ .member = index, .inventory = inventory };
     }
@@ -116,7 +116,7 @@ pub noinline fn pump(self: *Session, binding: Binding, state: *field.State, stor
             if (!staged.inn_payment_refused) staged_state.rest_ticks = 60;
         }
         if (chest_failed_target) |target| try staged.instance.?.redirect(binding.content, batch.slice()[0].origin, target);
-        if (item_grant) |grant| staged_state.progress.party[grant.member].inventory = grant.inventory;
+        if (item_grant) |grant| staged_state.progress.party.at(grant.member).inventory = grant.inventory;
         self.* = staged;
         state.commitProgress(staged_state);
         story.* = staged_story;

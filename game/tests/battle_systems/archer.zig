@@ -35,7 +35,7 @@ test "source archer shots overlap without losing target locks or damage" {
     combat.startEncounter();
     try combat.attachUniteActors(&actors.value);
     try combat.attachSpellScenes(&spells.value);
-    for (combat.progress.party) |*member| {
+    for (combat.progress.party.items()) |member| {
         member.max_hp = 5000;
         member.hp = 5000;
         member.inventory.slots = @splat(null);
@@ -123,7 +123,7 @@ test "mixed C formations complete queued archer melee and magic rounds" {
         combat.integration = .{ .host = rules_host };
         try combat.attachUniteActors(&actors.value);
         try combat.attachSpellScenes(&spells.value);
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| {
             member.max_hp = 5000;
             member.hp = 5000;
             member.inventory.slots = @splat(null);
@@ -187,14 +187,14 @@ test "source archer knockout and Buddha retain reaction ownership through the ne
         combat.integration = .{ .host = rules_host };
         try combat.attachUniteActors(&actors.value);
         try combat.attachSpellScenes(&spells.value);
-        for (combat.progress.party) |*member| member.rune = null;
-        for (combat.progress.party, 0..) |*member, index| {
+        for (combat.progress.party.items()) |member| member.rune = null;
+        for (combat.progress.party.items(), 0..) |member, index| {
             member.max_hp = 100;
             member.hp = if (index == 1) 50 else 100;
             member.inventory.slots = @splat(null);
-            combat.progress.party[index].base_stats.defense = 40;
-            combat.progress.party[index].base_stats.skill = 0;
-            combat.progress.party[index].loadout = .{};
+            combat.progress.party.at(index).base_stats.defense = 40;
+            combat.progress.party.at(index).base_stats.skill = 0;
+            combat.progress.party.at(index).loadout = .{};
         }
         if (buddha) members[1].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
         combat.phase = .resolving;
@@ -305,11 +305,11 @@ test "source and legacy archer rounds retain sleep and suppress protected HP los
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
+        for (combat.progress.party.items()) |member| member.rune = null;
         const owner = combat.partyCount();
         combat.acted[owner] = false;
         combat.coordinator = .{ .stage = .dispatch, .current_actor = owner, .cached = .{ .actor = owner } };
-        for (combat.progress.party, 0..) |*member, index| {
+        for (combat.progress.party.items(), 0..) |member, index| {
             member.max_hp = 1000;
             member.hp = if (index != target and (modern or index < 3)) 0 else 1000;
             member.status = if (member.hp == 0) .unconscious else if (index == target and mode == 2) .poisoned else .healthy;

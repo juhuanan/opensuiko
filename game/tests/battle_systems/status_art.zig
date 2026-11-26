@@ -8,7 +8,7 @@ fn load() !std.json.Parsed(battle.spell_scene.Packet) {
 }
 
 fn allStatuses(state: *battle.State) void {
-    for (state.progress.party, 0..) |*member, index| {
+    for (state.progress.party.items(), 0..) |member, index| {
         member.status = .poisoned;
         member.balloons = 3;
         state.actor_conditions[index].sleep_turns = 1;
@@ -145,8 +145,8 @@ test "Status art keeps independent acquisition phases and removes cured or depar
     try std.testing.expect(!combat.inflictStatus(1, .sleep));
     try std.testing.expectEqualDeep(started, combat.status_icons[1]);
     try std.testing.expectEqual(@as(usize, 2), combat.spellSceneFrame().count);
-    combat.progress.party[0].rune = combat.content.systems.?.runeIndex("water");
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = combat.content.systems.?.runeIndex("water");
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
     const spell = for (combat.content.systems.?.spells, 0..) |entry, index| {
         if (std.mem.eql(u8, entry.name, "Drops of Kindness")) break index;
     } else unreachable;
@@ -191,8 +191,8 @@ test "Balloon departure uses source motion and keeps symbols attached in both vi
         try std.testing.expectEqual(@as(usize, 0), draws.cursor);
         combat.beginDeparture(0);
         try std.testing.expectEqual(start, combat.departures[0].?.started_at);
-        combat.progress.party[1].hp = 0;
-        combat.progress.party[1].status = .unconscious;
+        combat.progress.party.at(1).hp = 0;
+        combat.progress.party.at(1).status = .unconscious;
         combat.beginDeparture(1);
         try std.testing.expect(!combat.departed[1] and combat.departures[1] == null);
         combat.markPartyKnockout(1);
@@ -200,8 +200,8 @@ test "Balloon departure uses source motion and keeps symbols attached in both vi
         try std.testing.expect(combat.party_knockouts[1].pending and !combat.departed[1] and combat.departures[1] == null);
         combat.party_knockouts[1].pending = false;
         combat.party_knockouts[1].prior_status = null;
-        combat.progress.party[1].hp = 1;
-        combat.progress.party[1].status = .healthy;
+        combat.progress.party.at(1).hp = 1;
+        combat.progress.party.at(1).status = .healthy;
         combat.party_knockouts[1].revival = .{ .started_at = start, .origin = battle.layout.worldPosition(&combat, 1), .original_status = .healthy };
         combat.beginDeparture(1);
         try std.testing.expect(combat.party_knockouts[1].revival != null and !combat.departed[1] and combat.departures[1] == null);
@@ -223,7 +223,7 @@ test "Balloon departure uses source motion and keeps symbols attached in both vi
             const frame = combat.spellSceneFrame();
             try std.testing.expectEqual(@as(usize, 3), frame.count);
             const body_layout = battle.layout.actorLayout(combat, 0);
-            const anchor = parsed.value.statusAnchors(combat.progress.party[0].id).?.offsets[body_layout.source_pose.?];
+            const anchor = parsed.value.statusAnchors(combat.progress.party.at(0).id).?.offsets[body_layout.source_pose.?];
             const entry = parsed.value.entries[frame.commands[0].texture.?];
             const scale: i32 = @intFromFloat(body_layout.scale * 2048);
             try std.testing.expectEqual(body_layout.point.x / 2 + @as(f32, @floatFromInt(@divTrunc(@as(i32, anchor[0]) * scale, 4096) + ((entry.dx * scale) >> 12))), frame.commands[0].vertices[0].x);
@@ -290,14 +290,14 @@ test "Status art attaches to the current source body pose and scale in both worl
         combat.phase = .command;
         for (0..6) |actor| {
             combat.actor_transforms[actor].scale_q12 = size;
-            combat.progress.party[actor].hp = combat.progress.party[actor].max_hp / 8;
+            combat.progress.party.at(actor).hp = combat.progress.party.at(actor).max_hp / 8;
             try std.testing.expect(combat.inflictStatus(actor, .sleep));
         }
         const scene = combat.spellSceneFrame();
         try std.testing.expectEqual(@as(usize, 6), scene.count);
         for (0..6) |actor| {
             const layout = battle.layout.actorLayout(combat, actor);
-            const anchors = parsed.value.statusAnchors(combat.progress.party[actor].id).?;
+            const anchors = parsed.value.statusAnchors(combat.progress.party.at(actor).id).?;
             const source_pose = battle.world_art.actorSample(battle.layout.sceneArt(combat), &combat, actor).sample.pose;
             try std.testing.expectEqual(@as(?u16, source_pose), layout.source_pose);
             const offset = anchors.offsets[source_pose];
@@ -367,14 +367,14 @@ test "Status art keeps idle attachments throughout Shining Wind support reaction
         combat.integration = .{ .host = host };
         try combat.attachSpellScenes(&parsed.value);
         if (with_world) combat.content.world_art = world.value;
-        combat.progress.party[0].rune = found: {
+        combat.progress.party.at(0).rune = found: {
             for (combat.content.systems.?.runes, 0..) |rune, index| for (rune.spells) |slot| {
                 if (slot != null and slot.? == spell_index) break :found index;
             };
             unreachable;
         };
-        combat.progress.party[0].rune_charges = @splat(9);
-        combat.progress.party[1].hp /= 2;
+        combat.progress.party.at(0).rune_charges = @splat(9);
+        combat.progress.party.at(1).hp /= 2;
         try std.testing.expect(combat.inflictStatus(1, .poison));
         combat.actions = @splat(.defend);
         combat.actions[0] = .{ .spell = .{ .index = spell_index, .target = 0 } };
@@ -389,7 +389,7 @@ test "Status art keeps idle attachments throughout Shining Wind support reaction
         const response = combat.spellReaction(1).?;
         try std.testing.expectEqual(@as(u8, 0), response.animation);
         try std.testing.expect(response.entry != null);
-        const anchors = parsed.value.statusAnchors(combat.progress.party[1].id).?;
+        const anchors = parsed.value.statusAnchors(combat.progress.party.at(1).id).?;
         try std.testing.expectEqual(@as(?u16, anchors.idle_pose), battle.layout.actorLayout(combat, 1).source_pose);
         try std.testing.expect(combat.hasStatusIconsFor(1));
         const frame = combat.spellSceneFrame();

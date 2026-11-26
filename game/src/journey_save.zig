@@ -104,7 +104,7 @@ pub const Snapshot = struct {
         const combat = state.combat;
         if (state.boat_travel) |boat| try boat.validate((state.boat_data orelse return error.MissingBoatOwner).*, state.package.rooms[world.room].id, world.x, world.y, world.facing, combat.progress.story.scenario orelse return error.MissingSourceStoryState);
         const count: u8 = @intCast(combat.partyCount());
-        var snapshot: Snapshot = .{ .schema = std.fmt.comptimePrint("{s}{d}", .{ save_prefix, current_save_version }), .spell_scene_hash = if (combat.spell_scenes) |packet| try packet.digest() else null, .unite_actor_hash = if (combat.unite_actors) |packet| try packet.digest() else null, .party_count = count, .party = @splat(combat.progress.party[0].record()), .extras = state.extras, .reserves = @as(ReserveRecords, @splat(null)), .reserve_extras = state.reserve_extras, .storage = combat.progress.storage, .save_name = state.save_name, .elapsed_ticks = state.elapsed_ticks, .room = state.package.rooms[world.room].id, .x = world.x, .y = world.y, .facing = world.facing, .field_music = world.music, .money = combat.progress.money, .story = combat.progress.story, .levels = @splat(1), .experience = @splat(0), .stats = @splat(.{ .attack = 0, .defense = 0, .skill = 0, .speed = 0 }), .formation = combat.formation, .weapon_levels = @as([6]u8, @splat(1)), .equipment = combat.headEquipment(), .loadouts = @as([6]battle.systems.Loadout, @splat(.{})), .runes = @splat(null), .random = combat.random, .opening_event = state.opening_event, .route = state.route.checkpoint(), .campaign = state.campaign, .hq = state.hq, .world_battle_enabled = state.world_battle_enabled, .world_battle_ticks = state.world_battle_ticks, .world_battle_started = state.world_battle_started };
+        var snapshot: Snapshot = .{ .schema = std.fmt.comptimePrint("{s}{d}", .{ save_prefix, current_save_version }), .spell_scene_hash = if (combat.spell_scenes) |packet| try packet.digest() else null, .unite_actor_hash = if (combat.unite_actors) |packet| try packet.digest() else null, .party_count = count, .party = @splat(combat.progress.party.at(0).record()), .extras = @splat(.{ .member_id = "" }), .reserves = @as(ReserveRecords, @splat(null)), .reserve_extras = @as([72]?party_session.CharacterExtra, @splat(null)), .storage = combat.progress.storage, .save_name = state.save_name, .elapsed_ticks = state.elapsed_ticks, .room = state.package.rooms[world.room].id, .x = world.x, .y = world.y, .facing = world.facing, .field_music = world.music, .money = combat.progress.money, .story = combat.progress.story, .levels = @splat(1), .experience = @splat(0), .stats = @splat(.{ .attack = 0, .defense = 0, .skill = 0, .speed = 0 }), .formation = combat.formationOrder(), .weapon_levels = @as([6]u8, @splat(1)), .equipment = combat.headEquipment(), .loadouts = @as([6]battle.systems.Loadout, @splat(.{})), .runes = @splat(null), .random = combat.random, .opening_event = state.opening_event, .route = state.route.checkpoint(), .campaign = state.campaign, .hq = state.hq, .world_battle_enabled = state.world_battle_enabled, .world_battle_ticks = state.world_battle_ticks, .world_battle_started = state.world_battle_started };
         snapshot.auxiliary_party = world.auxiliary_party;
         const records = state.optional_games;
         if (records.cup_profit != 0 or !std.mem.allEqual(u32, &records.card_records, 0)) snapshot.optional_games = .{
@@ -141,8 +141,9 @@ pub const Snapshot = struct {
             snapshot.shared_items = state.shared_items;
             break;
         };
-        for (combat.progress.party, 0..) |member, i| {
+        for (combat.progress.party.items(), 0..) |member, i| {
             snapshot.party[i] = member.record();
+            snapshot.extras[i] = state.activeExtra(i);
             snapshot.levels[i] = member.level;
             snapshot.experience[i] = member.experience;
             snapshot.stats[i] = member.base_stats;
@@ -150,8 +151,11 @@ pub const Snapshot = struct {
             snapshot.loadouts.?[i] = member.loadout;
             snapshot.runes[i] = member.rune;
         }
-        for (state.reserves, 0..) |entry, i| {
-            if (entry) |member| snapshot.reserves.?[i] = .fromCharacter(member);
+        for (state.reserve_slots, 0..) |entry, i| {
+            if (entry) |slot| {
+                snapshot.reserves.?[i] = .fromCharacter(combat.progress.party.backing()[slot]);
+                snapshot.reserve_extras.?[i] = state.roster_extras[slot];
+            }
         }
         return snapshot;
     }
@@ -275,7 +279,7 @@ pub const Snapshot = struct {
         }
         try roster.validate(
             state.combat.content.characterRules(),
-            .{ .money = self.money, .party = active, .story = self.story, .storage = self.storage orelse .{} },
+            .{ .money = self.money, .party = .init(active), .story = self.story, .storage = self.storage orelse .{} },
             self.formation,
             self.extras,
             &reserves,
@@ -313,32 +317,27 @@ pub const Snapshot = struct {
             break :blk try actors.rebind(binding.ordinary.?, binding.animations);
         } else null;
         const shared = if (self.shared_items) |slots| try state.bindSharedItems(slots) else @as(SharedItems, @splat(null));
-        const backing = state.party_backing orelse state.combat.progress.party;
-        if (self.party_count > backing.len) return error.InvalidParty;
+        const backing = state.party_backing orelse state.combat.progress.party.backing();
+        const reserves = self.reserves orelse @as(ReserveRecords, @splat(null));
+        var reserve_count: usize = 0;
+        for (reserves) |entry| {
+            if (entry == null) break;
+            reserve_count += 1;
+        }
+        if (self.party_count + reserve_count > backing.len) return error.InvalidParty;
         var restored_party: [6]battle.OwnedMember = undefined;
         const active = restored_party[0..self.party_count];
         for (active, 0..) |*member, i| member.* = try self.ownedMember(i, state.combat.content);
-        state.combat.progress.party = backing[0..self.party_count];
-        for (active, 0..) |member, i| {
-            state.combat.setOwnedMember(i, member);
+        state.combat.progress.party = .selectInitial(backing, self.party_count);
+        state.reserve_slots = @splat(null);
+        for (active, 0..) |member, i| roster.putMember(state, @intCast(i), member, self.extras[i]);
+        const extras = self.reserve_extras orelse @as([72]?party_session.CharacterExtra, @splat(null));
+        for (reserves, extras, 0..) |entry, extra, i| {
+            const member = entry orelse break;
+            const slot: battle.Party.Slot = @intCast(self.party_count + i);
+            roster.putMember(state, slot, member.character(), extra orelse .{ .member_id = "" });
+            state.reserve_slots[i] = slot;
         }
-        state.extras = self.extras;
-        for (&state.reserves, self.reserves orelse @as(ReserveRecords, @splat(null))) |*slot, record| {
-            slot.* = if (record) |member| member.character() else null;
-        }
-        state.reserve_extras = self.reserve_extras orelse @splat(null);
-        for (state.extras[0..self.party_count], 0..) |*extra, i| if (extra.member_id.len != 0) {
-            extra.member_id = state.combat.progress.party[i].id;
-        };
-        for (state.extras[0..self.party_count], 0..) |extra, i| state.combat.progress.party[i].weapon_augment = party_session.weaponAugment(extra);
-        for (&state.reserves, 0..) |*entry, i| if (entry.*) |owned| {
-            const profile = state.combat.content.partyProfile(owned.id).?;
-            entry.*.?.id = profile.id;
-            entry.*.?.name = profile.name;
-            if (state.reserve_extras[i] == null) state.reserve_extras[i] = .{ .member_id = "" };
-            if (state.reserve_extras[i].?.member_id.len != 0) state.reserve_extras[i].?.member_id = profile.id;
-            entry.*.?.weapon_augment = party_session.weaponAugment(state.reserve_extras[i].?);
-        };
         state.combat.progress.storage = self.storage orelse .{};
         state.optional_games = if (self.optional_games) |records| .{
             .cup_profit = records.cup_profit,
@@ -356,7 +355,7 @@ pub const Snapshot = struct {
         if (state.combat.progress.story.scenario) |*story| story.schema = "suikoden-event-story/1";
         const destination = state.package.roomIndex(self.room).?;
         if (self.riverBoat(state.package.rooms[destination])) state.combat.progress.story.scenario.?.world_mode = 1;
-        state.combat.formation = self.formation;
+        state.combat.setFormation(self.formation);
         state.combat.random = self.random;
         state.route = if (self.route) |checkpoint| try opening_route.Controller.restore(checkpoint) else opening_route.initial(state.package);
         if (state.packagedOpeningRoute() != null) state.updateOpeningPartyMilestone();
@@ -573,7 +572,7 @@ fn readSnapshot(io: std.Io, allocator: std.mem.Allocator, directory: std.Io.Dir,
     defer allocator.free(bytes);
     const parsed = try decodeSnapshotHeap(allocator, bytes, state);
     errdefer parsed.deinit();
-    const backing = state.party_backing orelse state.combat.progress.party;
+    const backing = state.party_backing orelse state.combat.progress.party.backing();
     if (parsed.value.party_count > backing.len) return error.InvalidParty;
     return parsed;
 }

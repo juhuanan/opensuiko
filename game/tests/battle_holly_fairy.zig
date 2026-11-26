@@ -66,7 +66,7 @@ test "Holly Fairy actor source admission completes healthy protected and Turtle 
                 state.actor_conditions[actor].protection_rounds = 2;
             };
             if (mode == 2) for (0..state.partyCount()) |actor| {
-                state.progress.party[actor].rune = data.systems.?.runeIndex("turtle").?;
+                state.progress.party.at(actor).rune = data.systems.?.runeIndex("turtle").?;
             };
             const values: [2048]u15 = @splat(51);
             var draws = battle.systems.Draws{ .values = &values };
@@ -188,11 +188,11 @@ test "Holly Fairy actor source rewards collect and serialize its named unapprais
     try std.testing.expect(!state.dropped_item.?.id.decoration());
     try std.testing.expect(items.value.good(.nameless_urn) == null);
     const owner = state.loot_recipient.?;
-    try state.progress.party[owner].inventory.validate();
-    const bytes = try std.json.Stringify.valueAlloc(alloc, state.progress.party[owner].inventory, .{});
+    try state.progress.party.at(owner).inventory.validate();
+    const bytes = try std.json.Stringify.valueAlloc(alloc, state.progress.party.at(owner).inventory, .{});
     const decoded = try std.json.parseFromSlice(field.items.Inventory, alloc, bytes, .{});
     try decoded.value.validate();
-    try std.testing.expectEqualDeep(state.progress.party[owner].inventory, decoded.value);
+    try std.testing.expectEqualDeep(state.progress.party.at(owner).inventory, decoded.value);
 }
 
 test "Holly Fairy actor source wave delegates front Holly allies with their own balloon recipients" {
@@ -564,7 +564,7 @@ test "Holly Fairy live idle checkpoints resume through signed residue and restar
         for (0..at) |_| try state.tickReplay(.{}, &draws);
         var restored = state;
         var restored_members = members;
-        restored.progress.party = &restored_members;
+        restored.progress.party = .init(&restored_members);
         const bytes = try std.json.Stringify.valueAlloc(alloc, state.unite_vm, .{});
         restored.unite_vm = (try std.json.parseFromSlice(battle.unite_playback.State, alloc, bytes, .{})).value;
         try restored.unite_vm.rebind(&replacement);

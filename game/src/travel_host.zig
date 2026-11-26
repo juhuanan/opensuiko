@@ -180,7 +180,7 @@ pub const Host = struct {
         store.money = state.combat.progress.money;
         const party = state.combat.progress.party;
         store.party.count = @intCast(party.len);
-        for (party, 0..) |member, index| {
+        for (party.items(), 0..) |member, index| {
             store.party.members[index] = .{
                 .id = try results.Id.init(member.id),
                 .hp = member.hp,
@@ -190,7 +190,7 @@ pub const Host = struct {
                     .poisoned => .poisoned,
                     .unconscious => .unconscious,
                 },
-                .level = @max(state.combat.progress.party[index].level, 1),
+                .level = @max(state.combat.progress.party.at(index).level, 1),
                 .weapon_level = 1,
             };
         }

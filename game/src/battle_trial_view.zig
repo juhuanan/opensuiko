@@ -73,12 +73,12 @@ pub fn draftActionText(state: battle.State, buffer: *[256]u8) []const u8 {
         .rune_target => actionText(state, state.actor, .{ .rune_attack = state.selection }, buffer),
         .unite_target => actionText(state, state.actor, .{ .unite = state.selection }, buffer),
         .item => blk: {
-            const selected = state.progress.party[state.actor].inventory.slots[state.selection].?;
+            const selected = state.progress.party.at(state.actor).inventory.slots[state.selection].?;
             if (selected.id == .dragon_seal_incense) break :blk "Dragon seal incense - reusable, all allies";
             if (selected.id == .sacrificial_buddha) break :blk "Sacrificial Buddha - automatic revival";
             break :blk std.fmt.bufPrint(buffer, "{s} - {d} uses", .{ selected.name(), selected.uses }) catch unreachable;
         },
-        .item_target => actionText(state, state.actor, .{ .item = .{ .slot = state.item_slot, .target = state.selection, .id = state.progress.party[state.actor].inventory.slots[state.item_slot].?.id } }, buffer),
+        .item_target => actionText(state, state.actor, .{ .item = .{ .slot = state.item_slot, .target = state.selection, .id = state.progress.party.at(state.actor).inventory.slots[state.item_slot].?.id } }, buffer),
         .spell => state.rune(state.actor).?.spell_names[state.selection],
         .spell_target => actionText(state, state.actor, .{ .spell = .{ .index = state.spell_slot, .target = state.selection } }, buffer),
         else => "",
@@ -271,8 +271,8 @@ fn actor(context: *const ui.Context, state: battle.State, atlas: rl.Texture2D, e
     const source_status = state.hasStatusIconsFor(index);
     if (!source_status and index < state.partyCount() and state.unbalanced[index] > 0 and state.hp(index) > 0) context.text("RECOVERING", @intFromFloat(point.x - 26), @intFromFloat(point.y - 65), 12, .gold);
     if (!source_status and state.actor_conditions[index].sleep_turns > 0 and state.hp(index) > 0) context.text("Zzz", @intFromFloat(point.x), @intFromFloat(point.y - 65), 16, .sky_blue);
-    if (!source_status and index < state.partyCount() and state.progress.party[index].balloons > 0) context.numberText("BALLOON {d}", .{state.progress.party[index].balloons}, @intFromFloat(point.x - 30), @intFromFloat(point.y - 80), 12, .gold);
-    if (!source_status and index < state.partyCount() and state.progress.party[index].status == .poisoned) context.text("POISON", @intFromFloat(point.x - 20), @intFromFloat(point.y - 65), 12, .violet);
+    if (!source_status and index < state.partyCount() and state.progress.party.at(index).balloons > 0) context.numberText("BALLOON {d}", .{state.progress.party.at(index).balloons}, @intFromFloat(point.x - 30), @intFromFloat(point.y - 80), 12, .gold);
+    if (!source_status and index < state.partyCount() and state.progress.party.at(index).status == .poisoned) context.text("POISON", @intFromFloat(point.x - 20), @intFromFloat(point.y - 65), 12, .violet);
     if (state.actor_conditions[index].protection_rounds > 0) context.text("PROTECT", @intFromFloat(point.x - 24), @intFromFloat(point.y - 104), 12, .sky_blue);
     if (!source_status and state.actor_conditions[index].accuracy_reduced) context.text("ACCURACY DOWN", @intFromFloat(point.x - 38), @intFromFloat(point.y - 92), 10, .gold);
     if (!source_status and state.actor_conditions[index].rune_blocked) context.text("RUNE BLOCKED", @intFromFloat(point.x - 36), @intFromFloat(point.y - 80), 10, .violet);
@@ -567,7 +567,7 @@ pub fn draw(context: *const ui.Context, state: battle.State, atlas: rl.Texture2D
     context.numberText("{d} bits", .{state.progress.money}, 540, 14, 12, .gold);
     if (state.phase != .resolving) {
         context.window(8, 330, 300, 142);
-        for (state.progress.party, 0..) |member, index| {
+        for (state.progress.party.items(), 0..) |member, index| {
             const row_y: i32 = 337 + @as(i32, @intCast(index)) * 21;
             const active = choosingMember(state) == index;
             const color: rl.Color = if (active) .sky_blue else if (state.participates(index)) .ray_white else .gray;
@@ -604,7 +604,7 @@ pub fn draw(context: *const ui.Context, state: battle.State, atlas: rl.Texture2D
         },
         .item => {
             context.text("Item", command_x, 339, 15, .gold);
-            for (state.progress.party[state.actor].inventory.slots, 0..) |slot, index| {
+            for (state.progress.party.at(state.actor).inventory.slots, 0..) |slot, index| {
                 const item = slot orelse break;
                 const color: rl.Color = if (!state.canSelectItem(state.actor, index)) .gray else if (index == state.selection) .gold else .ray_white;
                 const cursor = if (index == state.selection) "> " else "  ";
@@ -612,13 +612,13 @@ pub fn draw(context: *const ui.Context, state: battle.State, atlas: rl.Texture2D
                 if (item.id == .sacrificial_buddha) context.numberText("{s}{s}: automatic", .{ cursor, item.name() }, command_x, y, 11, color) else if (item.id == .dragon_seal_incense) context.numberText("{s}{s}: reusable", .{ cursor, item.name() }, command_x, y, 11, color) else context.numberText("{s}{s}: {d}", .{ cursor, item.name(), item.uses }, command_x, y, 11, color);
             }
         },
-        .item_target => drawTargetList(context, &state, state.progress.party[state.actor].inventory.slots[state.item_slot].?.name()),
+        .item_target => drawTargetList(context, &state, state.progress.party.at(state.actor).inventory.slots[state.item_slot].?.name()),
         .spell => {
             const owned = state.rune(state.actor).?;
             context.numberText("{s}  MGC {d}", .{ owned.name, state.stats(state.actor).magic }, command_x, 339, 15, .gold);
             for (owned.spell_names, owned.spells, 0..) |name, slot, i| {
                 const color: rl.Color = if (slot == null or !state.canSelectSpell(slot.?)) .gray else if (state.selection == i) .gold else .ray_white;
-                context.numberText("{s}T{d} {s}  {d}/{d}", .{ if (state.selection == i) "> " else "  ", i + 1, name, state.progress.party[state.actor].rune_charges[i], state.progress.party[state.actor].max_rune_charges[i] }, command_x, 362 + @as(i32, @intCast(i)) * 20, 13, color);
+                context.numberText("{s}T{d} {s}  {d}/{d}", .{ if (state.selection == i) "> " else "  ", i + 1, name, state.progress.party.at(state.actor).rune_charges[i], state.progress.party.at(state.actor).max_rune_charges[i] }, command_x, 362 + @as(i32, @intCast(i)) * 20, 13, color);
             }
             if (owned.spells[state.selection]) |spell| {
                 if (!state.canCast(state.actor, spell)) context.text("Spell unavailable.", command_x, 447, 12, .light_gray) else if (!state.canSelectSpell(spell)) context.text("No valid target.", command_x, 447, 12, .light_gray);
@@ -700,10 +700,10 @@ pub fn draw(context: *const ui.Context, state: battle.State, atlas: rl.Texture2D
             context.numberText("Found {s}", .{state.dropped_item.?.name()}, 94, 76, 23, .gold);
             if (state.phase == .loot) {
                 context.text("Choose a recipient or press X to leave it.", 94, 116, 17, .ray_white);
-                for (state.progress.party, 0..) |member, i| context.numberText("{s}{s}  {d}/9 items", .{ if (state.selection == i) "> " else "  ", member.name, member.inventory.count() }, 94, 147 + @as(i32, @intCast(i)) * 25, 18, .ray_white);
+                for (state.progress.party.items(), 0..) |member, i| context.numberText("{s}{s}  {d}/9 items", .{ if (state.selection == i) "> " else "  ", member.name, member.inventory.count() }, 94, 147 + @as(i32, @intCast(i)) * 25, 18, .ray_white);
             } else if (state.phase == .loot_replace) {
                 context.numberText("{s}'s bag is full. Choose an item to replace.", .{state.name(state.actor)}, 94, 111, 16, .ray_white);
-                for (state.progress.party[state.actor].inventory.slots, 0..) |slot, i| context.numberText("{s}{s}{s}", .{ if (state.selection == i) "> " else "  ", slot.?.name(), if (state.itemEquipped(state.actor, i)) " [worn]" else "" }, 94, 139 + @as(i32, @intCast(i)) * 20, 17, if (state.itemEquipped(state.actor, i)) .gray else .ray_white);
+                for (state.progress.party.at(state.actor).inventory.slots, 0..) |slot, i| context.numberText("{s}{s}{s}", .{ if (state.selection == i) "> " else "  ", slot.?.name(), if (state.itemEquipped(state.actor, i)) " [worn]" else "" }, 94, 139 + @as(i32, @intCast(i)) * 20, 17, if (state.itemEquipped(state.actor, i)) .gray else .ray_white);
             } else {
                 context.text(if (state.phase == .confirm_leave_loot) "Leave this reward behind?" else "Discard the selected item and take this reward?", 94, 140, 18, .ray_white);
                 context.text(if (state.yes) "> Yes      No" else "  Yes    > No", 110, 240, 20, .ray_white);
@@ -730,9 +730,9 @@ pub fn draw(context: *const ui.Context, state: battle.State, atlas: rl.Texture2D
                 for (0..state.partyCount()) |i| {
                     const y = 157 + @as(i32, @intCast(i)) * 20;
                     context.text(state.name(i), 94, y, 16, if (!state.participates(i)) .gray else .ray_white);
-                    if (state.reward_levels[i] != state.progress.party[i].level) context.numberText("{d} -> {d}", .{ state.reward_levels[i], state.progress.party[i].level }, 215, y, 16, .gold) else context.numberText("{d}", .{state.progress.party[i].level}, 215, y, 16, .ray_white);
+                    if (state.reward_levels[i] != state.progress.party.at(i).level) context.numberText("{d} -> {d}", .{ state.reward_levels[i], state.progress.party.at(i).level }, 215, y, 16, .gold) else context.numberText("{d}", .{state.progress.party.at(i).level}, 215, y, 16, .ray_white);
                     context.numberText("+{d}{s}", .{ state.award_exp[i], if (state.departed[i]) " (departed)" else if (state.hp(i) == 0) " (KO)" else "" }, 331, y, 16, if (!state.participates(i)) .gray else .green);
-                    if (state.progress.party[i].level == 99) context.text("MAX", 447, y, 16, .gold) else context.numberText("{d}/1000", .{state.progress.party[i].experience}, 447, y, 16, .ray_white);
+                    if (state.progress.party.at(i).level == 99) context.text("MAX", 447, y, 16, .gold) else context.numberText("{d}/1000", .{state.progress.party.at(i).experience}, 447, y, 16, .ray_white);
                 }
                 if (state.dropped_item) |item| context.numberText("{s}: {s}", .{ item.name(), if (state.drop_received) (if (state.loot_recipient) |member| state.name(member) else "added to inventory") else if (state.loot_declined) "left behind" else "choose recipient on Continue" }, 94, 282, 16, if (state.drop_received) .green else .gold);
                 context.text("Z/Enter: continue", 94, 308, 18, .gold);
@@ -740,8 +740,8 @@ pub fn draw(context: *const ui.Context, state: battle.State, atlas: rl.Texture2D
                 context.text("No rewards. Close the window to leave.", 94, 145, 18, .ray_white);
             } else {
                 context.numberText("Balance: {d} bits", .{state.progress.money}, 118, 145, 20, .ray_white);
-                const companion_exp = if (state.partyCount() > 1) state.progress.party[1].experience else 0;
-                context.numberText("Earned EXP: Hero {d} / Gremio {d}", .{ state.progress.party[0].experience, companion_exp }, 118, 185, 17, .ray_white);
+                const companion_exp = if (state.partyCount() > 1) state.progress.party.at(1).experience else 0;
+                context.numberText("Earned EXP: Hero {d} / Gremio {d}", .{ state.progress.party.at(0).experience, companion_exp }, 118, 185, 17, .ray_white);
                 context.text("Z/Enter/R: restart    X/Esc: leave", 118, 264, 18, .gold);
             }
         },

@@ -87,12 +87,12 @@ test "twelve demos finish through the shared resolver across twenty seeds" {
             try equal(.result, session.screen);
             try expect(session.completed[index]);
             if (index == 9) {
-                try equal(@as(u8, 6), session.battle.progress.party[0].level);
+                try equal(@as(u8, 6), session.battle.progress.party.at(0).level);
                 try expect(session.battle.drop_received);
                 for (0..6) |i| {
                     try equal(@as(u32, 100), session.battle.award_exp[i]);
-                    try equal(@as(u32, if (i == 0) 50 else 100), session.battle.progress.party[i].experience);
-                    try equal(@as(u8, if (i == 0) 6 else 5), session.battle.progress.party[i].level);
+                    try equal(@as(u32, if (i == 0) 50 else 100), session.battle.progress.party.at(i).experience);
+                    try equal(@as(u8, if (i == 0) 6 else 5), session.battle.progress.party.at(i).level);
                     try equal(@as(u8, 5), session.battle.reward_levels[i]);
                 }
             }
@@ -179,7 +179,7 @@ test "runes select exact targets, group once, reject full health and revive with
     session.battle.actions = @splat(.defend);
     session.battle.actions[0] = .{ .spell = .{ .index = 2, .target = 0 } };
     session.battle.phase = .resolving;
-    session.battle.progress.party[0].base_stats.speed = 999;
+    session.battle.progress.party.at(0).base_stats.speed = 999;
     try resolve(&session);
     try equal(@as(u16, 5), members[0].rune_charges[0]);
 }
@@ -229,7 +229,7 @@ test "sleep skips actions, physical attacks wake and poison is curable" {
     try equal(@as(u8, 1), session.battle.actor_conditions[6].sleep_turns);
     session.battle.actions = @splat(.defend);
     session.battle.actions[0] = .{ .attack = 0 };
-    session.battle.progress.party[0].base_stats.skill = 999;
+    session.battle.progress.party.at(0).base_stats.skill = 999;
     session.battle.phase = .confirm_round;
     try resolve(&session);
     try equal(@as(u8, 0), session.battle.actor_conditions[6].sleep_turns);
@@ -246,7 +246,7 @@ test "demo checkpoint round trips separately and rejects corrupt state before mu
     members[0].hp = 54;
     session.battle.actor_conditions[3].sleep_turns = 2;
     session.battle.actor_conditions[session.battle.partyCount()].sleep_turns = 4;
-    session.battle.progress.party[0].rune = content.value.systems.?.runeIndex("fire").?;
+    session.battle.progress.party.at(0).rune = content.value.systems.?.runeIndex("fire").?;
     try session.battle.swapFormation(0, 5);
     try session.battle.equip(0, 1);
     var temporary = std.testing.tmpDir(.{});
@@ -308,19 +308,19 @@ test "runes belong to their hero, native Magic thresholds control all four tiers
     session.battle.queue(.{ .spell = .{ .index = 2, .target = 0 } });
     try equal(@as(usize, 0), session.battle.actor);
     try expect(session.battle.actions[0] == null);
-    session.battle.progress.party[0].base_stats.magic = 40;
+    session.battle.progress.party.at(0).base_stats.magic = 40;
     session.battle.refillMagic(0);
     try expect(!session.battle.canCast(0, 1));
-    session.battle.progress.party[0].base_stats.magic = 41;
+    session.battle.progress.party.at(0).base_stats.magic = 41;
     session.battle.refillMagic(0);
     try expect(session.battle.canCast(0, 1));
-    session.battle.progress.party[0].rune = content.value.systems.?.runeIndex("rage").?;
+    session.battle.progress.party.at(0).rune = content.value.systems.?.runeIndex("rage").?;
     try equal(@as(?u2, 0), session.battle.spellTier(0, 1));
-    session.battle.progress.party[0].rune = content.value.systems.?.runeIndex("fire").?;
+    session.battle.progress.party.at(0).rune = content.value.systems.?.runeIndex("fire").?;
     try equal(@as(?u2, 1), session.battle.spellTier(0, 1));
     session.start(4);
     session.suggested();
-    session.battle.progress.party[5].base_stats.speed = 999;
+    session.battle.progress.party.at(5).base_stats.speed = 999;
     session.tick(.{ .confirm = true });
     session.tick(.{});
     try equal(@as(usize, 5), session.battle.active.?.actor);
@@ -383,11 +383,11 @@ test "progression agrees with complete native level-up and EXP award routines" {
     var session = try demo.Session.init(content.value, rules.value, &members);
     for (vectors.value.growth) |row| {
         session.start(0);
-        session.battle.progress.party[row.member].level = row.level;
+        session.battle.progress.party.at(row.member).level = row.level;
         members[row.member].hp -= 20;
         session.battle.levelUp(row.member, row.randoms);
         const stats = session.battle.stats(row.member);
-        try equal(row.new_level, session.battle.progress.party[row.member].level);
+        try equal(row.new_level, session.battle.progress.party.at(row.member).level);
         try equal(row.max_hp, members[row.member].max_hp);
         try equal(row.hp, members[row.member].hp);
         try std.testing.expectEqualSlices(u16, &row.stats, &.{ stats.attack, stats.skill, stats.defense, stats.speed, stats.magic, stats.luck });
@@ -395,7 +395,7 @@ test "progression agrees with complete native level-up and EXP award routines" {
     for (vectors.value.awards) |row| {
         session.start(11);
         session.battle.encounter = row.encounter;
-        for (session.battle.progress.party, row.levels) |*member, level| member.level = level;
+        for (session.battle.progress.party.items(), row.levels) |member, level| member.level = level;
         for (0..6) |i| try equal(row.expected[i], session.battle.experienceAward(i));
     }
 }
@@ -607,8 +607,8 @@ test "battle menu Fight, Run and Let go agree with original decisions and backtr
         encounters[1].enemies = ids[0..row.enemy_levels.len];
         session.battle.content.encounters = &encounters;
         session.battle.content.enemies = enemies[0..row.enemy_levels.len];
-        session.battle.progress.party = members[0..row.party_levels.len];
-        for (session.battle.progress.party[0..row.party_levels.len], row.party_levels) |*member, level| member.level = level;
+        session.battle.progress.party = .init(members[0..row.party_levels.len]);
+        for (session.battle.progress.party.items()[0..row.party_levels.len], row.party_levels) |member, level| member.level = level;
         session.battle.escape_allowed = row.allowed;
         try equal(row.let_go, session.battle.canLetGo());
         try equal(row.success, session.battle.runSucceeds(row.roll));
@@ -619,14 +619,14 @@ test "battle menu Fight, Run and Let go agree with original decisions and backtr
                 try equal(expected, session.battle.runSucceeds(@intCast(roll + 100)));
             }
         }
-        session.battle.progress.party = &members;
+        session.battle.progress.party = .init(&members);
         session.battle.content = content.value;
     }
     var successes: usize = 0;
     var failures: usize = 0;
     for (0..20) |seed| {
         session.start(0);
-        for (session.battle.progress.party) |*member| member.level = 1;
+        for (session.battle.progress.party.items()) |member| member.level = 1;
         session.battle.random = .init(seed);
         var expected_random = session.battle.random;
         const succeeds = expected_random.random().int(u15) % 100 >= 51;
@@ -746,7 +746,7 @@ test "Talisman synchronizes both participants, commits once to its chosen enemy 
         for (&session.battle.actions) |*action| if (action.* == null) {
             action.* = .defend;
         };
-        session.battle.progress.party[initiator].base_stats.speed = 999;
+        session.battle.progress.party.at(initiator).base_stats.speed = 999;
         session.battle.phase = .resolving;
         session.tick(.{});
         const effect = session.battle.active.?;
@@ -775,7 +775,7 @@ test "Talisman synchronizes both participants, commits once to its chosen enemy 
     for ([_]bool{ false, true }) |sleep| {
         session.start(8);
         session.suggested();
-        session.battle.progress.party[1].base_stats.speed = 999;
+        session.battle.progress.party.at(1).base_stats.speed = 999;
         session.tick(.{ .confirm = true });
         session.tick(.{});
         try equal(.unite, session.battle.active.?.kind);
@@ -800,7 +800,7 @@ test "rewards credit every survivor once, record level changes and exclude KO me
     session.start(9);
     members[3].hp = 0;
     members[3].status = .unconscious;
-    for (0..6) |i| session.battle.progress.party[i].experience = 950;
+    for (0..6) |i| session.battle.progress.party.at(i).experience = 950;
     const expected = session.battle.experienceAward(0);
     session.suggested();
     for (0..20) |_| {
@@ -811,9 +811,9 @@ test "rewards credit every survivor once, record level changes and exclude KO me
     try equal(.victory, session.battle.phase);
     for (0..6) |i| {
         try equal(@as(u32, if (i == 3) 0 else expected), session.battle.award_exp[i]);
-        try equal(@as(u8, if (i == 3) 5 else 6), session.battle.progress.party[i].level);
+        try equal(@as(u8, if (i == 3) 5 else 6), session.battle.progress.party.at(i).level);
         try equal(@as(u8, 5), session.battle.reward_levels[i]);
-        try equal(@as(u32, if (i == 3) 950 else 950 + expected - 1000), session.battle.progress.party[i].experience);
+        try equal(@as(u32, if (i == 3) 950 else 950 + expected - 1000), session.battle.progress.party.at(i).experience);
     }
     const levels = characterFields("level", session.battle.progress.party);
     const experience = characterFields("experience", session.battle.progress.party);

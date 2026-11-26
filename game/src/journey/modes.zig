@@ -32,14 +32,15 @@ pub fn startDuelById(state: *journey.State, allocator: std.mem.Allocator, duel_i
     if (state.mode != .field or state.active_duel != null or state.active_war != null or state.active_ending != null) return error.GameBusy;
     const player = blk: {
         const target_id = if (std.mem.eql(u8, duel_id, "pahn_teo")) "pahn" else "hero";
-        for (state.combat.progress.party, 0..) |member, index| {
-            if (std.mem.eql(u8, member.id, target_id)) break :blk duelFighter(member, state.combat.stats(index));
+        for (state.combat.progress.party.items(), 0..) |member, index| {
+            if (std.mem.eql(u8, member.id, target_id)) break :blk duelFighter(member.*, state.combat.stats(index));
         }
-        for (state.reserves, state.reserve_extras) |entry, extra| if (entry) |owned| {
+        for (state.reserve_slots[0..state.reserveCount()]) |slot| {
+            const owned = state.combat.progress.party.backing()[slot.?];
             if (!std.mem.eql(u8, owned.id, target_id)) continue;
-            const augment: battle.systems.WeaponAugment = if (extra) |value| party_session.weaponAugment(value) else .{};
+            const augment = owned.weapon_augment;
             break :blk duelFighter(owned, battle.equippedStats(state.combat.content, owned, augment));
-        };
+        }
         break :blk duel.FighterState{ .maximum_hp = 240, .hp = 240, .attack = 160, .defense = 80 };
     };
     const seed: u32 = @max(@as(u32, 1), @as(u32, @truncate(state.elapsed_ticks +% 1)));

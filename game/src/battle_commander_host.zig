@@ -25,7 +25,7 @@ pub fn beginSourceCommander(self: *State, owner: usize, recipient: ?usize) !void
     if (recipient != null and binding.solo_program == null) return error.InvalidActorBinding;
     if (self.content.presentation_ready) {
         try art.checkProgramArt(self.*, bundle.library(), bundle.animations.find(binding.id).?, if (recipient == null) binding.order_program else binding.solo_program.?, 0, 0, false);
-        if (recipient) |target| try art.checkProgramArt(self.*, bundle.library(), bundle.animations.find(self.progress.party[target].id) orelse return error.MissingActorResource, binding.recipient_program.?, 0, 0, false);
+        if (recipient) |target| try art.checkProgramArt(self.*, bundle.library(), bundle.animations.find(self.progress.party.at(target).id) orelse return error.MissingActorResource, binding.recipient_program.?, 0, 0, false);
     }
     self.unite_vm.auxiliary_capacity = @intCast(19 - self.partyCount() - self.enemyCount());
     self.unite_vm.commander_actions[owner] = .{ .id = binding.id, .owner = @intCast(owner), .recipient = if (recipient) |target| @intCast(target) else null, .start_at = self.camera_ticks +% 1, .recipient_done = recipient == null };
@@ -38,7 +38,7 @@ pub fn beginSourceCommander(self: *State, owner: usize, recipient: ?usize) !void
 }
 fn prepareActor(self: *State, actor: usize, owner: usize, runtime: *host.Runtime) !void {
     const bundle = self.unite_actors.?;
-    const id = if (actor < self.partyCount()) self.progress.party[actor].id else self.enemy(actor - self.partyCount()).id;
+    const id = if (actor < self.partyCount()) self.progress.party.at(actor).id else self.enemy(actor - self.partyCount()).id;
     const resource = for (bundle.animations.resources, 0..) |value, index| {
         if (std.mem.eql(u8, value.id, id)) break index;
     } else return error.MissingActorResource;
@@ -64,7 +64,7 @@ pub fn advanceCommander(self: *State, owner: usize, runtime: *host.Runtime) !voi
     playback.ordered_at = self.camera_ticks;
     for (self.partyCount()..self.partyCount() + self.enemyCount()) |ally| {
         if (ally == owner or !self.participates(ally) or self.acted[ally] or self.coordinatorLocked(ally)) continue;
-        const target = self.formation[ally - self.partyCount()];
+        const target = self.formationMember(ally - self.partyCount());
         if (target >= self.partyCount() or !self.participates(target) or self.coordinatorLocked(target)) continue;
         try reactions.beginOrderedAttack(self, ally, target);
         self.acted[ally] = true;

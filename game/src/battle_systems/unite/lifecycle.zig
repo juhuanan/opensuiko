@@ -288,9 +288,9 @@ pub const Boundary = struct {
     target: Target,
     /// `0x800F6344` replaced an invalid individual target.
     retargeted_from: ?Target = null,
-    participants: [max_members]usize = undefined,
+    participants: [max_members]usize = @splat(0),
     count: u8 = 0,
-    prior: [max_members]SlotState = undefined,
+    prior: [max_members]SlotState = @splat(.{}),
     stage: Stage = .planned,
     finished_members: u8 = 0,
     saved_draws: ?rng.Draws = null,

@@ -11,14 +11,14 @@ const State = battle.State;
 pub fn characterId(self: *const State, member: usize) ?u8 {
     const host = self.integrationHost() orelse return null;
     if (member >= self.partyCount()) return null;
-    return host.characterId(self.progress.party[member].id);
+    return host.characterId(self.progress.party.at(member).id);
 }
 
 /// Join by stable rune key: party composition filters and compacts the catalogue.
 const rune_keys = [_][]const u8{ "fire", "water", "wind", "lightning", "earth", "resurrection", "boar", "shrike", "falcon", "hate", "trick", "clone", "double-beat", "killer", "counter", "spark", "hazy", "gale", "sunbeam", "holy", "true_holy", "fortune", "prosperity", "champion's", "turtle", "phero", "rage", "flowing", "cyclone", "mother_earth", "thunder" };
 
 pub fn runeByteFor(self: *const State, member: usize) ?u8 {
-    const index = self.progress.party[member].rune orelse return null;
+    const index = self.progress.party.at(member).rune orelse return null;
     const owned = self.content.systems.?.runes[index];
     if (std.mem.eql(u8, owned.id, "masked_rune_32")) return 32;
     if (std.mem.eql(u8, owned.id, "soul_eater")) return 1;
@@ -88,7 +88,7 @@ fn uniteApplyDamage(context: *anyopaque, target: unite_systems.Target, amount: u
         effect.amounts[index] = applied;
     }
     if (index < ctx.state.partyCount()) {
-        const member = &ctx.state.progress.party[index];
+        const member = ctx.state.progress.party.at(index);
         member.hp = @intCast(@as(u32, member.hp) -| applied);
         ctx.state.markPartyKnockout(index);
     } else {
@@ -159,7 +159,7 @@ pub fn uniteHost(ctx: *UniteContext) unite_systems.Host {
 
 pub fn uniteView(self: *const State, party: *[6]unite_systems.Slot, enemies: *[6]unite_systems.Slot) unite_systems.View {
     for (0..self.partyCount()) |index| {
-        const member = self.progress.party[index];
+        const member = self.progress.party.at(index).*;
         const slot_status: unite_systems.StatusFlags = .{
             .poisoned = member.status == .poisoned,
             .asleep = self.actor_conditions[index].sleep_turns > 0,

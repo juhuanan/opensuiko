@@ -69,19 +69,19 @@ pub const Session = struct {
         self.battle.startEncounter();
         self.screen = if (demo >= 1 and demo <= 3) .prepare else .fight;
         if (demo == 2) {
-            self.battle.progress.party[0].inventory.slots[0].?.uses = 2;
-            self.battle.progress.party[5].inventory.slots = @splat(.{ .id = .medicine, .uses = 6 });
+            self.battle.progress.party.at(0).inventory.slots[0].?.uses = 2;
+            self.battle.progress.party.at(5).inventory.slots = @splat(.{ .id = .medicine, .uses = 6 });
         }
         if (demo == 6 or demo == 7) {
-            self.battle.progress.party[0].hp = 20;
-            self.battle.progress.party[1].status = .poisoned;
+            self.battle.progress.party.at(0).hp = 20;
+            self.battle.progress.party.at(1).status = .poisoned;
         }
         if (demo == 6) {
-            self.battle.progress.party[2].hp = 0;
-            self.battle.progress.party[2].status = .unconscious;
+            self.battle.progress.party.at(2).hp = 0;
+            self.battle.progress.party.at(2).status = .unconscious;
         }
         if (demo == 9) {
-            self.battle.progress.party[0].experience = 950;
+            self.battle.progress.party.at(0).experience = 950;
             self.battle.reward_drop = true;
         }
         if (demo == 4 or demo == 5) self.setDemoRune(0, "fire", 65);
@@ -94,8 +94,8 @@ pub const Session = struct {
         self.battle.enterRoundMenu();
     }
     fn setDemoRune(self: *Session, member: usize, id: []const u8, magic: u16) void {
-        self.battle.progress.party[member].rune = self.battle.content.systems.?.runeIndex(id).?;
-        self.battle.progress.party[member].base_stats.magic = magic;
+        self.battle.progress.party.at(member).rune = self.battle.content.systems.?.runeIndex(id).?;
+        self.battle.progress.party.at(member).base_stats.magic = magic;
         self.battle.refillMagic(member);
     }
     pub fn next(self: *Session) void {
@@ -128,12 +128,12 @@ pub const Session = struct {
     }
     pub fn cycleEquipment(self: *Session, backwards: bool) void {
         const count = self.battle.content.systems.?.equipment.len + 1;
-        const current = if (self.battle.progress.party[self.selection].loadout.head) |item| item + 1 else 0;
+        const current = if (self.battle.progress.party.at(self.selection).loadout.head) |item| item + 1 else 0;
         const next_item = (current + if (backwards) count - 1 else 1) % count;
         self.battle.equip(self.selection, if (next_item == 0) null else next_item - 1) catch unreachable;
     }
     pub fn defeatSetup(self: *Session) void {
-        for (self.battle.progress.party, 0..) |*member, i| {
+        for (self.battle.progress.party.items(), 0..) |member, i| {
             member.hp = if (i == 0) 1 else 0;
             member.status = if (i == 0) .healthy else .unconscious;
         }
@@ -180,7 +180,7 @@ pub const Session = struct {
                 action = if (state.firstAttackTarget(i)) |target| .{ .attack = target } else .defend;
             }
             if (action == .spell and !state.canCast(i, action.spell.index)) action = .defend;
-            if (state.hp(i) < state.progress.party[i].max_hp / 2 and self.demo != 10 and state.progress.party[i].inventory.count() > 0 and action == .attack) action = .{ .item = .{ .slot = 0, .target = i } };
+            if (state.hp(i) < state.progress.party.at(i).max_hp / 2 and self.demo != 10 and state.progress.party.at(i).inventory.count() > 0 and action == .attack) action = .{ .item = .{ .slot = 0, .target = i } };
             state.actions[i] = action;
             if (action == .unite) state.actions[state.unitePartner(i).?] = .{ .assist = i };
         }
@@ -236,8 +236,8 @@ pub const Snapshot = struct {
         if (!canSave(session)) return error.SaveAtRoundStart;
         var asleep: [12]u8 = undefined;
         for (&asleep, session.battle.actor_conditions) |*turns, conditions| turns.* = conditions.sleep_turns;
-        var result: Snapshot = .{ .schema = "suikoden-demo-save/2", .encounter = session.battle.encounter, .round = session.battle.round, .money = session.battle.progress.money, .party = undefined, .levels = undefined, .stats = undefined, .experience = undefined, .formation = session.battle.formation, .equipment = session.battle.headEquipment(), .runes = undefined, .asleep = asleep, .enemy_hp = session.battle.enemy_hp, .random = session.battle.random };
-        for (session.battle.progress.party, 0..) |member, i| {
+        var result: Snapshot = .{ .schema = "suikoden-demo-save/2", .encounter = session.battle.encounter, .round = session.battle.round, .money = session.battle.progress.money, .party = undefined, .levels = undefined, .stats = undefined, .experience = undefined, .formation = session.battle.formationOrder(), .equipment = session.battle.headEquipment(), .runes = undefined, .asleep = asleep, .enemy_hp = session.battle.enemy_hp, .random = session.battle.random };
+        for (session.battle.progress.party.items(), 0..) |member, i| {
             result.party[i] = member.record();
             result.levels[i] = member.level;
             result.stats[i] = member.base_stats;
@@ -250,7 +250,7 @@ pub const Snapshot = struct {
         if (!std.mem.eql(u8, self.schema, "suikoden-demo-save/2") or self.encounter >= session.battle.content.encounters.len or self.round == 0 or self.round > 1000000) return error.InvalidDemoSave;
         var party: [6]battle.Member = undefined;
         for (&party, self.party) |*member, record| member.* = record.character();
-        var progress = field.game_state.Progress{ .money = self.money, .party = &party };
+        var progress = field.game_state.Progress{ .money = self.money, .party = .init(&party) };
         try progress.validate();
         var seen: [6]bool = @splat(false);
         for (0..6) |i| {
@@ -282,21 +282,21 @@ pub const Snapshot = struct {
         session.start(11);
         session.battle.encounter = self.encounter;
         session.battle.progress.money = self.money;
-        for (session.battle.progress.party, party) |*member, record| {
+        for (session.battle.progress.party.items(), party) |member, record| {
             const weapon_level = member.weapon_level;
             member.* = record;
             member.weapon_level = weapon_level;
         }
         session.battle.startEncounter();
         const loadouts = battle.systems.legacyLoadouts(self.equipment);
-        for (session.battle.progress.party, 0..) |*member, i| {
+        for (session.battle.progress.party.items(), 0..) |member, i| {
             member.level = self.levels[i];
             member.base_stats = self.stats[i];
             member.experience = self.experience[i];
             member.loadout = loadouts[i];
             member.rune = self.runes[i];
         }
-        session.battle.formation = self.formation;
+        session.battle.setFormation(self.formation);
         for (&session.battle.actor_conditions, self.asleep) |*conditions, turns| conditions.sleep_turns = turns;
         session.battle.enemy_hp = self.enemy_hp;
         session.battle.random = self.random;

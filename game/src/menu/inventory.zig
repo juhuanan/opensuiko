@@ -33,7 +33,7 @@ fn handleItems(state: *pause.State, game: *field.State, input: pause.Input) paus
         return .none;
     }
     nav.cycle(&state.member, count, input.left, input.right);
-    const slots = game.progress.party[state.member].inventory.count();
+    const slots = game.progress.party.at(state.member).inventory.count();
     if (slots == 0) {
         state.slot = 0;
         return .none;
@@ -42,7 +42,7 @@ fn handleItems(state: *pause.State, game: *field.State, input: pause.Input) paus
     nav.cycleUpDown(&state.slot, slots, input.field.menu_direction);
     if (input.field.action and game.item_rules != null) {
         state.target = state.member;
-        const selected = game.progress.party[state.member].inventory.slots[state.slot].?.id;
+        const selected = game.progress.party.at(state.member).inventory.slots[state.slot].?.id;
         if (selected == .sacrificial_buddha and state.combat == null) {
             state.message = "Revives its bearer automatically in battle.";
             state.phase = .item_notice;
@@ -62,7 +62,7 @@ fn handleItems(state: *pause.State, game: *field.State, input: pause.Input) paus
 fn handleItemAction(state: *pause.State, game: *field.State, input: pause.Input) pause.Effect {
     nav.cycleUpDown(&state.item_action, 3, input.field.menu_direction);
     if (input.field.action) {
-        const item = game.progress.party[state.member].inventory.slots[state.slot].?;
+        const item = game.progress.party.at(state.member).inventory.slots[state.slot].?;
         state.target = state.member;
         if (state.item_action == 0) {
             if (item.id == .blinking_mirror and input.travel_tools) return .blinking_mirror;
@@ -100,7 +100,7 @@ fn handleItemTransfer(state: *pause.State, game: *field.State, input: pause.Inpu
             state.message = if (err == error.InventoryFull) "That member's inventory is full." else "Choose a different member.";
         };
         state.phase = .item_notice;
-        state.slot = @min(state.slot, game.progress.party[state.member].inventory.count() -| 1);
+        state.slot = @min(state.slot, game.progress.party.at(state.member).inventory.count() -| 1);
     }
     return .none;
 }
@@ -119,7 +119,7 @@ fn handleConfirmDiscard(state: *pause.State, game: *field.State, input: pause.In
             game.progress.discard(state.member, state.slot) catch unreachable;
             state.message = "Item discarded.";
             state.phase = .item_notice;
-            state.slot = @min(state.slot, game.progress.party[state.member].inventory.count() -| 1);
+            state.slot = @min(state.slot, game.progress.party.at(state.member).inventory.count() -| 1);
         }
     }
     return .none;
@@ -128,12 +128,12 @@ fn handleConfirmDiscard(state: *pause.State, game: *field.State, input: pause.In
 fn handleItemTarget(state: *pause.State, game: *field.State, input: pause.Input) pause.Effect {
     nav.cycleUpDown(&state.target, game.progress.party.len, input.field.menu_direction);
     if (input.field.action) {
-        if (input.weapon_pieces and game.progress.party[state.member].inventory.slots[state.slot].?.id.weaponPiece()) {
+        if (input.weapon_pieces and game.progress.party.at(state.member).inventory.slots[state.slot].?.id.weaponPiece()) {
             state.weapon_piece_replace = false;
             state.phase = .item_notice;
             return .weapon_piece;
         }
-        const item = game.item_rules.?.consumable(game.progress.party[state.member].inventory.slots[state.slot].?.id);
+        const item = game.item_rules.?.consumable(game.progress.party.at(state.member).inventory.slots[state.slot].?.id);
         state.message = if (item != null and item.?.cure != null) "Condition cured. One use consumed." else "Recovered HP. One use consumed.";
         game.progress.useItem(game.item_rules.?, state.member, state.slot, state.target) catch |err| {
             state.message = switch (err) {
@@ -145,7 +145,7 @@ fn handleItemTarget(state: *pause.State, game: *field.State, input: pause.Input)
             };
         };
         state.phase = .item_notice;
-        state.slot = @min(state.slot, game.progress.party[state.member].inventory.count() -| 1);
+        state.slot = @min(state.slot, game.progress.party.at(state.member).inventory.count() -| 1);
     }
     return .none;
 }

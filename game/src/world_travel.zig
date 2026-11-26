@@ -20,8 +20,8 @@ pub fn partyTraits(combat: *const battle.State) !Traits {
     try combat.progress.validate();
     if (combat.partyCount() == 0 or combat.partyCount() > 6) return error.InvalidParty;
     var traits: Traits = .{};
-    for (combat.progress.party, 0..) |member, i| {
-        traits.level_sum += combat.progress.party[i].level;
+    for (combat.progress.party.items(), 0..) |member, i| {
+        traits.level_sum += combat.progress.party.at(i).level;
         traits.healing = traits.healing or combat.hasRune(i, "sunbeam");
         traits.suppression = traits.suppression or combat.hasRune(i, "champion's");
         traits.faster = traits.faster or std.mem.eql(u8, member.id, "stallion");
@@ -588,7 +588,7 @@ pub const State = struct {
     }
     pub fn attachPartySnapshot(self: *State, snapshot: *const party.Snapshot) !void {
         if (self.link.travel.mode == .battle or self.adapter.transaction != null or self.adapter.original != null) return error.WorldBattleNotReady;
-        _ = try party.weaponAugments(self.combat.content.characterRules(), self.combat.progress.party, snapshot.*);
+        _ = try party.weaponAugments(self.combat.content.characterRules(), self.combat.progress.party.values()[0..self.combat.partyCount()], snapshot.*);
         self.party_snapshot = snapshot;
     }
     fn supportedRoom(id: []const u8) bool {
@@ -617,11 +617,11 @@ pub const State = struct {
         const combat_before = self.combat.*;
         const saved_draws = draws.*;
         var members: [6]battle.Member = undefined;
-        @memcpy(members[0..self.combat.partyCount()], self.combat.progress.party);
+        self.combat.progress.party.copyTo(members[0..self.combat.partyCount()]);
         errdefer {
             self.* = before;
             self.combat.* = combat_before;
-            @memcpy(self.combat.progress.party, members[0..self.combat.partyCount()]);
+            self.combat.progress.party.copyFrom(members[0..self.combat.partyCount()]);
             draws.* = saved_draws;
         }
         self.menu.live_world_context = self.live_saves;
@@ -653,8 +653,8 @@ pub const State = struct {
                     .battle => block: {
                         if (std.mem.eql(u8, self.link.content.id, "region_c") and (self.region_c == null or self.region_c.?.battles == null)) return error.UnimplementedRegionCCombat;
                         if (self.party_snapshot) |snapshot| {
-                            const augments = try party.weaponAugments(self.combat.content.characterRules(), self.combat.progress.party, snapshot.*);
-                            for (self.combat.progress.party, 0..) |*member, i| member.weapon_augment = augments[i];
+                            const augments = try party.weaponAugments(self.combat.content.characterRules(), self.combat.progress.party.values()[0..self.combat.partyCount()], snapshot.*);
+                            for (self.combat.progress.party.items(), 0..) |member, i| member.weapon_augment = augments[i];
                         } else if (self.party_transactions) return error.UnsupportedCombatSidecar;
                         if (self.party_transactions) {
                             try self.adapter.beginTransactional(&self.link, self.combat, self.overlay, draws.*, self.battle_receipt);

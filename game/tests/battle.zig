@@ -22,17 +22,17 @@ test "scene experience keeps ten-point floor wrap cap and party growth draw orde
     defer rules.deinit();
     var members: [6]battle.Member = undefined;
     var state = try battle.State.init(parsed.value, rules.value, &members, 17);
-    for (state.progress.party, [_]u32{ 999, 995, 9, 0, 999, 999 }) |*member, xp| member.experience = xp;
-    state.progress.party[0].level = 5;
-    state.progress.party[1].level = 98;
-    state.progress.party[4].level = 99;
-    state.progress.party[5].level = 99;
+    for (state.progress.party.items(), [_]u32{ 999, 995, 9, 0, 999, 999 }) |member, xp| member.experience = xp;
+    state.progress.party.at(0).level = 5;
+    state.progress.party.at(1).level = 98;
+    state.progress.party.at(4).level = 99;
+    state.progress.party.at(5).level = 99;
     var draws = state;
     for (0..14) |_| _ = draws.roll();
     try state.sceneExperience(true);
     try std.testing.expectEqualSlices(u32, &.{ 9, 5, 19, 10, 9, 9 }, &characterFields("experience", state.progress.party));
-    try std.testing.expectEqual(@as(u8, 6), state.progress.party[0].level);
-    try std.testing.expectEqual(@as(u8, 99), state.progress.party[1].level);
+    try std.testing.expectEqual(@as(u8, 6), state.progress.party.at(0).level);
+    try std.testing.expectEqual(@as(u8, 99), state.progress.party.at(1).level);
     try std.testing.expectEqualDeep(draws.random, state.random);
     const levels = characterFields("level", state.progress.party);
     try state.sceneExperience(false);
@@ -405,7 +405,7 @@ test "battle layout uses the source camera framing and finite actor projections"
     var state = try battle.State.init(parsed.value, rules.value, &members, 17);
     const formations = [_][6]u8{ .{ 0, 1, 2, 3, 4, 5 }, .{ 3, 4, 5, 0, 1, 2 }, .{ 5, 3, 4, 2, 0, 1 }, .{ 1, 2, 0, 4, 5, 3 } };
     for (formations) |formation| {
-        state.formation = formation;
+        state.setFormation(formation);
         const frame = battle.layout.framing(state);
         try std.testing.expectEqual(battle.layout.Framing{}, frame);
         for (0..state.partyCount() + state.enemyCount()) |index| {
@@ -512,9 +512,9 @@ test "physical weapon weakness and rune pieces apply before critical damage" {
     enemy.stats.defense = 50;
     enemy.stats.attack = 100;
     enemy.affinities = .{ .fire = .weak, .earth = .weak };
-    state.progress.party[0].base_stats.attack = 100;
-    state.progress.party[0].base_stats.defense = 50;
-    state.progress.party[0].loadout = .{};
+    state.progress.party.at(0).base_stats.attack = 100;
+    state.progress.party.at(0).base_stats.defense = 50;
+    state.progress.party.at(0).loadout = .{};
     party[0].weapon.?.element = .fire;
     state.content.schema = "suikoden-battle-trial/31";
     try std.testing.expectError(error.UnsupportedBattleSchema, state.content.validate());
@@ -525,18 +525,18 @@ test "physical weapon weakness and rune pieces apply before critical damage" {
     enemy.affinities = .{ .fire = .weak, .earth = .weak };
     const target = state.partyCount();
     try std.testing.expectEqual(@as(u32, 82), state.resolvePhysicalDamage(0, target, 0, false));
-    state.progress.party[0].weapon_augment = .{ .rune = .fire, .fragments = 3 };
+    state.progress.party.at(0).weapon_augment = .{ .rune = .fire, .fragments = 3 };
     try std.testing.expectEqual(@as(u32, 94), state.resolvePhysicalDamage(0, target, 0, false));
-    state.progress.party[0].weapon_augment = .{ .rune = .wind, .fragments = 3 };
+    state.progress.party.at(0).weapon_augment = .{ .rune = .wind, .fragments = 3 };
     try std.testing.expectEqual(@as(u32, 94), state.resolvePhysicalDamage(0, target, 0, false));
-    state.progress.party[0].weapon_augment = .{ .rune = .earth, .fragments = 9 };
+    state.progress.party.at(0).weapon_augment = .{ .rune = .earth, .fragments = 9 };
     try std.testing.expectEqual(@as(u32, 55), state.resolvePhysicalDamage(0, target, 0, false));
     enemy.affinities.?.wind = .weak;
     try std.testing.expectEqual(@as(u32, 82), state.resolvePhysicalDamage(0, target, 0, false));
-    state.progress.party[0].weapon_augment = .{ .rune = .water, .fragments = 9 };
+    state.progress.party.at(0).weapon_augment = .{ .rune = .water, .fragments = 9 };
     try std.testing.expectEqual(@as(u32, 55), state.resolvePhysicalDamage(0, target, 0, false));
     try std.testing.expectEqual(@as(u32, 27), state.resolvePhysicalDamage(target, 0, 0, true));
-    state.progress.party[0].weapon_augment = .{ .rune = .fire, .fragments = 3 };
+    state.progress.party.at(0).weapon_augment = .{ .rune = .fire, .fragments = 3 };
     var draws = battle.systems.Draws{ .values = &.{ 0, 99, 0 } };
     state.replay_draws = &draws;
     state.beginAttack(0, target, .ordinary);
@@ -544,7 +544,7 @@ test "physical weapon weakness and rune pieces apply before critical damage" {
     try std.testing.expectEqual(@as(u32, 94), state.active.?.amount);
     try std.testing.expectEqual(@as(usize, 3), draws.cursor);
     party[0].weapon.?.element = null;
-    state.progress.party[0].weapon_augment = .{};
+    state.progress.party.at(0).weapon_augment = .{};
     try std.testing.expectEqual(@as(u32, 55), state.resolvePhysicalDamage(0, target, 0, false));
 }
 
@@ -568,7 +568,7 @@ fn fightTrial(state: *battle.State) !void {
         switch (state.phase) {
             .intro, .target, .item, .item_target, .confirm_round => state.tick(.{ .confirm = true }),
             .command => {
-                const member = state.progress.party[state.actor];
+                const member = state.progress.party.at(state.actor).*;
                 const command: @import("game").Command = if (member.hp < 70 and member.inventory.count() > 0) .item else if (state.encounter == 1 and state.round == 1) .defend else .attack;
                 try choose(state, command);
             },
@@ -578,20 +578,20 @@ fn fightTrial(state: *battle.State) !void {
                 try std.testing.expectEqual(wins - 1, state.encounter);
                 expected_money += state.reward_money;
                 try std.testing.expectEqual(expected_money, state.progress.money);
-                const before = state.progress.party[0];
-                const other = state.progress.party[1];
+                const before = state.progress.party.at(0).*;
+                const other = state.progress.party.at(1).*;
                 const experience = characterFields("experience", state.progress.party);
                 for (0..100) |_| state.tick(.{});
                 try std.testing.expectEqual(expected_money, state.progress.money);
                 try std.testing.expectEqualDeep(experience, characterFields("experience", state.progress.party));
                 state.tick(.{ .confirm = true });
-                try std.testing.expectEqualDeep(before, state.progress.party[0]);
-                try std.testing.expectEqualDeep(other, state.progress.party[1]);
+                try std.testing.expectEqualDeep(before, state.progress.party.at(0).*);
+                try std.testing.expectEqualDeep(other, state.progress.party.at(1).*);
             },
             .complete => {
                 try std.testing.expectEqual(@as(usize, 3), wins);
                 try std.testing.expectEqual(@as(u32, 930), state.progress.money);
-                try std.testing.expect(state.progress.party[0].experience <= 850 and state.progress.party[1].experience <= 850);
+                try std.testing.expect(state.progress.party.at(0).experience <= 850 and state.progress.party.at(1).experience <= 850);
                 return;
             },
             else => return error.TrialFailed,
@@ -1059,9 +1059,9 @@ test "canonical Firestorm applies damage to an enemy" {
     defer rules.deinit();
     var members: [6]battle.Member = undefined;
     var state = try battle.State.init(content.value, rules.value, &members, 17);
-    state.progress.party[0].rune = 0;
-    state.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    state.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    state.progress.party.at(0).rune = 0;
+    state.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    state.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     const enemy = state.partyCount();
     const before = state.hp(enemy);
     var effect = battle.Effect{ .actor = 0, .target = enemy, .kind = .cast, .spell = 1 };
@@ -1077,26 +1077,26 @@ test "canonical Drops of Kindness heals an ally and spends a charge" {
     defer rules.deinit();
     var members: [6]battle.Member = undefined;
     var state = try battle.State.init(content.value, rules.value, &members, 17);
-    state.progress.party[0].rune = 1;
-    state.progress.party[0].rune_charges = .{ 9, 0, 0, 0 };
-    state.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-    for (state.progress.party) |*member| member.hp = member.max_hp;
+    state.progress.party.at(0).rune = 1;
+    state.progress.party.at(0).rune_charges = .{ 9, 0, 0, 0 };
+    state.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+    for (state.progress.party.items()) |member| member.hp = member.max_hp;
     state.choose(0);
     try choose(&state, .rune);
     try std.testing.expect(!state.canSelectSpell(2));
     state.tick(.{ .confirm = true });
     try std.testing.expectEqual(.spell, state.phase);
 
-    state.progress.party[1].hp = 1;
-    state.progress.party[2].hp = 0;
-    state.progress.party[2].status = .unconscious;
-    state.progress.party[3].hp = 1;
+    state.progress.party.at(1).hp = 1;
+    state.progress.party.at(2).hp = 0;
+    state.progress.party.at(2).status = .unconscious;
+    state.progress.party.at(3).hp = 1;
     state.tick(.{ .confirm = true });
     try std.testing.expectEqual(.spell_target, state.phase);
     try std.testing.expectEqual(@as(usize, 1), state.selection);
     state.tick(.{ .right = true });
     try std.testing.expectEqual(@as(usize, 3), state.selection);
-    state.progress.party[3].hp = state.progress.party[3].max_hp;
+    state.progress.party.at(3).hp = state.progress.party.at(3).max_hp;
     state.tick(.{ .confirm = true });
     try std.testing.expectEqual(.spell_target, state.phase);
     try std.testing.expect(state.actions[0] == null);
@@ -1106,7 +1106,7 @@ test "canonical Drops of Kindness heals an ally and spends a charge" {
     var effect = battle.Effect{ .actor = 0, .target = queued.target, .kind = .cast, .spell = queued.index };
     state.applySpell(&effect);
     try std.testing.expect(state.hp(1) > 1);
-    try std.testing.expectEqual(@as(u8, 8), state.progress.party[0].rune_charges[0]);
+    try std.testing.expectEqual(@as(u8, 8), state.progress.party.at(0).rune_charges[0]);
 }
 
 test "every canonical damage spell applies damage through its rune" {
@@ -1128,9 +1128,9 @@ test "every canonical damage spell applies damage through its rune" {
         try std.testing.expect(rune_index != null);
         var members: [6]battle.Member = undefined;
         var state = try battle.State.init(content.value, rules.value, &members, 17);
-        state.progress.party[0].rune = rune_index;
-        state.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        state.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+        state.progress.party.at(0).rune = rune_index;
+        state.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        state.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
         const target = state.partyCount();
         const before = state.hp(target);
         var effect = battle.Effect{ .actor = 0, .target = target, .kind = .cast, .spell = spell_index };
@@ -1159,16 +1159,16 @@ test "every canonical non-damage spell connects and spends a charge" {
         try std.testing.expect(rune_index != null);
         var members: [6]battle.Member = undefined;
         var state = try battle.State.init(content.value, rules.value, &members, 17);
-        state.progress.party[0].rune = rune_index;
-        state.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        state.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-        state.progress.party[0].hp = 1;
+        state.progress.party.at(0).rune = rune_index;
+        state.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        state.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+        state.progress.party.at(0).hp = 1;
         const target = if (spell.allies) 0 else state.partyCount();
         var effect = battle.Effect{ .actor = 0, .target = target, .kind = .cast, .spell = spell_index };
         state.applySpell(&effect);
         try std.testing.expect(effect.affected != 0);
         var remaining: u16 = 0;
-        for (state.progress.party[0].rune_charges) |charge| remaining += charge;
+        for (state.progress.party.at(0).rune_charges) |charge| remaining += charge;
         try std.testing.expectEqual(@as(u16, 35), remaining);
     }
 }
@@ -1314,10 +1314,10 @@ test "review Drops spends its visual draws at start and heals only at callback30
     var members: [6]battle.Member = undefined;
     var state = try battle.State.init(content.value, rules.value, &members, 17);
     state.drops_art = drops_art_fixture;
-    state.progress.party[0].rune = 1;
-    state.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    state.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-    state.progress.party[1].hp = 35;
+    state.progress.party.at(0).rune = 1;
+    state.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    state.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+    state.progress.party.at(1).hp = 35;
     state.actions = @splat(.defend);
     state.actions[0] = .{ .spell = .{ .index = 2, .target = 1 } };
     state.acted = @splat(true);
@@ -1349,7 +1349,7 @@ test "review Drops spends its visual draws at start and heals only at callback30
         state.tick(.{});
     }
     try std.testing.expect(state.hp(1) > 35);
-    try std.testing.expectEqual(@as(u8, 8), state.progress.party[0].rune_charges[0]);
+    try std.testing.expectEqual(@as(u8, 8), state.progress.party.at(0).rune_charges[0]);
 }
 
 test "exhausted Drops setup draws roll back the action before any charge or HP change" {
@@ -1360,10 +1360,10 @@ test "exhausted Drops setup draws roll back the action before any charge or HP c
     var members: [6]battle.Member = undefined;
     var state = try battle.State.init(content.value, rules.value, &members, 17);
     state.drops_art = drops_art_fixture;
-    state.progress.party[0].rune = 1;
-    state.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    state.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-    state.progress.party[1].hp = 35;
+    state.progress.party.at(0).rune = 1;
+    state.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    state.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+    state.progress.party.at(1).hp = 35;
     state.actions = @splat(.defend);
     state.actions[0] = .{ .spell = .{ .index = 2, .target = 1 } };
     state.acted = @splat(true);
@@ -1374,7 +1374,7 @@ test "exhausted Drops setup draws roll back the action before any charge or HP c
     try std.testing.expectError(error.RandomInputExhausted, state.tickReplay(.{}, &draws));
     try std.testing.expectEqual(@as(usize, 0), draws.cursor);
     try std.testing.expectEqual(@as(u16, 35), state.hp(1));
-    try std.testing.expectEqual(@as(u8, 9), state.progress.party[0].rune_charges[0]);
+    try std.testing.expectEqual(@as(u8, 9), state.progress.party.at(0).rune_charges[0]);
     try std.testing.expect(state.active == null);
 }
 
@@ -1507,10 +1507,10 @@ test "imported spells dispatch normally apply once at source impact and return t
         var members: [6]battle.Member = undefined;
         var state = try battle.State.init(content.value, rules.value, &members, 17);
         try state.attachSpellScenes(&packet.value);
-        state.progress.party[0].rune = if (spell == 0) 0 else 1;
-        state.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        state.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-        state.progress.party[1].hp = 35;
+        state.progress.party.at(0).rune = if (spell == 0) 0 else 1;
+        state.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        state.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+        state.progress.party.at(1).hp = 35;
         const target = if (spell == 0) state.partyCount() else 1;
         const hp = state.hp(target);
         state.actions = @splat(.defend);
@@ -1527,7 +1527,7 @@ test "imported spells dispatch normally apply once at source impact and return t
             state.tick(.{});
         }
         try std.testing.expect(if (spell == 0) state.hp(target) < hp else state.hp(target) > hp);
-        try std.testing.expectEqual(@as(u8, 8), state.progress.party[0].rune_charges[0]);
+        try std.testing.expectEqual(@as(u8, 8), state.progress.party.at(0).rune_charges[0]);
         const after = state.hp(target);
         state.enterRoundMenu();
         state.camera_ticks += 30;
@@ -1626,9 +1626,9 @@ test "Firestorm captures only living enemies and hits each once after group reco
     try state.attachSpellScenes(&packet.value);
     state.enemy_hp[0] = 0;
     for (1..state.enemyCount()) |index| state.enemy_hp[index] = 1;
-    state.progress.party[0].rune = 0;
-    state.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    state.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    state.progress.party.at(0).rune = 0;
+    state.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    state.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     state.actions = @splat(.defend);
     state.actions[0] = .{ .spell = .{ .index = 1, .target = 0 } };
     state.acted = @splat(true);
@@ -1669,8 +1669,8 @@ test "Firestorm captures only living enemies and hits each once after group reco
     try std.testing.expectEqual(@as(u16, 465), state.action_ticks);
     try std.testing.expectEqual(@as(u16, 0), state.enemy_hp[0]);
     for (1..state.enemyCount()) |enemy| try std.testing.expect(state.enemy_hp[enemy] < before[enemy]);
-    try std.testing.expectEqual(@as(u8, 8), state.progress.party[0].rune_charges[1]);
-    try std.testing.expectEqual(@as(u8, 9), state.progress.party[0].rune_charges[0]);
+    try std.testing.expectEqual(@as(u8, 8), state.progress.party.at(0).rune_charges[1]);
+    try std.testing.expectEqual(@as(u8, 9), state.progress.party.at(0).rune_charges[0]);
     const after = state.enemy_hp;
     for (0..10) |_| state.tick(.{});
     try std.testing.expectEqualDeep(after, state.enemy_hp);
@@ -1821,10 +1821,10 @@ test "legacy Unite eligibility uses the source poison sleep recovery mask for ei
         var members: [6]battle.Member = undefined;
         var state = try battle.State.init(parsed.value, rules.value, &members, 17);
         switch (condition) {
-            0 => state.progress.party[member].status = .poisoned,
+            0 => state.progress.party.at(member).status = .poisoned,
             1 => state.actor_conditions[member].sleep_turns = 1,
             2 => state.unbalanced[member] = 1,
-            3 => state.progress.party[member].balloons = 1,
+            3 => state.progress.party.at(member).balloons = 1,
             4 => state.actor_conditions[member].accuracy_reduced = true,
             5 => state.actor_conditions[member].rune_blocked = true,
             6 => state.actor_conditions[member].protection_rounds = 3,
@@ -1843,24 +1843,24 @@ test "legacy battle items consume on no effect and protection without changing f
     for ([_]field.items.Id{ .medicine, .mega_medicine, .antitoxin, .needle }) |id| for (0..3) |condition| {
         var members: [6]battle.Member = undefined;
         var state = try battle.State.init(parsed.value, rules.value, &members, 17);
-        state.progress.party[1].max_hp = 1000;
-        state.progress.party[1].hp = if (condition == 0) 1000 else 1;
-        state.progress.party[1].status = if (condition == 0) .healthy else .poisoned;
-        state.progress.party[1].balloons = if (condition == 0) 0 else 3;
+        state.progress.party.at(1).max_hp = 1000;
+        state.progress.party.at(1).hp = if (condition == 0) 1000 else 1;
+        state.progress.party.at(1).status = if (condition == 0) .healthy else .poisoned;
+        state.progress.party.at(1).balloons = if (condition == 0) 0 else 3;
         state.actor_conditions[1].protection_rounds = if (condition == 1) 3 else 0;
-        state.progress.party[0].inventory.slots = @splat(null);
-        state.progress.party[0].inventory.slots[0] = .{ .id = id, .uses = 1 };
-        state.progress.party[0].inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
+        state.progress.party.at(0).inventory.slots = @splat(null);
+        state.progress.party.at(0).inventory.slots[0] = .{ .id = id, .uses = 1 };
+        state.progress.party.at(0).inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
         state.phase = .resolving;
         state.actions[0] = .{ .item = .{ .slot = 0, .target = 1, .id = id } };
         state.active = .{ .actor = 0, .target = 1, .kind = .item, .item_id = id };
         state.action_ticks = state.impactTick() - 1;
         state.tick(.{});
-        try std.testing.expectEqual(field.items.Id.bandanna, state.progress.party[0].inventory.slots[0].?.id);
+        try std.testing.expectEqual(field.items.Id.bandanna, state.progress.party.at(0).inventory.slots[0].?.id);
         const amount: u16 = if (condition == 2) rules.value.consumable(id).?.heal_hp else 0;
-        try std.testing.expectEqual(@as(u16, if (condition == 0) 1000 else 1) + amount, state.progress.party[1].hp);
-        if (condition != 0 and id == .antitoxin) try std.testing.expectEqual(field.game_state.Status.healthy, state.progress.party[1].status);
-        if (condition != 0 and id == .needle) try std.testing.expectEqual(@as(u8, 2), state.progress.party[1].balloons);
+        try std.testing.expectEqual(@as(u16, if (condition == 0) 1000 else 1) + amount, state.progress.party.at(1).hp);
+        if (condition != 0 and id == .antitoxin) try std.testing.expectEqual(field.game_state.Status.healthy, state.progress.party.at(1).status);
+        if (condition != 0 and id == .needle) try std.testing.expectEqual(@as(u8, 2), state.progress.party.at(1).balloons);
     };
 }
 
@@ -2339,9 +2339,9 @@ test "legacy sleep adapter honors the exported ward before drawing" {
     } else unreachable;
     var members: [6]battle.Member = undefined;
     var state = try battle.State.init(view, rules.value, &members, 17);
-    state.progress.party[0].rune = systems.runeIndex("wind").?;
-    state.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    state.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    state.progress.party.at(0).rune = systems.runeIndex("wind").?;
+    state.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    state.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     var draws = battle.systems.Draws{ .values = &.{} };
     state.replay_draws = &draws;
     var effect = battle.Effect{ .actor = 0, .target = state.partyCount(), .kind = .cast, .spell = spell };
@@ -2349,7 +2349,7 @@ test "legacy sleep adapter honors the exported ward before drawing" {
     try std.testing.expect(!state.replay_exhausted);
     try std.testing.expectEqual(@as(usize, 0), draws.cursor);
     for (state.actor_conditions[state.partyCount() .. state.partyCount() + state.enemyCount()]) |conditions| try std.testing.expectEqual(@as(u8, 0), conditions.sleep_turns);
-    try std.testing.expectEqual(@as(u8, 8), state.progress.party[0].rune_charges[0]);
+    try std.testing.expectEqual(@as(u8, 8), state.progress.party.at(0).rune_charges[0]);
 }
 
 test "cycling sprite parser rejects stale schemas unsafe draw strides and truncated scale tracks" {
@@ -3144,7 +3144,7 @@ test "legacy battle completion waits for playback before dispatch and allows def
     defer items.deinit();
     var members: [6]battle.Member = undefined;
     var state = try battle.State.init(parsed.value, items.value, &members, 17);
-    for (state.progress.party) |*member| member.hp = 0;
+    for (state.progress.party.items()) |member| member.hp = 0;
     @memset(state.enemy_hp[0..state.enemyCount()], 0);
     state.phase = .resolving;
     state.active = null;
@@ -3173,7 +3173,7 @@ test "coordinated battle completion waits for revival and playback before the 31
     defer items.deinit();
     var members: [6]battle.Member = undefined;
     var state = try battle.State.init(parsed.value, items.value, &members, 17);
-    for (state.progress.party) |*member| member.hp = 0;
+    for (state.progress.party.items()) |member| member.hp = 0;
     @memset(state.enemy_hp[0..state.enemyCount()], 0);
     state.phase = .resolving;
     state.coordinator = .{ .stage = .round_ready, .current_actor = 0, .elapsed = 7 };

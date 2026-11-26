@@ -31,10 +31,10 @@ test "all nine Area A formations complete source enemy rounds with poison and Tu
             combat.integration = .{ .host = host };
             try combat.attachUniteActors(&actors.value);
             try combat.attachSpellScenes(&packet);
-            for (combat.progress.party, 0..) |*member, index| {
+            for (combat.progress.party.items(), 0..) |member, index| {
                 member.max_hp = 5000;
                 member.hp = 5000;
-                combat.progress.party[index].rune = if (variant == 2) combat.content.systems.?.runeIndex("turtle").? else null;
+                combat.progress.party.at(index).rune = if (variant == 2) combat.content.systems.?.runeIndex("turtle").? else null;
                 combat.actions[index] = .defend;
             }
             combat.phase = .resolving;

@@ -90,7 +90,7 @@ pub fn resolveTick(state: *State) void {
                 const c_knockouts = (state.content.world_art != null and state.content.world_art.?.c_tracks != null) or
                     (state.content.world_art == null and state.content.presentation_ready and state.sourceRounds());
                 const statuses_ready = state.integration != null or state.sharedPartyMelee();
-                for (state.progress.party, 0..) |member, index| {
+                for (state.progress.party.items(), 0..) |member, index| {
                     const expected_status: field.game_state.Status = if (member.hp == 0) .unconscious else .healthy;
                     const supported_status = member.status == expected_status or (statuses_ready and member.hp > 0 and member.status == .poisoned);
                     if ((member.hp == 0 and !c_knockouts) or !supported_status or (!statuses_ready and (member.balloons != 0 or state.actor_conditions[index].sleep_turns != 0 or state.actor_conditions[index].protection_rounds != 0 or state.unbalanced[index] != 0 or state.actor_conditions[index].accuracy_reduced or state.actor_conditions[index].rune_blocked or state.hasRune(index, "sunbeam")))) {
@@ -209,7 +209,7 @@ pub fn resolveTick(state: *State) void {
                     if (effect.damage_at_impact and effect.protector == null and effect.target == 0 and state.enemy(effect.actor - state.partyCount()).action_policy == .roc) state.hero_reaction_offset = true;
                     if (state.actor_conditions[damage_target].protection_rounds > 0) effect.amount = 0;
                     if (damage_target < state.partyCount()) {
-                        const target = &state.progress.party[damage_target];
+                        const target = state.progress.party.at(damage_target);
                         target.hp = @intCast(@as(u32, target.hp) -| effect.amount);
                         state.markPartyKnockout(damage_target);
                     } else state.enemy_hp[damage_target - state.partyCount()] = @intCast(@as(u32, state.enemy_hp[damage_target - state.partyCount()]) -| effect.amount);
@@ -217,9 +217,9 @@ pub fn resolveTick(state: *State) void {
             },
             .item => {
                 // shortcut: legacy demo clock; source item clocks use the separate coordinator action above.
-                const target = &state.progress.party[effect.target];
+                const target = state.progress.party.at(effect.target);
                 const selected = state.actions[effect.actor].?.item;
-                const inventory = &state.progress.party[effect.actor].inventory;
+                const inventory = &state.progress.party.at(effect.actor).inventory;
                 const definition = state.rules.consumable(selected.id);
                 if (!state.participates(effect.target)) {
                     effect.kind = .unavailable;
@@ -233,7 +233,7 @@ pub fn resolveTick(state: *State) void {
                     if (definition.?.partyWide()) {
                         for (0..state.partyCount()) |index| if (state.participates(index)) {
                             effect.affected |= @as(u16, 1) << @intCast(index);
-                            const member = &state.progress.party[index];
+                            const member = state.progress.party.at(index);
                             const before = member.*;
                             effect.amounts[index] = definition.?.applyTo(member, state.actor_conditions[index].protection_rounds > 0);
                             state.noteItemImpact(index, before);

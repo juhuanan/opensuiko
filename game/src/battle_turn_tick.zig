@@ -89,7 +89,7 @@ pub fn startEncounter(self: *State) void {
     self.loot_declined = false;
     self.award_exp = @splat(0);
     self.reward_levels = @splat(1);
-    for (self.progress.party, 0..) |member, i| self.reward_levels[i] = member.level;
+    for (self.progress.party.items(), 0..) |member, i| self.reward_levels[i] = member.level;
     self.released_enemies = false;
     self.bribed_enemies = false;
     self.acted = @splat(false);
@@ -98,7 +98,7 @@ pub fn startEncounter(self: *State) void {
     status.advanceIcons(self);
 }
 pub fn canSelectItem(self: *const State, actor: usize, slot: usize) bool {
-    const inventory = &self.progress.party[actor].inventory;
+    const inventory = &self.progress.party.at(actor).inventory;
     if (slot >= inventory.count()) return false;
     const item = inventory.slots[slot].?;
     const rule = self.rules.consumable(item.id) orelse return false;
@@ -106,7 +106,7 @@ pub fn canSelectItem(self: *const State, actor: usize, slot: usize) bool {
 }
 
 fn firstBattleItem(self: *const State, actor: usize) ?usize {
-    for (0..self.progress.party[actor].inventory.count()) |slot| {
+    for (0..self.progress.party.at(actor).inventory.count()) |slot| {
         if (self.canSelectItem(actor, slot)) return slot;
     }
     return null;
@@ -147,7 +147,7 @@ pub fn queue(self: *State, action: Action) void {
     if (action == .spell and !self.canCast(self.actor, action.spell.index)) return;
     if (action == .item) {
         const item = action.item;
-        const inventory = self.progress.party[self.actor].inventory;
+        const inventory = self.progress.party.at(self.actor).inventory;
         if (item.target >= self.partyCount() or !self.participates(item.target) or !self.canSelectItem(self.actor, item.slot) or inventory.slots[item.slot].?.id != item.id) return;
     }
     if (action == .unite and self.integration != null) {
@@ -384,7 +384,7 @@ pub fn tickCore(self: *State, input: Input) void {
             if (input.down or (!unite_choice and input.right)) self.moveTarget(false);
             if (input.confirm) {
                 if (party) {
-                    self.queue(.{ .item = .{ .slot = self.item_slot, .target = self.selection, .id = self.progress.party[self.actor].inventory.slots[self.item_slot].?.id } });
+                    self.queue(.{ .item = .{ .slot = self.item_slot, .target = self.selection, .id = self.progress.party.at(self.actor).inventory.slots[self.item_slot].?.id } });
                 } else if (self.phase == .unite_target) self.queue(.{ .unite = self.selection }) else if (self.phase == .rune_target) self.queue(.{ .rune_attack = self.selection }) else self.queue(.{ .attack = self.selection });
             }
         },
@@ -393,7 +393,7 @@ pub fn tickCore(self: *State, input: Input) void {
                 self.phase = .command;
                 return;
             }
-            const count = self.progress.party[self.actor].inventory.count();
+            const count = self.progress.party.at(self.actor).inventory.count();
             const first = firstBattleItem(self, self.actor) orelse {
                 self.phase = .command;
                 return;
@@ -407,7 +407,7 @@ pub fn tickCore(self: *State, input: Input) void {
                 }
             }
             if (input.confirm) {
-                const id = self.progress.party[self.actor].inventory.slots[self.selection].?.id;
+                const id = self.progress.party.at(self.actor).inventory.slots[self.selection].?.id;
                 const definition = self.rules.consumable(id) orelse return;
                 self.item_slot = self.selection;
                 if (definition.partyWide()) {
@@ -476,7 +476,7 @@ pub fn tickCore(self: *State, input: Input) void {
                 self.yes = false;
             }
             if (input.confirm) {
-                const inventory = &self.progress.party[self.selection].inventory;
+                const inventory = &self.progress.party.at(self.selection).inventory;
                 if (inventory.count() < 9) {
                     inventory.slots[inventory.count()] = self.dropped_item.?;
                     self.drop_received = true;
@@ -507,7 +507,7 @@ pub fn tickCore(self: *State, input: Input) void {
             if (input.up or input.down or input.left or input.right) self.yes = !self.yes;
             if (input.cancel or (input.confirm and !self.yes)) self.phase = if (leaving) .loot else .loot_replace else if (input.confirm) {
                 if (leaving) self.loot_declined = true else {
-                    self.progress.party[self.actor].inventory.slots[self.item_slot] = self.dropped_item.?;
+                    self.progress.party.at(self.actor).inventory.slots[self.item_slot] = self.dropped_item.?;
                     self.drop_received = true;
                     self.loot_recipient = self.actor;
                 }

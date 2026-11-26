@@ -85,7 +85,7 @@ fn run(io: std.Io, allocator: std.mem.Allocator, world_path: []const u8, replay_
     const world = try std.json.parseFromSliceLeaky(World, allocator, world_bytes, .{});
     try world.inn.validate();
 
-    var members: [6]battle.Member = undefined;
+    var members: [battle.Party.roster_capacity]battle.Member = undefined;
     var combat_backing: battle.State = undefined;
     var state = try engine.State.initOpening(world.room, world.journey, world.battle, world.items, world.inn, &members, &combat_backing, world.opening.hero, world.opening.money);
     defer state.releaseRestoredSave();
@@ -200,7 +200,7 @@ fn checkpoint(json: *std.json.Stringify, state: *const engine.State, id: []const
         rune_charges: [4]u16,
     };
     var party: [6]Member = undefined;
-    for (progress.party, 0..) |member, i| {
+    for (progress.party.items(), 0..) |member, i| {
         party[i] = .{
             .id = member.id,
             .hp = member.hp,
@@ -279,7 +279,7 @@ const Actor = struct {
     id: []const u8,
 
     fn fromIndex(combat: *const battle.State, index: usize) ?Actor {
-        if (index < combat.partyCount()) return .{ .side = .party, .slot = index, .id = combat.progress.party[index].id };
+        if (index < combat.partyCount()) return .{ .side = .party, .slot = index, .id = combat.progress.party.at(index).id };
         const enemy = index - combat.partyCount();
         if (enemy >= combat.enemyCount()) return null;
         return .{ .side = .enemy, .slot = enemy, .id = combat.enemy(enemy).id };
@@ -291,7 +291,7 @@ fn writeDiagnostics(json: *std.json.Stringify, state: *const engine.State, music
     const world = &state.field_state;
     const in_combat = state.mode == .battle or state.mode == .defeat;
     var stats: [6]struct { max_hp: u16, stats: battle.Stats } = undefined;
-    for (state.progress().party, 0..) |member, index| {
+    for (state.progress().party.items(), 0..) |member, index| {
         stats[index] = .{ .max_hp = member.max_hp, .stats = combat.stats(index) };
     }
     try json.objectField("party_stats");

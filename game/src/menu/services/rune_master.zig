@@ -23,7 +23,7 @@ pub fn handle(state: *pause.State, game: *field.State, input: pause.Input) void 
         },
         .rune_attach => {
             nav.cycle(&state.member, game.progress.party.len, input.left, input.right);
-            const slots = game.progress.party[state.member].inventory.count();
+            const slots = game.progress.party.at(state.member).inventory.count();
             state.slot = @min(state.slot, slots -| 1);
             if (slots > 0) {
                 nav.cycleUpDown(&state.slot, slots, input.field.menu_direction);

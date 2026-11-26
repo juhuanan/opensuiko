@@ -166,11 +166,10 @@ pub const State = struct {
     elapsed_ticks: u64 = 0,
     save_name: pause.save_slots.Label = pause.save_slots.defaultLabel(0),
     restored_save_arena: ?*std.heap.ArenaAllocator = null,
-    reserves: Reserves = @splat(null),
+    reserve_slots: [72]?battle.Party.Slot = @splat(null),
     shared_items: SharedItems = @splat(null),
     shared_item_catalogue: ?item_ledger.catalogue.Packet = null,
-    extras: [6]party_session.CharacterExtra = @splat(.{ .member_id = "" }),
-    reserve_extras: [72]?party_session.CharacterExtra = @splat(null),
+    roster_extras: [battle.Party.roster_capacity]party_session.CharacterExtra = @splat(.{ .member_id = "" }),
     party_backing: ?[]battle.Member = null,
     party_catalog: ?party_session.catalogue.Catalogue = null,
     party_bindings: ?party_session.catalogue.OwnershipBindings = null,
@@ -190,17 +189,18 @@ pub const State = struct {
     pub fn initEpisode(package: field.Package, data: Data, content: battle.Content, rules: field.items.Rules, inn: field.inn.Rules, members: []battle.Member, combat_backing: *battle.State) !State {
         try package.validate();
         try data.validate(package, content);
-        if (members.len != 6 or content.initialPartyCount() != 6) return error.InvalidParty;
+        if (members.len != battle.Party.roster_capacity or content.initialPartyCount() != 6) return error.InvalidParty;
         try content.validate();
         const expected = [_][]const u8{ "hero", "gremio", "pahn", "viktor", "yam_koo", "tai_ho" };
         for (expected, 0..) |id, i| if (!std.mem.eql(u8, id, content.initialProfile(i).id)) return error.InvalidEpisodeParty;
-        var combat = try battle.State.init(content, rules, members, battle.trial_seed);
+        var combat = try battle.State.init(content, rules, members[0..6], battle.trial_seed);
+        combat.progress.party = .selectInitial(members, 6);
         if (data.recruitment) |definition| try definition.validate(combat.content.characterRules());
         combat.progress.money = 1200;
-        combat.progress.party[0].inventory.slots[2] = .{ .id = .bandanna, .uses = 0 };
-        combat.progress.party[3].inventory.slots[2] = .{ .id = .headband, .uses = 0 };
+        combat.progress.party.at(0).inventory.slots[2] = .{ .id = .bandanna, .uses = 0 };
+        combat.progress.party.at(3).inventory.slots[2] = .{ .id = .headband, .uses = 0 };
         try combat.equipOwned(0, 0);
-        combat.progress.party[0].experience = 900;
+        combat.progress.party.at(0).experience = 900;
         var world = field.State.init(package, &combat.progress);
         if (package.roomIndex(inn.room) != null) try world.configureInn(package, inn);
         world.item_rules = rules;
@@ -212,18 +212,18 @@ pub const State = struct {
     pub fn initOpening(package: field.Package, data: Data, content: battle.Content, rules: field.items.Rules, inn: field.inn.Rules, members: []battle.Member, combat_backing: *battle.State, hero: opening.Hero, money: u32) !State {
         try package.validate();
         try data.validate(package, content);
-        if (members.len < 1) return error.InvalidParty;
+        if (members.len != battle.Party.roster_capacity) return error.InvalidParty;
         var canonical = content;
         canonical.initial_party = &.{"hero"};
         canonical.party_positions = canonical.party_positions[0..1];
         var starting_party: [1]battle.Member = undefined;
         var combat = try battle.State.init(canonical, rules, &starting_party, battle.trial_seed);
-        combat.progress.party[0] = hero.member.character();
-        combat.progress.party[0].rune = null;
+        combat.progress.party.at(0).* = hero.member.character();
+        combat.progress.party.at(0).rune = null;
         combat.progress.money = money;
-        combat.progress.party[0].level = hero.level;
-        combat.progress.party[0].experience = hero.experience;
-        combat.progress.party[0].base_stats = .{
+        combat.progress.party.at(0).level = hero.level;
+        combat.progress.party.at(0).experience = hero.experience;
+        combat.progress.party.at(0).base_stats = .{
             .attack = hero.base_stats.power,
             .defense = hero.base_stats.defense,
             .skill = hero.base_stats.skill,
@@ -231,7 +231,7 @@ pub const State = struct {
             .magic = hero.base_stats.magic,
             .luck = hero.base_stats.luck,
         };
-        combat.progress.party[0].weapon_level = hero.weapon_level;
+        combat.progress.party.at(0).weapon_level = hero.weapon_level;
         inline for (comptime std.enums.values(battle.systems.EquipmentSlot)) |slot| {
             if (@field(hero.equipped, @tagName(slot))) |item| {
                 const systems = combat.content.systems orelse return error.InvalidEquipment;
@@ -245,7 +245,7 @@ pub const State = struct {
         if (package.roomIndex(inn.room) != null) try world.configureInn(package, inn);
         world.item_rules = rules;
         members[0] = starting_party[0];
-        combat.progress.party = members[0..1];
+        combat.progress.party = .selectInitial(members, 1);
         combat_backing.* = combat;
         world.progress = &combat_backing.progress;
         return .{ .package = package, .data = data, .field_state = world, .combat = combat_backing, .route = initialRoute(package), .party_backing = members, .field_encounter_clock = battle_flow.initialFieldEncounterClock(data.field_encounters, world.progress.story.scenario) };
@@ -280,8 +280,17 @@ pub const State = struct {
         progress_owner.recordPahnDuel(self, outcome);
     }
 
-    pub fn replacePartySlice(self: *State, members: []battle.Member) void {
-        progress_owner.replacePartySlice(self, members);
+    pub fn reserveCount(self: *const State) usize {
+        return std.mem.indexOfScalar(?battle.Party.Slot, &self.reserve_slots, null) orelse self.reserve_slots.len;
+    }
+
+    pub fn reserveMember(self: *const State, index: usize) ?battle.Member {
+        const slot = self.reserve_slots[index] orelse return null;
+        return self.combat.progress.party.backing()[slot];
+    }
+
+    pub fn activeExtra(self: *const State, index: usize) party_session.CharacterExtra {
+        return self.roster_extras[self.combat.progress.party.slot(index)];
     }
 
     pub fn modalOwner(self: *const State, input: pause.Input) ModalOwner {
@@ -313,10 +322,13 @@ pub const State = struct {
 
     // Publish only validated startup or restore data into the long-lived session.
     pub fn bindValidatedStorage(self: *State, combat_backing: *battle.State, members: []battle.Member) void {
-        const active = members[0..self.combat.partyCount()];
-        @memcpy(active, self.combat.progress.party);
+        const source = self.combat.progress.party;
+        const owned_count = source.len + self.reserveCount();
+        std.debug.assert(members.len >= owned_count);
+        std.mem.copyForwards(battle.Member, members[0..owned_count], source.backing()[0..owned_count]);
         combat_backing.* = self.combat.*;
-        combat_backing.progress.party = active;
+        combat_backing.progress.party = .selectInitial(members, source.len);
+        for (0..source.len) |index| combat_backing.progress.party.select(index, source.slot(index));
         self.combat = combat_backing;
         self.field_state.progress = &combat_backing.progress;
         self.party_backing = members;
@@ -338,13 +350,13 @@ pub const State = struct {
         try content.validate();
         try data.validate(package, content);
         try rules.validate();
-        if (members.len < snapshot.party_count or snapshot.party_count == 0 or snapshot.party_count > 6) return error.InvalidParty;
-        var owned: [6]battle.Member = undefined;
-        for (&owned, snapshot.party) |*member, record| member.* = record.character();
+        if (members.len != battle.Party.roster_capacity or snapshot.party_count == 0 or snapshot.party_count > 6) return error.InvalidParty;
+        var owned: [battle.Party.roster_capacity]battle.Member = undefined;
+        for (owned[0..snapshot.party.len], snapshot.party) |*member, record| member.* = record.character();
         var combat: battle.State = .{
             .content = content,
             .rules = rules,
-            .progress = .{ .money = snapshot.money, .party = owned[0..snapshot.party_count] },
+            .progress = .{ .money = snapshot.money, .party = .selectInitial(&owned, snapshot.party_count) },
             .random = snapshot.random,
             .seed = retry_seed,
             .picker = try @FieldType(battle.State, "picker").init(.{ true, true, false, true, false }, .attack),
@@ -451,10 +463,11 @@ pub const State = struct {
     pub fn updateOpeningPartyMilestone(self: *State) void {
         const required = if (self.packagedOpeningRoute()) |route| route.initial_party else &[_][]const u8{ "cleo", "ted" };
         required_members: for (required) |id| {
-            for (self.combat.progress.party) |member| {
+            for (self.combat.progress.party.items()) |member| {
                 if (std.mem.eql(u8, member.id, id)) continue :required_members;
             }
-            for (self.reserves) |entry| if (entry) |member| {
+            for (self.reserve_slots) |entry| if (entry) |slot| {
+                const member = self.combat.progress.party.backing()[slot];
                 if (std.mem.eql(u8, member.id, id)) continue :required_members;
             };
             return;

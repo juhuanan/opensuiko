@@ -19,14 +19,13 @@ pub const FieldEncounterClock = struct {
 pub const Checkpoint = struct {
     progress: field.game_state.Progress,
     members: [6]field.game_state.Character,
-    formation: [6]u8,
+    formation: field.game_state.Formation,
     random: std.Random.DefaultPrng,
     elapsed_ticks: u64,
 
     fn capture(state: *const State) Checkpoint {
         const party_members = state.combat.progress.party;
-        var members: [6]field.game_state.Character = @splat(party_members[0]);
-        @memcpy(members[0..party_members.len], party_members);
+        const members = party_members.values();
         return .{
             .progress = state.combat.progress,
             .members = members,
@@ -98,7 +97,7 @@ pub fn beginReadyFieldEncounter(state: *State) !bool {
     const entry = (state.data.field_encounters orelse return false).forRoom(state.package.rooms[world.room].id) orelse return false;
     var traits: encounter_policy.Party = .{};
     for (0..state.combat.partyCount()) |slot| {
-        traits.level_sum += state.combat.progress.party[slot].level;
+        traits.level_sum += state.combat.progress.party.at(slot).level;
         traits.suppression_rune = traits.suppression_rune or state.combat.hasRune(slot, "champion's");
     }
     const outcome = try encounter_policy.attempt(.{
@@ -140,9 +139,10 @@ pub fn beginCombat(state: *State, encounter: usize) !void {
     if (state.mode != .field or state.scripted_battle != null or state.menu.phase != .closed or state.field_state.dialogue != null or state.field_state.remaining != 0) return error.GameBusy;
     if (encounter >= state.combat.content.encounters.len) return error.UnknownEncounter;
     try state.requireIdleField();
-    const members = state.combat.progress.party;
-    if (members.len == 0 or members.len > state.extras.len) return error.InvalidParty;
-    for (members, state.extras[0..members.len]) |member, extra| {
+    const members = state.combat.progress.party.items();
+    if (members.len == 0 or members.len > battle.Party.capacity) return error.InvalidParty;
+    for (members, 0..) |member, i| {
+        const extra = state.activeExtra(i);
         if (!roster.extraMatches(extra, member.id)) return error.InvalidExtras;
     }
     state.checkpoint = .capture(state);
@@ -152,7 +152,7 @@ pub fn beginCombat(state: *State, encounter: usize) !void {
 pub fn retryCombat(state: *State) !void {
     const checkpoint = state.checkpoint orelse return error.MissingBattleCheckpoint;
     const encounter = state.combat.encounter;
-    @memcpy(checkpoint.progress.party, checkpoint.members[0..checkpoint.progress.party.len]);
+    checkpoint.progress.party.copyFrom(checkpoint.members[0..checkpoint.progress.party.len]);
     state.combat.progress = checkpoint.progress;
     state.combat.formation = checkpoint.formation;
     state.combat.random = checkpoint.random;
@@ -162,7 +162,7 @@ pub fn retryCombat(state: *State) !void {
 
 fn startCombat(state: *State, encounter: usize) void {
     for (0..state.combat.partyCount()) |member| {
-        state.combat.progress.party[member].weapon_augment = party.weaponAugment(state.extras[member]);
+        state.combat.progress.party.at(member).weapon_augment = party.weaponAugment(state.activeExtra(member));
     }
     state.combat.encounter = encounter;
     state.combat.startEncounter();

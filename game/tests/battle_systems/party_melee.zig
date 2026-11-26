@@ -103,7 +103,7 @@ test "shared party melee and ranged normal critical protection knockout and dodg
             combat.integration = .{ .host = host };
             try combat.attachUniteActors(&actors.value);
             try combat.attachSpellScenes(&packet);
-            for (combat.progress.party) |*member| {
+            for (combat.progress.party.items()) |member| {
                 member.max_hp = 5000;
                 member.hp = 5000;
             }
@@ -111,8 +111,8 @@ test "shared party melee and ranged normal critical protection knockout and dodg
             combat.round_start_pending = false;
             combat.acted = @splat(true);
             combat.actions[0] = .{ .attack = target };
-            for (combat.progress.party) |*member| member.rune = null;
-            combat.progress.party[0].base_stats.attack = 300;
+            for (combat.progress.party.items()) |member| member.rune = null;
+            combat.progress.party.at(0).base_stats.attack = 300;
             combat.coordinator = .{ .stage = .dispatch, .current_actor = 0 };
             const actor = combat.partyCount() + target;
             if (variant == 2) combat.actor_conditions[actor].protection_rounds = 1;
@@ -188,7 +188,7 @@ test "shared party melee C formations finish source rounds with magic and cooper
             combat.integration = .{ .host = host };
             try combat.attachUniteActors(&actors.value);
             try combat.attachSpellScenes(&packet);
-            for (combat.progress.party) |*member| {
+            for (combat.progress.party.items()) |member| {
                 member.max_hp = 5000;
                 member.hp = 5000;
             }
@@ -243,12 +243,12 @@ test "shared party melee catalogue completes full Free Will encounters" {
         try combat.attachUniteActors(&actors.value);
         try combat.attachSpellScenes(&packet);
         // Diagnostic survivability/damage isolate scheduling from campaign growth.
-        for (combat.progress.party, 0..) |*member, owner| {
+        for (combat.progress.party.items(), 0..) |member, owner| {
             member.max_hp = 5000;
             member.hp = 5000;
-            combat.progress.party[owner].base_stats.attack = 300;
+            combat.progress.party.at(owner).base_stats.attack = 300;
         }
-        for (combat.progress.party) |*member| member.rune = null;
+        for (combat.progress.party.items()) |member| member.rune = null;
         var tape: h.Tape = .{};
         var draws = tape.init();
         var rounds: usize = 0;
@@ -343,17 +343,17 @@ test "shared party melee catalogue completes defended defeats and rear promotion
         try combat.attachUniteActors(&actors.value);
         try combat.attachSpellScenes(&packet);
         // Force lethal contacts without changing source selection or animation programs.
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| {
             member.hp = 1;
             member.inventory = .{};
         }
-        for (combat.progress.party) |*member| member.rune = null;
+        for (combat.progress.party.items()) |member| member.rune = null;
         const money = combat.progress.money;
-        const formation = combat.formation;
+        const formation = combat.formationOrder();
         var tape: h.Tape = .{};
         var draws = tape.init();
         for (0..25000) |_| {
-            const before_formation = combat.formation;
+            const before_formation = combat.formationOrder();
             var input: battle.Input = .{};
             if (combat.phase == .battle_menu) combat.choose(combat.firstLiving(true).?);
             if (combat.phase == .command) combat.queue(.defend);
@@ -410,7 +410,7 @@ test "shared party melee catalogue completes defended defeats and rear promotion
         try std.testing.expectEqual(cursor, draws.cursor);
         try std.testing.expectEqual(money, combat.progress.money);
         try std.testing.expect(!combat.unite_vm.hasActors() and !combat.hasUniteReturns());
-        if (!std.mem.eql(u8, &formation, &combat.formation)) promoted += 1;
+        if (!std.mem.eql(u8, &formation, &combat.formationOrder())) promoted += 1;
         try combat.progress.validate();
         cases += 1;
     }
@@ -447,15 +447,15 @@ test "shared party melee simultaneous Double Beat owners retain independent foll
     combat.round_start_pending = false;
     combat.acted = @splat(true);
     for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |actor| combat.acted[actor] = false;
-    for (combat.progress.party) |*member| {
+    for (combat.progress.party.items()) |member| {
         member.max_hp = 5000;
         member.hp = 5000;
     }
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .attack = 0 };
     combat.actions[2] = .{ .attack = 1 };
-    for (combat.progress.party) |*member| member.rune = null;
-    for ([_]usize{ 0, 2 }) |owner| combat.progress.party[owner].rune = combat.content.systems.?.runeIndex("double-beat").?;
+    for (combat.progress.party.items()) |member| member.rune = null;
+    for ([_]usize{ 0, 2 }) |owner| combat.progress.party.at(owner).rune = combat.content.systems.?.runeIndex("double-beat").?;
     combat.coordinator = .{ .stage = .select, .current_actor = 2, .completed = false, .remaining = 0 };
     var values: [4096]u15 = @splat(51);
     values[0..4].* = .{ 0, 99, 0, 99 };
@@ -554,7 +554,7 @@ test "shared party melee round boundary owns native statuses without an optional
     combat.startEncounter();
     try combat.attachUniteActors(&actors.value);
     try std.testing.expect(combat.integration == null and combat.sharedPartyMelee());
-    for (combat.progress.party) |*member| {
+    for (combat.progress.party.items()) |member| {
         member.max_hp = 200;
         member.hp = 100;
     }
@@ -568,7 +568,7 @@ test "shared party melee round boundary owns native statuses without an optional
     combat.phase = .resolving;
     combat.round_start_pending = false;
     combat.acted = @splat(true);
-    for (combat.progress.party) |*member| member.rune = null;
+    for (combat.progress.party.items()) |member| member.rune = null;
     combat.coordinator = .{ .stage = .round_ready, .current_actor = 0, .completed = true, .remaining = 0 };
     var values: [8]u15 = @splat(0);
     var draws = h.rules.Draws{ .values = &values };

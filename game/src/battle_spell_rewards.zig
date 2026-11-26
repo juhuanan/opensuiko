@@ -18,11 +18,11 @@ pub fn spellValid(self: *const State, spell: systems.Spell, target: usize) bool 
     if (target >= self.partyCount() + self.enemyCount() or spell.allies != (target < self.partyCount())) return false;
     const conditions = self.actor_conditions[target];
     const has_ailment = conditions.sleep_turns > 0 or conditions.accuracy_reduced or conditions.rune_blocked;
-    if (spell.kind == .revive) return target < self.partyCount() and (!self.participates(target) or (spell.full_heal and (self.hp(target) < self.progress.party[target].max_hp or self.progress.party[target].status != .healthy or self.progress.party[target].balloons > 0 or has_ailment)));
+    if (spell.kind == .revive) return target < self.partyCount() and (!self.participates(target) or (spell.full_heal and (self.hp(target) < self.progress.party.at(target).max_hp or self.progress.party.at(target).status != .healthy or self.progress.party.at(target).balloons > 0 or has_ailment)));
     if (!self.participates(target)) return false;
     return switch (spell.kind) {
-        .heal => self.hp(target) < self.progress.party[target].max_hp or (spell.clear_status and (self.progress.party[target].status != .healthy or self.progress.party[target].balloons > 0 or has_ailment)),
-        .cure => self.progress.party[target].status == .poisoned or self.progress.party[target].balloons > 0 or has_ailment or self.hp(target) < self.progress.party[target].max_hp,
+        .heal => self.hp(target) < self.progress.party.at(target).max_hp or (spell.clear_status and (self.progress.party.at(target).status != .healthy or self.progress.party.at(target).balloons > 0 or has_ailment)),
+        .cure => self.progress.party.at(target).status == .poisoned or self.progress.party.at(target).balloons > 0 or has_ailment or self.hp(target) < self.progress.party.at(target).max_hp,
         .sleep => conditions.sleep_turns == 0,
         else => true,
     };
@@ -44,7 +44,7 @@ pub fn runeSpells(self: *const State, host: *const battle_host_systems.Host, mem
 
 pub fn spellTarget(self: State, index: usize) spell_systems.plan.Target {
     if (index < self.partyCount()) {
-        const member = self.progress.party[index];
+        const member = self.progress.party.at(index).*;
         return .{
             .id = @intCast(index + 1),
             .side = .ally,
@@ -85,7 +85,7 @@ pub fn spellTarget(self: State, index: usize) spell_systems.plan.Target {
 }
 
 pub fn spellStatus(self: State, index: usize) u16 {
-    const member = self.progress.party[index];
+    const member = self.progress.party.at(index).*;
     var mask: u16 = 0;
     if (member.status == .poisoned) mask |= status_systems.status.maskOf(.poison);
     for (0..member.balloons) |balloon| mask |= status_systems.status.maskOf(@fromBackingInt(@intCast(balloon + 1)));
@@ -148,8 +148,8 @@ pub fn applySpellBridge(self: *State, effect: *Effect) void {
     while (target_index < count) : (target_index += 1) targets[target_index] = self.spellTarget(target_index);
     const actor: spell_systems.plan.Actor = .{
         .id = @intCast(effect.actor + 1),
-        .rune_index = self.progress.party[effect.actor].rune orelse 0,
-        .charges = self.progress.party[effect.actor].rune_charges,
+        .rune_index = self.progress.party.at(effect.actor).rune orelse 0,
+        .charges = self.progress.party.at(effect.actor).rune_charges,
         .magic = self.stats(effect.actor).magic,
     };
     const continuation = spell_systems.plan.prepare(host.spellRules(), content_id, rune_spells, actor, .{
@@ -207,7 +207,7 @@ pub fn applySpellBridge(self: *State, effect: *Effect) void {
         effect.affected |= @as(u16, 1) << @intCast(index);
         self.actor_conditions[index].stat_modifiers = .{ .skill_bonus = after.skill_bonus, .defense_bonus = after.defense_bonus };
         if (index < self.partyCount()) {
-            const member = &self.progress.party[index];
+            const member = self.progress.party.at(index);
             member.hp = after.hp;
             if (after.ko and !change.before.ko) {
                 self.markPartyKnockout(index);
@@ -237,7 +237,7 @@ pub fn applySpellBridge(self: *State, effect: *Effect) void {
             self.actor_conditions[index].protection_rounds = after.protection;
         }
     }
-    self.progress.party[effect.actor].rune_charges = staged.actor.charges;
+    self.progress.party.at(effect.actor).rune_charges = staged.actor.charges;
     draws.* = staged.draws;
 }
 
@@ -259,7 +259,7 @@ pub fn applySpell(self: *State, effect: *Effect) void {
         effect.kind = .unavailable;
         return;
     }
-    const actor = &self.progress.party[effect.actor];
+    const actor = self.progress.party.at(effect.actor);
     const tier = self.spellTier(effect.actor, effect.spell) orelse {
         effect.kind = .unavailable;
         return;
@@ -290,7 +290,7 @@ pub fn applySpell(self: *State, effect: *Effect) void {
                 if (systems.statusPercent(self.roll()) >= failure) _ = self.inflictStatus(target, .sleep);
             } else if (self.inflictStatus(target, .sleep)) self.actor_conditions[target].sleep_turns = @intCast(@min(spell.power + 1, 255));
         } else {
-            const member = &self.progress.party[target];
+            const member = self.progress.party.at(target);
             const before = member.hp;
             if (spell.kind == .revive) {
                 if (self.actor_conditions[target].protection_rounds == 0) member.hp = if (spell.full_heal) member.max_hp else @max(1, @as(u16, @intCast(@as(u32, member.max_hp) * spell.power / 100)));
@@ -326,34 +326,34 @@ pub fn applyExperience(self: *State, index: usize) void {
     // Bounded: a legitimate award can cross several levels, but a corrupt
     // counter must not spin the reward commit.  99 is the source cap.
     var levels: u8 = 0;
-    while (self.progress.party[index].experience >= 1000 and self.progress.party[index].level < 99 and levels < 99) : (levels += 1) {
-        self.progress.party[index].experience -= 1000;
+    while (self.progress.party.at(index).experience >= 1000 and self.progress.party.at(index).level < 99 and levels < 99) : (levels += 1) {
+        self.progress.party.at(index).experience -= 1000;
         var randoms: [7]u15 = undefined;
         for (&randoms) |*value| value.* = self.roll();
         self.levelUp(index, randoms);
     }
-    if (self.progress.party[index].level == 99) self.progress.party[index].experience = 0 else if (self.progress.party[index].experience >= 1000) self.progress.party[index].experience = 999;
+    if (self.progress.party.at(index).level == 99) self.progress.party.at(index).experience = 0 else if (self.progress.party.at(index).experience >= 1000) self.progress.party.at(index).experience = 999;
 }
 pub fn sceneExperience(self: *State, gain: bool) !void {
     if (self.content.systems == null) return error.MissingGrowthRules;
-    for (0..self.partyCount()) |index| if (self.progress.party[index].experience >= 1000) return error.InvalidExperience;
+    for (0..self.partyCount()) |index| if (self.progress.party.at(index).experience >= 1000) return error.InvalidExperience;
     for (0..self.partyCount()) |index| {
         if (!gain) {
-            self.progress.party[index].experience -|= 10;
+            self.progress.party.at(index).experience -|= 10;
             continue;
         }
-        self.progress.party[index].experience += 10;
-        if (self.progress.party[index].experience < 1000) continue;
-        self.progress.party[index].experience %= 1000;
+        self.progress.party.at(index).experience += 10;
+        if (self.progress.party.at(index).experience < 1000) continue;
+        self.progress.party.at(index).experience %= 1000;
         // The event wraps EXP at the cap without consuming growth draws.
-        if (self.progress.party[index].level == 99) continue;
+        if (self.progress.party.at(index).level == 99) continue;
         var randoms: [7]u15 = undefined;
         for (&randoms) |*value| value.* = self.roll();
         self.levelUp(index, randoms);
     }
 }
 pub fn levelUp(self: *State, index: usize, randoms: [7]u15) void {
-    const member = &self.progress.party[index];
+    const member = self.progress.party.at(index);
     if (member.level == 99) return;
     member.levelUp(self.content.systems.?, self.partyProfile(index).growth, randoms);
 }

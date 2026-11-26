@@ -126,13 +126,13 @@ pub const Session = struct {
         const old_menu: ?pause.State = if (menu) |m| m.* else null;
         const old_effect = self.menu_effect;
         var members: [6]field.game_state.Member = undefined;
-        @memcpy(members[0..before.progress.party.len], before.progress.party);
+        before.progress.party.copyTo(members[0..before.progress.party.len]);
         errdefer {
             self.field_state = before;
             before.progress.* = before_progress;
             self.field_moving_updates = old_updates;
             draws.* = old_draws;
-            @memcpy(before.progress.party, members[0..before.progress.party.len]);
+            before.progress.party.copyFrom(members[0..before.progress.party.len]);
             if (menu) |m| m.* = old_menu.?;
             self.menu_effect = old_effect;
         }

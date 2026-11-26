@@ -15,10 +15,10 @@ test "party transactions agree with 30 independent original-instruction vectors"
         for (members[0..row.party_size], 0..) |*member, i| {
             member.* = .{ .id = ids[i], .name = "Test member", .hp = @intCast(10 + i), .max_hp = @intCast(100 + i), .status = .poisoned, .rune_charges = .{ 0, 0, 0, 0 }, .max_rune_charges = row.max_rune_charges };
         }
-        var state = progress.Progress{ .money = row.money_before, .party = members[0..row.party_size] };
+        var state = progress.Progress{ .money = row.money_before, .party = .init(members[0..row.party_size]) };
         if (row.rested) try state.stay(rules.value.price_per_member) else try std.testing.expectError(error.InsufficientFunds, state.stay(rules.value.price_per_member));
         try std.testing.expectEqual(row.money_after, state.money);
-        for (state.party, 0..) |member, i| {
+        for (state.party.items(), 0..) |member, i| {
             try std.testing.expectEqual(@as(u16, @intCast(if (row.rested) 100 + i else 10 + i)), member.hp);
             try std.testing.expectEqual(if (row.rested) progress.Status.healthy else .poisoned, member.status);
             try std.testing.expectEqual(if (row.rested) row.max_rune_charges else [_]u16{ 0, 0, 0, 0 }, member.rune_charges);
@@ -52,7 +52,7 @@ test "inn cancel, decline and insufficient money leave all gameplay state intact
     scoped.npc = "keeper";
     for (0..3) |route| {
         var members = [_]progress.Member{injuredHero()};
-        var state_progress: field.game_state.Progress = .{ .money = 99, .party = &members };
+        var state_progress: field.game_state.Progress = .{ .money = 99, .party = .init(&members) };
         var state = field.State.init(package.value, &state_progress);
         try state.configureInn(package.value, scoped);
         offer(&state, package.value);
@@ -87,7 +87,7 @@ test "confirmation charges once; rest blocks input and returns control after its
     scoped.room = "inn";
     scoped.npc = "keeper";
     var members = [_]progress.Member{injuredHero()};
-    var state_progress: field.game_state.Progress = .{ .money = 100, .party = &members };
+    var state_progress: field.game_state.Progress = .{ .money = 100, .party = .init(&members) };
     var state = field.State.init(package.value, &state_progress);
     try state.configureInn(package.value, scoped);
     offer(&state, package.value);
@@ -124,7 +124,7 @@ test "invalid rules, service bindings and party data fail before payment" {
     try std.testing.expectError(error.InvalidInn, rules.validate());
     try std.testing.expectError(error.UnexpectedEndOfInput, field.inn.load(std.testing.allocator, "{"));
     var members = [_]progress.Member{injuredHero()};
-    var state_progress: field.game_state.Progress = .{ .money = 100, .party = &members };
+    var state_progress: field.game_state.Progress = .{ .money = 100, .party = .init(&members) };
     var state = field.State.init(package.value, &state_progress);
     try std.testing.expectError(error.UnknownInnRoom, state.configureInn(package.value, parsed.value));
     rules = parsed.value;
@@ -133,6 +133,6 @@ test "invalid rules, service bindings and party data fail before payment" {
     members[0].hp = 101;
     try std.testing.expectError(error.InvalidMember, state.progress.stay(100));
     try std.testing.expectEqual(@as(u32, 100), state.progress.money);
-    state.progress.party = &.{};
+    state.progress.party = .{};
     try std.testing.expectError(error.InvalidParty, state.progress.stay(100));
 }

@@ -86,13 +86,13 @@ pub fn startSpellAction(self: *State, actor: usize, cast: types_mod.SpellSelecti
         instance.target_center = .{ @divTrunc(target_pose.rect.w, 2) - target_pose.anchor_x, @divTrunc(target_pose.rect.h, 2) - target_pose.anchor_y };
         instance.target_idle_center = instance.target_center;
         instance.target_height = @intCast(std.math.clamp(target_pose.rect.h, 0, 255));
-        const target_profile_id = if (target < self.partyCount()) self.progress.party[target].id else self.enemy(target - self.partyCount()).id;
+        const target_profile_id = if (target < self.partyCount()) self.progress.party.at(target).id else self.enemy(target - self.partyCount()).id;
         for (packet.hurt_poses) |pose| if (std.mem.eql(u8, pose.id, target_profile_id)) {
             if (pose.sprite_height) |height| instance.target_height = height;
             break;
         };
         if (packet.spells[scene_id].program.?.reaction != null and packet.spells[scene_id].program.?.center_after_reaction) {
-            const target_id = if (target < self.partyCount()) self.progress.party[target].id else self.enemy(target - self.partyCount()).id;
+            const target_id = if (target < self.partyCount()) self.progress.party.at(target).id else self.enemy(target - self.partyCount()).id;
             for (packet.hurt_poses) |pose| if (std.mem.eql(u8, pose.id, target_id)) {
                 if (pose.idle_center) |center| instance.target_idle_center = .{ center[0], center[1] };
                 if (pose.center) |center| instance.target_center = .{ center[0], center[1] };
@@ -112,7 +112,7 @@ pub fn startSpellAction(self: *State, actor: usize, cast: types_mod.SpellSelecti
                 const position = layout.worldPosition(self, recipient);
                 const pose = layout.actorLayout(self.*, recipient).sprite;
                 var center = [2]i32{ @divTrunc(pose.rect.w, 2) - pose.anchor_x, @divTrunc(pose.rect.h, 2) - pose.anchor_y };
-                const id = if (recipient < self.partyCount()) self.progress.party[recipient].id else self.enemy(recipient - self.partyCount()).id;
+                const id = if (recipient < self.partyCount()) self.progress.party.at(recipient).id else self.enemy(recipient - self.partyCount()).id;
                 for (packet.hurt_poses) |art| if (std.mem.eql(u8, art.id, id)) {
                     const known = if (packet.spells[scene_id].program.?.center_after_reaction) art.center else art.idle_center;
                     if (known) |v| center = .{ v[0], v[1] };
@@ -459,7 +459,7 @@ pub fn commanderDecision(self: *State, actor: usize) void {
         }
         var selected: ?usize = null;
         for (self.partyCount()..self.partyCount() + self.enemyCount()) |ally| {
-            const target = self.formation[ally - self.partyCount()];
+            const target = self.formationMember(ally - self.partyCount());
             if (ally == actor or !self.participates(ally) or self.acted[ally] or self.coordinatorLocked(ally) or target >= self.partyCount() or !self.participates(target) or self.coordinatorLocked(target)) continue;
             // shortcut: one witnessed Squirrel overlaps the Commander; other rosters need their own complete source tracks.
             if (selected != null or self.enemy(ally - self.partyCount()).ordered_attack == null) {
@@ -473,7 +473,7 @@ pub fn commanderDecision(self: *State, actor: usize) void {
             return;
         };
         self.acted[actor] = true;
-        self.active = .{ .actor = actor, .target = self.formation[ally - self.partyCount()], .kind = .group_order, .ordered = .{ .actor = ally } };
+        self.active = .{ .actor = actor, .target = self.formationMember(ally - self.partyCount()), .kind = .group_order, .ordered = .{ .actor = ally } };
         self.coordinator = .{ .current_actor = actor };
         self.action_ticks = 1;
         return;

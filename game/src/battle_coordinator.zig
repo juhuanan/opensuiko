@@ -406,7 +406,7 @@ const ItemStart = enum { started, wait, rejected };
 fn startMedicine(self: *State, actor: usize) ItemStart {
     const selected = self.actions[actor].?.item;
     var timing = for (self.content.medicine_timings) |entry| {
-        if (std.mem.eql(u8, entry.id, self.progress.party[actor].id)) break entry;
+        if (std.mem.eql(u8, entry.id, self.progress.party.at(actor).id)) break entry;
     } else {
         self.replay_unsupported = .coordinator_action;
         return .wait;
@@ -430,7 +430,7 @@ fn startMedicine(self: *State, actor: usize) ItemStart {
     // shortcut: retain one item effect until both tracks finish; qualify interrupted overlaps before relaxing this.
     if (self.medicine_action) |item| if (!item.owner_released or !item.target_released) return .wait;
     for (0..self.partyCount() + self.enemyCount()) |index| if (self.coordinatorLocked(index)) return .wait;
-    const inventory = &self.progress.party[actor].inventory;
+    const inventory = &self.progress.party.at(actor).inventory;
     if (selected.slot >= inventory.count() or inventory.slots[selected.slot].?.id != selected.id or (definition.uses != 0 and inventory.slots[selected.slot].?.uses == 0)) {
         self.replay_unsupported = .coordinator_action;
         return .wait;
@@ -464,7 +464,7 @@ pub fn advanceMedicine(self: *State) void {
         };
     }
     if (item.ticks == timing.target_start) if (definition.cure) |cure| {
-        const target = self.progress.party[item.target];
+        const target = self.progress.party.at(item.target).*;
         if ((cure == .poison and target.status != .poisoned) or (cure == .balloon and target.balloons == 0)) {
             item.target_released = true;
             item.target_interrupted = true;
@@ -474,7 +474,7 @@ pub fn advanceMedicine(self: *State) void {
     };
     if (item.ticks == timing.pending_tick) {
         for (0..self.partyCount()) |index| if (item.affects(index) and !item.interrupted(index) and self.participates(index)) {
-            var pending = self.progress.party[index];
+            var pending = self.progress.party.at(index).*;
             item.amounts[index] = definition.applyTo(&pending, self.actor_conditions[index].protection_rounds > 0);
         };
         item.amount = item.amounts[item.target];
@@ -485,7 +485,7 @@ pub fn advanceMedicine(self: *State) void {
                 amount.* = 0;
                 continue;
             }
-            const target = &self.progress.party[index];
+            const target = self.progress.party.at(index);
             const before = target.*;
             target.hp = @min(target.max_hp, target.hp +| amount.*);
             amount.* = target.hp -| before.hp;
@@ -498,7 +498,7 @@ pub fn advanceMedicine(self: *State) void {
     if (item.ticks == (if (item.actor == item.target and !item.interrupted(item.actor)) timing.target_release else timing.owner_release)) item.owner_released = true;
 }
 pub fn partyAttackTiming(self: *const State, actor: usize) ?PartyAttackTiming {
-    for (self.content.party_attacks) |timing| if (std.mem.eql(u8, timing.id, self.progress.party[actor].id)) return timing;
+    for (self.content.party_attacks) |timing| if (std.mem.eql(u8, timing.id, self.progress.party.at(actor).id)) return timing;
     return null;
 }
 fn startPartyStrike(self: *State, actor: usize, requested: usize, origin: ?battle.Position) bool {
@@ -527,11 +527,11 @@ fn startPartyStrike(self: *State, actor: usize, requested: usize, origin: ?battl
         return true;
     }
     if (origin == null) if (self.unite_actors) |bundle| if (bundle.counterPacket()) |packet| {
-        if (packet.rangedAttacker(self.progress.party[actor].id) != null) return startRangedStrike(self, actor, requested);
-        if (packet.partyAttacker(self.progress.party[actor].id, .melee_hit) != null) return startMeleeStrike(self, actor, requested);
+        if (packet.rangedAttacker(self.progress.party.at(actor).id) != null) return startRangedStrike(self, actor, requested);
+        if (packet.partyAttacker(self.progress.party.at(actor).id, .melee_hit) != null) return startMeleeStrike(self, actor, requested);
     };
-    const tracks = if (self.content.world_art) |art| art.attackTracks(self.progress.party[actor].id, requested) else null;
-    if ((!std.mem.eql(u8, self.progress.party[actor].id, "hero") and tracks == null) or self.party_strikes[actor] != null or self.partyAttackTiming(actor) == null or requested >= self.enemyCount() or self.actor_conditions[actor].sleep_turns > 0 or self.unbalanced[actor] > 0) {
+    const tracks = if (self.content.world_art) |art| art.attackTracks(self.progress.party.at(actor).id, requested) else null;
+    if ((!std.mem.eql(u8, self.progress.party.at(actor).id, "hero") and tracks == null) or self.party_strikes[actor] != null or self.partyAttackTiming(actor) == null or requested >= self.enemyCount() or self.actor_conditions[actor].sleep_turns > 0 or self.unbalanced[actor] > 0) {
         self.replay_unsupported = .coordinator_action;
         return false;
     }

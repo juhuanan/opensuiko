@@ -664,7 +664,7 @@ fn seedMember(roster_asset: catalogue.Asset, bindings: Bindings, profile: *const
 
 fn validateMember(roster_asset: catalogue.Asset, bindings: Bindings, profile: *const catalogue.Profile, owned: battle.OwnedMember, sidecar: party.CharacterExtra, progress: Progress) !void {
     var members = [_]field.game_state.Member{owned};
-    try (field.game_state.Progress{ .money = 0, .party = &members }).validate();
+    try (field.game_state.Progress{ .money = 0, .party = .init(&members) }).validate();
     if (owned.level == 0 or owned.level > roster_asset.rules.max_level or owned.experience >= 1000) return error.InvalidMember;
     if (owned.weapon_level == 0 or owned.weapon_level > roster_asset.rules.weapon_max_level) return error.InvalidWeapon;
     if (owned.max_hp > 9999) return error.InvalidMember;

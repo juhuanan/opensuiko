@@ -206,7 +206,7 @@ test "Whip Wolf actor group orders preserve launch delay eligibility mapping pro
             members[0].hp = 0;
             members[0].status = .unconscious;
         }
-        if (mode == 6) state.formation = .{ 3, 1, 2, 0, 4, 5 };
+        if (mode == 6) state.setFormation(.{ 3, 1, 2, 0, 4, 5 });
         if (mode == 7) {
             for (state.actions[0..state.partyCount()]) |*action| action.* = null;
         }
@@ -217,7 +217,7 @@ test "Whip Wolf actor group orders preserve launch delay eligibility mapping pro
         if (mode == 4) expected[0] = 0;
         var contacts: usize = 0;
         for (0..3) |ally| {
-            const target = state.formation[ally];
+            const target = state.formationMember(ally);
             if (mode == 5 or (ally == 0 and (mode == 2 or mode == 3 or mode == 4))) continue;
             const amount = if (mode == 1 and target == 0) 0 else state.resolvePhysicalDamage(state.partyCount() + ally, target, 0, mode != 7);
             expected[target] -|= @intCast(amount);

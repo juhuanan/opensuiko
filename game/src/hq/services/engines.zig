@@ -53,14 +53,14 @@ pub const Adapter = struct {
     fn deposit(ctx: *anyopaque, member: usize, slot: usize) anyerror!void {
         const self: *Adapter = @ptrCast(@alignCast(ctx));
         if (member >= self.state.progress.party.len) return error.InvalidMember;
-        try self.state.progress.storage.deposit(&self.state.progress.party[member].inventory, slot);
+        try self.state.progress.storage.deposit(&self.state.progress.party.at(member).inventory, slot);
     }
 
     fn withdraw(ctx: *anyopaque, member: usize, native_id: u16) anyerror!void {
         const self: *Adapter = @ptrCast(@alignCast(ctx));
         if (member >= self.state.progress.party.len) return error.InvalidMember;
         const id = item(native_id) orelse return error.UnsupportedItem;
-        try self.state.progress.storage.withdraw(&self.state.progress.party[member].inventory, id);
+        try self.state.progress.storage.withdraw(&self.state.progress.party.at(member).inventory, id);
     }
 
     fn appraise(ctx: *anyopaque, member: usize, slot: usize) anyerror!void {

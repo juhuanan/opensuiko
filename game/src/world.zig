@@ -126,18 +126,18 @@ pub fn pick(content: Content, draw: u15, party_level_sum: u16, suppression_rune:
     return entry;
 }
 pub const Party = struct {
-    members: []field.game_state.Member = &.{},
+    members: field.game_state.Party = .{},
     level_sum: u16,
     suppression_rune: bool = false,
     step_healing_rune: bool = false,
     pub fn step(self: Party, draws: *Draws) !void {
-        if (self.step_healing_rune) for (self.members) |*member| {
+        if (self.step_healing_rune) for (self.members.items()) |member| {
             if (member.hp < member.max_hp) {
                 member.hp += 1;
                 if (member.status == .unconscious) member.status = .healthy;
             }
         };
-        for (self.members) |*member| if (member.status == .poisoned) {
+        for (self.members.items()) |member| if (member.status == .poisoned) {
             const result = rules.fieldPoison(member.hp, member.max_hp, try draws.next());
             if (result.cured) member.status = .healthy;
             member.hp -= result.damage;
@@ -205,13 +205,13 @@ pub const State = struct {
         if (self.boat or self.scripted) return error.UnsupportedWorldTravelMode;
         if (party.members.len > 6) return error.InvalidParty;
         var previous_members: [6]field.game_state.Member = undefined;
-        @memcpy(previous_members[0..party.members.len], party.members);
+        party.members.copyTo(previous_members[0..party.members.len]);
         const before = self.*;
         const old_draws = draws.*;
         errdefer {
             self.* = before;
             draws.* = old_draws;
-            @memcpy(party.members, previous_members[0..party.members.len]);
+            party.members.copyFrom(previous_members[0..party.members.len]);
         }
         if (self.ready()) if (input.direction) |direction| if (requestedAxisAllowed(self.camera, direction)) {
             var passable: [4]bool = undefined;

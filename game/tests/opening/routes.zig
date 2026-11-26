@@ -72,10 +72,10 @@ test "scripted battle retries defeat and resumes the field event through the Jou
     defer items.deinit();
     const inn = try field.inn.load(allocator, field.inn.json);
     defer inn.deinit();
-    var party: [6]battle.Member = undefined;
+    var party: [battle.Party.roster_capacity]battle.Member = undefined;
     var combat_backing: battle.State = undefined;
     var journey_state = try journey.State.initEpisode(package.value, data.value, content.value, items.value, inn.value, &party, &combat_backing);
-    const assets = try field_events.Owned.load(allocator, journey_state.field_state.progress.party);
+    const assets = try field_events.Owned.load(allocator, journey_state.field_state.progress.party.values()[0..journey_state.field_state.progress.party.len]);
     defer assets.deinit();
     var binding = assets.binding();
     const commands: []const runtime.Command = &.{
@@ -193,10 +193,10 @@ test "scripted battle retries defeat and resumes the field event through the Jou
     stale.receipt.instance += 1;
     try std.testing.expectError(error.InvalidFieldBattleReceipt, session.resumeBattle(binding, state, stale, .victory));
 
-    const before_attempt = party;
+    const before_attempt = journey_state.combat.progress.party.values();
     const random_before = journey_state.combat.random;
     const enemy_hp_before = journey_state.combat.enemy_hp;
-    for (&party) |*member| member.hp = 1;
+    for (journey_state.combat.progress.party.items()) |member| member.hp = 1;
     journey_state.combat.progress.money -= 17;
     for (0..4000) |_| {
         if (journey_state.mode == .defeat) break;
@@ -215,7 +215,7 @@ test "scripted battle retries defeat and resumes the field event through the Jou
     _ = try journey_state.tickWithFieldEvents(.{}, .{ .confirm = true });
     try std.testing.expectEqual(.battle, journey_state.mode);
     try std.testing.expectEqual(.battle, journey_state.audioScene());
-    try std.testing.expectEqualDeep(before_attempt, party);
+    try std.testing.expectEqualDeep(before_attempt, journey_state.combat.progress.party.values());
     try std.testing.expectEqualDeep(random_before, journey_state.combat.random);
     try std.testing.expectEqualDeep(enemy_hp_before, journey_state.combat.enemy_hp);
     try std.testing.expectEqual(money_before, journey_state.combat.progress.money);

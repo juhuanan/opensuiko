@@ -140,7 +140,7 @@ test "ranged attacks use the live battle scheduler for hit miss protection and k
         defer allocator.free(profiles);
         profiles[0].id = name;
         combat.content.party = profiles;
-        combat.progress.party[0].id = name;
+        combat.progress.party.at(0).id = name;
         var encounters = try allocator.dupe(battle.Encounter, content.value.encounters);
         defer allocator.free(encounters);
         encounters[0].enemies = &.{"crow"};
@@ -168,7 +168,7 @@ test "ranged attacks use the live battle scheduler for hit miss protection and k
         const graphics = [_]battle.UniteGraphic{ .{ .id = name, .poses = owner_poses }, .{ .id = "crow", .poses = target_poses } };
         combat.content.unite_graphics = &graphics;
         combat.startEncounter();
-        if (scenario == 0) combat.progress.party[0].weapon_augment = .{ .rune = .fire, .fragments = 3 };
+        if (scenario == 0) combat.progress.party.at(0).weapon_augment = .{ .rune = .fire, .fragments = 3 };
         combat.unite_actors = &bundle;
         try combat.attachSpellScenes(&scene_packet);
         combat.phase = .resolving;
@@ -176,7 +176,7 @@ test "ranged attacks use the live battle scheduler for hit miss protection and k
         combat.acted[0] = false;
         combat.actions[0] = .{ .attack = 0 };
         if (coordinated) combat.coordinator = .{ .stage = .dispatch, .current_actor = 0 };
-        if (scenario >= 5) combat.progress.party[0].rune = for (combat.content.systems.?.runes, 0..) |rune, index| {
+        if (scenario >= 5) combat.progress.party.at(0).rune = for (combat.content.systems.?.runes, 0..) |rune, index| {
             if (std.mem.eql(u8, rune.id, "double-beat")) break index;
         } else return error.MissingRune;
         if (scenario == 2) combat.actor_conditions[combat.partyCount()].protection_rounds = 1;
@@ -589,10 +589,10 @@ test "BonBon journey source attack handles hit miss and protection" {
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
-        combat.progress.party[0].inventory.slots = @splat(null);
-        combat.progress.party[0].max_hp = 5000;
-        combat.progress.party[0].hp = 5000;
+        for (combat.progress.party.items()) |member| member.rune = null;
+        combat.progress.party.at(0).inventory.slots = @splat(null);
+        combat.progress.party.at(0).max_hp = 5000;
+        combat.progress.party.at(0).hp = 5000;
         if (scenario == 1) combat.actor_conditions[0].protection_rounds = 2;
         const enemy = combat.partyCount();
         combat.acted[enemy] = false;
@@ -613,11 +613,11 @@ test "BonBon journey source attack handles hit miss and protection" {
             for (combat.unite_vm.counter_actions) |maybe| if (maybe) |playback| {
                 if (playback.action == null or rollback or playback.action.?.stage != .approach or combat.unite_vm.actors[enemy].signals & 2 == 0 or scenario == 2) continue;
                 const before = combat;
-                const before_member = combat.progress.party[0];
+                const before_member = combat.progress.party.at(0).*;
                 const cursor = draws.cursor;
                 draws.values = values[0..cursor];
                 try std.testing.expectError(error.RandomInputExhausted, combat.tickReplay(.{}, &draws));
-                try std.testing.expectEqualDeep(before_member, combat.progress.party[0]);
+                try std.testing.expectEqualDeep(before_member, combat.progress.party.at(0).*);
                 try std.testing.expectEqualDeep(before.unite_vm, combat.unite_vm);
                 try std.testing.expectEqualDeep(before.active, combat.active);
                 try std.testing.expectEqual(cursor, draws.cursor);
@@ -683,22 +683,22 @@ test "Wild boar journey source attack retains queued items damage protection mis
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
-        combat.progress.party[0].inventory.slots = @splat(null);
+        for (combat.progress.party.items()) |member| member.rune = null;
+        combat.progress.party.at(0).inventory.slots = @splat(null);
         const initial_hp: u16 = if (scenario == 3) 1 else if (queued_item != null) (if (low_hp) @as(u16, 1000) else 2500) else 5000;
-        combat.progress.party[0].max_hp = if (scenario == 3) 1 else 5000;
-        combat.progress.party[0].hp = initial_hp;
+        combat.progress.party.at(0).max_hp = if (scenario == 3) 1 else 5000;
+        combat.progress.party.at(0).hp = initial_hp;
         if (queued_item) |id| {
             combat.actions[1] = .{ .item = .{ .slot = 0, .target = 0, .id = id } };
             combat.acted[1] = false;
-            combat.progress.party[1].inventory.slots = @splat(null);
-            combat.progress.party[1].inventory.slots[0] = .{ .id = id, .uses = items.value.consumable(id).?.uses };
-            if (id == .antitoxin) combat.progress.party[0].status = .poisoned;
-            if (id == .needle) combat.progress.party[0].balloons = 2;
+            combat.progress.party.at(1).inventory.slots = @splat(null);
+            combat.progress.party.at(1).inventory.slots[0] = .{ .id = id, .uses = items.value.consumable(id).?.uses };
+            if (id == .antitoxin) combat.progress.party.at(0).status = .poisoned;
+            if (id == .needle) combat.progress.party.at(0).balloons = 2;
         }
         if (party_first) {
             // Keep one living front target so the enemy must wait for the item lock.
-            for (combat.progress.party[2..]) |*member| {
+            for (combat.progress.party.items()[2..]) |member| {
                 member.hp = 0;
                 member.status = .unconscious;
             }
@@ -730,7 +730,7 @@ test "Wild boar journey source attack retains queued items damage protection mis
         }
         const healing: u16 = if (queued_item != null and scenario != 1 and scenario != 3) items.value.consumable(queued_item.?).?.heal_hp else 0;
         const hp_at_attack = initial_hp + @as(u16, if (party_first) healing else 0);
-        const guard: ?u8 = if (queued_item != null and scenario < 2 and hp_at_attack < combat.progress.party[0].max_hp / 4) 1 else null;
+        const guard: ?u8 = if (queued_item != null and scenario < 2 and hp_at_attack < combat.progress.party.at(0).max_hp / 4) 1 else null;
         const victim = guard orelse 0;
         var draws = battle.systems.Draws{ .values = &values };
         const initial_guard_hp = combat.hp(1);
@@ -791,20 +791,20 @@ test "Wild boar journey source attack retains queued items damage protection mis
             const guard_damage: u16 = if (guard != null and scenario == 0) @intCast(battle.physicalDamage(combat.stats(enemy).attack, combat.stats(1).defense, 24, false)) else 0;
             try std.testing.expectEqual(initial_guard_hp - guard_damage, combat.hp(1));
             try std.testing.expect(combat.acted[1]);
-            if (item_started != (party_first or scenario != 3)) std.debug.print("Wild boar item={s} low_hp={any} party_first={any} scenario={d} owner_hp={d} target_hp={d} status={s}\n", .{ @tagName(id), low_hp, party_first, scenario, combat.hp(1), combat.hp(0), @tagName(combat.progress.party[0].status) });
+            if (item_started != (party_first or scenario != 3)) std.debug.print("Wild boar item={s} low_hp={any} party_first={any} scenario={d} owner_hp={d} target_hp={d} status={s}\n", .{ @tagName(id), low_hp, party_first, scenario, combat.hp(1), combat.hp(0), @tagName(combat.progress.party.at(0).status) });
             try std.testing.expectEqual(party_first or scenario != 3, item_started);
             if (party_first or scenario != 3) {
                 try std.testing.expect(item_waited);
                 try std.testing.expect(item_completed);
             }
             if (scenario != 3) {
-                try std.testing.expectEqual(field.game_state.Status.healthy, combat.progress.party[0].status);
-                if (id == .needle) try std.testing.expectEqual(@as(u8, 1), combat.progress.party[0].balloons);
+                try std.testing.expectEqual(field.game_state.Status.healthy, combat.progress.party.at(0).status);
+                if (id == .needle) try std.testing.expectEqual(@as(u8, 1), combat.progress.party.at(0).balloons);
             }
             const uses = items.value.consumable(id).?.uses - @as(u16, if (scenario == 3 and !party_first) 0 else 1);
-            if (uses == 0) try std.testing.expect(combat.progress.party[1].inventory.slots[0] == null) else {
-                try std.testing.expectEqual(id, combat.progress.party[1].inventory.slots[0].?.id);
-                try std.testing.expectEqual(uses, combat.progress.party[1].inventory.slots[0].?.uses);
+            if (uses == 0) try std.testing.expect(combat.progress.party.at(1).inventory.slots[0] == null) else {
+                try std.testing.expectEqual(id, combat.progress.party.at(1).inventory.slots[0].?.id);
+                try std.testing.expectEqual(uses, combat.progress.party.at(1).inventory.slots[0].?.uses);
             }
         }
         cases += 1;
@@ -837,25 +837,25 @@ test "opening journey source encounters complete mixed rounds with queued healin
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
-        for (combat.progress.party, 0..) |*member, actor| {
+        for (combat.progress.party.items()) |member| member.rune = null;
+        for (combat.progress.party.items(), 0..) |member, actor| {
             member.inventory.slots = @splat(null);
             member.max_hp = 5000;
             member.hp = if (actor == 0) 3000 else 5000;
             if (condition == 1) combat.actor_conditions[actor].protection_rounds = 2;
         }
         if (condition == 2) {
-            combat.progress.party[0].status = .poisoned;
-            combat.progress.party[0].balloons = 2;
+            combat.progress.party.at(0).status = .poisoned;
+            combat.progress.party.at(0).balloons = 2;
             combat.actor_conditions[0].sleep_turns = 1;
             combat.actions[0] = null;
         }
         if (condition == 3) {
-            combat.progress.party[0].hp = 1;
-            combat.progress.party[0].max_hp = 1;
+            combat.progress.party.at(0).hp = 1;
+            combat.progress.party.at(0).max_hp = 1;
         }
         const initial = members;
-        combat.progress.party[5].inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
+        combat.progress.party.at(5).inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
         combat.actions[5] = .{ .item = .{ .id = .medicine, .slot = 0, .target = 0 } };
         combat.acted[5] = false;
         for (combat.partyCount()..combat.partyCount() + combat.enemyCount()) |enemy| combat.acted[enemy] = false;
@@ -913,7 +913,7 @@ test "opening journey source encounters complete mixed rounds with queued healin
         try std.testing.expect(saw_item);
         try std.testing.expectEqual(roll == 51, rollback);
         try std.testing.expectEqual(combat.enemyCount() > 1, overlap);
-        try std.testing.expectEqual(@as(u16, 5), combat.progress.party[5].inventory.slots[0].?.uses);
+        try std.testing.expectEqual(@as(u16, 5), combat.progress.party.at(5).inventory.slots[0].?.uses);
         for (0..combat.enemyCount()) |enemy| {
             try std.testing.expect(started[enemy]);
             try std.testing.expectEqual(roll == 51, contacted[enemy]);
@@ -925,8 +925,8 @@ test "opening journey source encounters complete mixed rounds with queued healin
             try std.testing.expectEqual(expected, combat.hp(actor));
         }
         if (condition == 2) {
-            try std.testing.expectEqual(field.game_state.Status.poisoned, combat.progress.party[0].status);
-            try std.testing.expectEqual(@as(u8, 2), combat.progress.party[0].balloons);
+            try std.testing.expectEqual(field.game_state.Status.poisoned, combat.progress.party.at(0).status);
+            try std.testing.expectEqual(@as(u8, 2), combat.progress.party.at(0).balloons);
             try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[0].sleep_turns);
         }
         cases += 1;
@@ -966,8 +966,8 @@ test "opening journey source rounds mix spells healing items and enemy returns" 
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| member.rune = null;
+        for (combat.progress.party.items()) |member| {
             member.inventory.slots = @splat(null);
             member.max_hp = 5000;
             member.hp = 3000;
@@ -975,12 +975,12 @@ test "opening journey source rounds mix spells healing items and enemy returns" 
             member.max_rune_charges = .{ 9, 9, 9, 9 };
         }
         const item_owner = 5 - caster;
-        combat.progress.party[item_owner].inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
+        combat.progress.party.at(item_owner).inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
         combat.actions[item_owner] = .{ .item = .{ .id = .medicine, .slot = 0, .target = 1 } };
         const spell = for (content.systems.?.spells, 0..) |entry, index| {
             if (std.mem.eql(u8, entry.id, if (healing) "spell_9" else "spell_1")) break index;
         } else return error.MissingSpell;
-        combat.progress.party[caster].rune = content.systems.?.runeIndex(if (healing) "water" else "fire");
+        combat.progress.party.at(caster).rune = content.systems.?.runeIndex(if (healing) "water" else "fire");
         try std.testing.expect(combat.canCast(caster, spell));
         combat.actions[caster] = .{ .spell = .{ .index = spell, .target = if (healing) 1 else 0 } };
         combat.acted[caster] = false;
@@ -1009,7 +1009,7 @@ test "opening journey source rounds mix spells healing items and enemy returns" 
                     if (playback.victim() == 1) recipient_damage += @intCast(playback.amount);
                 }
             };
-            if (healing and !healed and combat.progress.party[caster].rune_charges[0] == 8) {
+            if (healing and !healed and combat.progress.party.at(caster).rune_charges[0] == 8) {
                 healed = true;
                 try std.testing.expectEqual(@as(u16, 5000), combat.hp(1));
             }
@@ -1020,8 +1020,8 @@ test "opening journey source rounds mix spells healing items and enemy returns" 
         try std.testing.expect(combat.phase == .battle_menu and combat.round == 2 and !combat.unite_vm.hasActors());
         try std.testing.expect(saw_spell and saw_item);
         try std.testing.expect(item_completed);
-        try std.testing.expectEqual(@as(u8, 8), combat.progress.party[caster].rune_charges[0]);
-        try std.testing.expectEqual(@as(u16, 5), combat.progress.party[item_owner].inventory.slots[0].?.uses);
+        try std.testing.expectEqual(@as(u8, 8), combat.progress.party.at(caster).rune_charges[0]);
+        try std.testing.expectEqual(@as(u16, 5), combat.progress.party.at(item_owner).inventory.slots[0].?.uses);
         for (0..combat.enemyCount()) |enemy| {
             try std.testing.expect(contacts[enemy]);
             if (!healing and enemy == 0) try std.testing.expect(combat.enemy_hp[enemy] < 5000) else try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[enemy]);
@@ -1081,8 +1081,8 @@ test "opening journey source rounds mix physical runes Fisherman and Medicine" {
             try std.testing.expect(combat.partyProfile(technique.owner).rune_locked);
             try std.testing.expect(combat.hasRune(technique.owner, technique.rune));
         }
-        for (combat.progress.party) |*member| member.rune = null;
-        combat.progress.party[technique.owner].rune = content.systems.?.runeIndex(technique.rune);
+        for (combat.progress.party.items()) |member| member.rune = null;
+        combat.progress.party.at(technique.owner).rune = content.systems.?.runeIndex(technique.rune);
         try std.testing.expect(combat.canPhysicalRune(technique.owner));
         combat.actions = @splat(null);
         combat.choose(4);
@@ -1093,17 +1093,17 @@ test "opening journey source rounds mix physical runes Fisherman and Medicine" {
         };
         combat.actions[technique.owner] = .{ .rune_attack = 0 };
         combat.actions[1] = .{ .item = .{ .id = .medicine, .slot = 0, .target = 3 } };
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| {
             member.inventory.slots = @splat(null);
             member.max_hp = 5000;
             member.hp = 3000;
         }
-        combat.progress.party[1].inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
-        combat.progress.party[if (physical_first) technique.owner else 4].base_stats.speed = 999;
+        combat.progress.party.at(1).inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
+        combat.progress.party.at(if (physical_first) technique.owner else 4).base_stats.speed = 999;
         if (protected) for (&combat.actor_conditions) |*conditions| {
             conditions.protection_rounds = 2;
         };
-        const charges = combat.progress.party[technique.owner].rune_charges;
+        const charges = combat.progress.party.at(technique.owner).rune_charges;
         const defense = combat.stats(combat.partyCount()).defense;
         const physical_damage = battle.physicalDamage(combat.stats(technique.owner).attack, defense, 51, false) * technique.numerator / 10;
         const unite_damage = (battle.physicalDamage(combat.stats(4).attack, defense, 51, false) + battle.physicalDamage(combat.stats(5).attack, defense, 51, false)) * 3;
@@ -1203,8 +1203,8 @@ test "opening journey source rounds mix physical runes Fisherman and Medicine" {
         try std.testing.expectEqual(@as(u16, @intCast(5000 - if (protected) 0 else physical_damage + unite_damage)), combat.enemy_hp[0]);
         for (1..combat.enemyCount()) |enemy| try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[enemy]);
         for (0..combat.enemyCount()) |enemy| try std.testing.expect(contacts[enemy]);
-        try std.testing.expectEqualDeep(charges, combat.progress.party[technique.owner].rune_charges);
-        try std.testing.expectEqual(@as(u16, 5), combat.progress.party[1].inventory.slots[0].?.uses);
+        try std.testing.expectEqualDeep(charges, combat.progress.party.at(technique.owner).rune_charges);
+        try std.testing.expectEqual(@as(u16, 5), combat.progress.party.at(1).inventory.slots[0].?.uses);
         try std.testing.expect(item_completed);
         cases += 1;
     };
@@ -1233,11 +1233,11 @@ test "Crow journey source dive reaches every party row and retains contact rollb
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
-        combat.progress.party[target].inventory.slots = @splat(null);
+        for (combat.progress.party.items()) |member| member.rune = null;
+        combat.progress.party.at(target).inventory.slots = @splat(null);
         const hp: u16 = if (scenario == 3) 1 else 5000;
-        combat.progress.party[target].hp = hp;
-        combat.progress.party[target].max_hp = hp;
+        combat.progress.party.at(target).hp = hp;
+        combat.progress.party.at(target).max_hp = hp;
         if (scenario == 1) combat.actor_conditions[target].protection_rounds = 2;
         const enemy = combat.partyCount();
         combat.acted[enemy] = false;
@@ -1299,14 +1299,14 @@ test "Ant journey plays source ordinary and special attacks" {
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
-        combat.progress.party[0].inventory.slots = @splat(null);
+        for (combat.progress.party.items()) |member| member.rune = null;
+        combat.progress.party.at(0).inventory.slots = @splat(null);
         const initial_hp: u16 = if (scenario >= 6) 1 else 5000;
-        combat.progress.party[0].max_hp = if (scenario >= 8) 5000 else initial_hp;
-        combat.progress.party[0].hp = initial_hp;
+        combat.progress.party.at(0).max_hp = if (scenario >= 8) 5000 else initial_hp;
+        combat.progress.party.at(0).hp = initial_hp;
         if (scenario >= 8) {
-            combat.progress.party[1].max_hp = 5000;
-            combat.progress.party[1].hp = 5000;
+            combat.progress.party.at(1).max_hp = 5000;
+            combat.progress.party.at(1).hp = 5000;
         }
         if (scenario == 1 or scenario == 5) combat.actor_conditions[0].protection_rounds = 2;
         const enemy = combat.partyCount();
@@ -1332,11 +1332,11 @@ test "Ant journey plays source ordinary and special attacks" {
             for (combat.unite_vm.counter_actions) |maybe| if (maybe) |playback| {
                 if (!special or rolled_back or playback.action == null or playback.action.?.stage != .approach or combat.unite_vm.actors[enemy].signals & 2 == 0) continue;
                 const before = combat;
-                const before_member = combat.progress.party[0];
+                const before_member = combat.progress.party.at(0).*;
                 const cursor = draws.cursor;
                 draws.values = values[0..cursor];
                 try std.testing.expectError(error.RandomInputExhausted, combat.tickReplay(.{}, &draws));
-                try std.testing.expectEqualDeep(before_member, combat.progress.party[0]);
+                try std.testing.expectEqualDeep(before_member, combat.progress.party.at(0).*);
                 try std.testing.expectEqualDeep(before.unite_vm, combat.unite_vm);
                 try std.testing.expectEqualDeep(before.active, combat.active);
                 try std.testing.expectEqual(cursor, draws.cursor);
@@ -1356,7 +1356,7 @@ test "Ant journey plays source ordinary and special attacks" {
         try std.testing.expectEqual(special, rolled_back);
         const amount: u16 = @intCast(battle.physicalDamage(combat.stats(enemy).attack, combat.stats(0).defense, 24, true));
         try std.testing.expectEqual(@as(u16, if (scenario == 8) 1 else if (scenario >= 6) 0 else if (scenario == 0 or scenario == 4) 5000 - amount else if (scenario == 3) 5000 - 2 * amount else 5000), combat.hp(0));
-        if (scenario == 6 or scenario == 7 or scenario == 9) try std.testing.expectEqual(field.game_state.Status.unconscious, combat.progress.party[0].status);
+        if (scenario == 6 or scenario == 7 or scenario == 9) try std.testing.expectEqual(field.game_state.Status.unconscious, combat.progress.party.at(0).status);
         if (scenario == 8) {
             const guarded_damage: u16 = @intCast(battle.physicalDamage(combat.stats(enemy).attack, combat.stats(1).defense, 24, true));
             try std.testing.expectEqual(@as(u16, 5000 - guarded_damage), combat.hp(1));
@@ -1388,9 +1388,9 @@ test "Ant source coordinator delays selection while its special continues" {
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
-        combat.progress.party[0].max_hp = 5000;
-        combat.progress.party[0].hp = 5000;
+        for (combat.progress.party.items()) |member| member.rune = null;
+        combat.progress.party.at(0).max_hp = 5000;
+        combat.progress.party.at(0).hp = 5000;
         const enemy = combat.partyCount();
         combat.acted[enemy] = false;
         combat.acted[1] = false;
@@ -1457,13 +1457,13 @@ test "Ant special starts the coordinator in an ordinary journey round" {
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
         combat.actions[1] = if (attack) .{ .attack = 0 } else if (item) .{ .item = .{ .slot = 0, .target = 0, .id = .medicine } } else .defend;
-        for (combat.progress.party) |*member| member.rune = null;
-        if (mode == 3) combat.progress.party[1].rune = for (combat.content.systems.?.runes, 0..) |rune, index| {
+        for (combat.progress.party.items()) |member| member.rune = null;
+        if (mode == 3) combat.progress.party.at(1).rune = for (combat.content.systems.?.runes, 0..) |rune, index| {
             if (std.mem.eql(u8, rune.id, "double-beat")) break index;
         } else return error.MissingRune;
-        combat.progress.party[0].max_hp = 5000;
-        combat.progress.party[0].hp = if (item) 1000 else 5000;
-        if (item) combat.progress.party[1].inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
+        combat.progress.party.at(0).max_hp = 5000;
+        combat.progress.party.at(0).hp = if (item) 1000 else 5000;
+        if (item) combat.progress.party.at(1).inventory.slots[0] = .{ .id = .medicine, .uses = 6 };
         combat.enemy_hp[0] = 5000;
         const enemy = combat.partyCount();
         combat.acted[enemy] = false;
@@ -1516,7 +1516,7 @@ test "Ant special starts the coordinator in an ordinary journey round" {
         if (mode == 3) try std.testing.expect(!combat.double_beat_pending[1]);
         if (item) {
             try std.testing.expect(combat.hp(0) > before_healing.?);
-            try std.testing.expectEqual(@as(u16, 5), combat.progress.party[1].inventory.slots[0].?.uses);
+            try std.testing.expectEqual(@as(u16, 5), combat.progress.party.at(1).inventory.slots[0].?.uses);
         }
     }
 }
@@ -1625,18 +1625,18 @@ test "Melee live source selection hit miss protected KO and Buddha preserve cont
         combat.phase = .resolving;
         combat.acted = @splat(true);
         for (combat.actions[0..combat.partyCount()]) |*action| action.* = .defend;
-        combat.progress.party[0].inventory.slots = @splat(null);
-        combat.progress.party[0].max_hp = 5000;
-        combat.progress.party[0].hp = 5000;
+        combat.progress.party.at(0).inventory.slots = @splat(null);
+        combat.progress.party.at(0).max_hp = 5000;
+        combat.progress.party.at(0).hp = 5000;
         if (scenario == 1) combat.actor_conditions[0].protection_rounds = 2;
         if (scenario == 2 or scenario == 3) {
-            combat.progress.party[0].hp = 1;
-            for (combat.progress.party[1..]) |*member| {
+            combat.progress.party.at(0).hp = 1;
+            for (combat.progress.party.items()[1..]) |member| {
                 member.hp = 0;
                 member.status = .unconscious;
             }
         }
-        if (scenario == 3) combat.progress.party[0].inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
+        if (scenario == 3) combat.progress.party.at(0).inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
         const hp = combat.hp(0);
         const enemy = combat.partyCount();
         combat.acted[enemy] = false;
@@ -1658,11 +1658,11 @@ test "Melee live source selection hit miss protected KO and Buddha preserve cont
             for (combat.unite_vm.counter_actions) |maybe| if (maybe) |playback| {
                 if (playback.action == null or rollback or playback.action.?.stage != .approach or combat.unite_vm.actors[enemy].signals & 2 == 0 or scenario == 4) continue;
                 const before = combat;
-                const before_member = combat.progress.party[0];
+                const before_member = combat.progress.party.at(0).*;
                 const cursor = draws.cursor;
                 draws.values = values[0..cursor];
                 try std.testing.expectError(error.RandomInputExhausted, combat.tickReplay(.{}, &draws));
-                try std.testing.expectEqualDeep(before_member, combat.progress.party[0]);
+                try std.testing.expectEqualDeep(before_member, combat.progress.party.at(0).*);
                 try std.testing.expectEqualDeep(before.unite_vm, combat.unite_vm);
                 try std.testing.expectEqualDeep(before.active, combat.active);
                 try std.testing.expectEqual(cursor, draws.cursor);
@@ -1740,8 +1740,8 @@ test "Parry completes a queued party turn and Kobold counters through its own se
         try combat.attachSpellScenes(&scenes.value);
         combat.phase = .resolving;
         combat.acted = @splat(true);
-        combat.progress.party[0].max_hp = 5000;
-        combat.progress.party[0].hp = 5000;
+        combat.progress.party.at(0).max_hp = 5000;
+        combat.progress.party.at(0).hp = 5000;
         combat.enemy_hp = @splat(5000);
         for (combat.actions[0..combat.partyCount()]) |*action| action.* = .defend;
         combat.acted[if (scenario == 0) 0 else combat.partyCount() + 1] = false;
@@ -1850,24 +1850,24 @@ test "Parry live party hurt protection KO Buddha and Double-Beat preserve source
         const initial_enemy_hp = combat.hp(target);
         // Diagnostic HP lets the same source actors cover surviving and lethal counter strikes.
         if (scenario == 0 or scenario >= 4) {
-            combat.progress.party[0].max_hp = 5000;
-            combat.progress.party[0].hp = 5000;
+            combat.progress.party.at(0).max_hp = 5000;
+            combat.progress.party.at(0).hp = 5000;
         }
         if (scenario == 1) combat.actor_conditions[0].protection_rounds = 2;
-        combat.progress.party[0].inventory.slots = @splat(null);
+        combat.progress.party.at(0).inventory.slots = @splat(null);
         if (scenario == 2 or scenario == 3) {
-            combat.progress.party[0].hp = 1;
-            for (combat.progress.party[1..]) |*member| {
+            combat.progress.party.at(0).hp = 1;
+            for (combat.progress.party.items()[1..]) |member| {
                 member.hp = 0;
                 member.status = .unconscious;
             }
         }
-        if (scenario == 3) combat.progress.party[0].inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
-        if (scenario >= 4) combat.progress.party[0].rune = for (combat.content.systems.?.runes, 0..) |rune, index| {
+        if (scenario == 3) combat.progress.party.at(0).inventory.slots[0] = .{ .id = combat.rules.automatic_revival.?.id, .uses = 0 };
+        if (scenario >= 4) combat.progress.party.at(0).rune = for (combat.content.systems.?.runes, 0..) |rune, index| {
             if (std.mem.eql(u8, rune.id, "double-beat")) break index;
         } else return error.MissingRune;
         const hp = combat.hp(0);
-        const charges = combat.progress.party[0].rune_charges;
+        const charges = combat.progress.party.at(0).rune_charges;
         var values: [128]u15 = @splat(12345);
         values[0] = 99;
         values[1] = 24;
@@ -1906,7 +1906,7 @@ test "Parry live party hurt protection KO Buddha and Double-Beat preserve source
                         expected_followup_origin = .{ .x = @as(f32, @floatFromInt(position[0])) / 4096, .y = @as(f32, @floatFromInt(position[1])) / 4096, .z = @as(f32, @floatFromInt(position[2])) / 4096 };
                     }
                     const before = combat;
-                    const before_member = combat.progress.party[0];
+                    const before_member = combat.progress.party.at(0).*;
                     const cursor = draws.cursor;
                     draws.values = values[0..cursor];
                     try std.testing.expectError(error.RandomInputExhausted, combat.tickReplay(.{}, &draws));
@@ -1914,7 +1914,7 @@ test "Parry live party hurt protection KO Buddha and Double-Beat preserve source
                     try std.testing.expectEqualDeep(before.active, combat.active);
                     try std.testing.expectEqualDeep(before.actor_camera, combat.actor_camera);
                     try std.testing.expectEqualDeep(before.double_beat_pending, combat.double_beat_pending);
-                    try std.testing.expectEqualDeep(before_member, combat.progress.party[0]);
+                    try std.testing.expectEqualDeep(before_member, combat.progress.party.at(0).*);
                     try std.testing.expectEqual(before.camera_ticks, combat.camera_ticks);
                     try std.testing.expectEqual(cursor, draws.cursor);
                     draws.values = &values;
@@ -1941,7 +1941,7 @@ test "Parry live party hurt protection KO Buddha and Double-Beat preserve source
             }
             if (combat.hp(0) == 0 and combat.party_knockouts[0].pending) {
                 saw_pending_ko = true;
-                try std.testing.expect(combat.progress.party[0].status == .unconscious);
+                try std.testing.expect(combat.progress.party.at(0).status == .unconscious);
             }
             if (combat.revivalAge(0) != null) saw_revival = true;
             if (scenario == 3) try std.testing.expect(combat.phase != .defeat);
@@ -1959,7 +1959,7 @@ test "Parry live party hurt protection KO Buddha and Double-Beat preserve source
         try std.testing.expectEqual(scenario == 2 or scenario == 3, saw_pending_ko);
         try std.testing.expectEqual(scenario == 3, saw_revival);
         try std.testing.expect(!combat.unite_vm.hasActors() and combat.active == null and !combat.hasPendingRevival());
-        try std.testing.expectEqualDeep(charges, combat.progress.party[0].rune_charges);
+        try std.testing.expectEqualDeep(charges, combat.progress.party.at(0).rune_charges);
         try std.testing.expectEqual(@as(usize, if (scenario == 4) 4 else if (scenario == 5) 5 else 2), draws.cursor);
         if (scenario == 1) try std.testing.expectEqual(hp, combat.hp(0));
         if (scenario == 2) {
@@ -1969,7 +1969,7 @@ test "Parry live party hurt protection KO Buddha and Double-Beat preserve source
         }
         if (scenario == 3) {
             try std.testing.expectEqual(@as(u16, 50), combat.hp(0));
-            try std.testing.expectEqual(@as(usize, 0), combat.progress.party[0].inventory.count());
+            try std.testing.expectEqual(@as(usize, 0), combat.progress.party.at(0).inventory.count());
         }
         if (scenario < 4) try std.testing.expectEqual(initial_enemy_hp, combat.hp(target));
         if (scenario >= 4) try std.testing.expect(!combat.double_beat_pending[0]);
@@ -2243,7 +2243,7 @@ test "Counter live eligibility preserves source slot weapon Defend rune and rand
         var combat = try battle.State.init(content, items.value, &members, 17);
         try combat.attachUniteActors(&actors.value);
         combat.actions[0] = if (scenario == 0 or scenario == 5 or scenario == 6 or scenario == 7) .defend else .{ .attack = 0 };
-        if (scenario == 3 or scenario == 4) combat.progress.party[0].rune = for (content.systems.?.runes, 0..) |rune, index| {
+        if (scenario == 3 or scenario == 4) combat.progress.party.at(0).rune = for (content.systems.?.runes, 0..) |rune, index| {
             if (std.mem.eql(u8, rune.id, "counter")) break index;
         } else return error.MissingCounterRune;
         if (scenario == 4) profiles[0].weapon_range = .long;
@@ -2343,7 +2343,7 @@ test "Counter and physical rune simultaneous callbacks consume variance in actor
     combat.enemy_hp = @splat(5000);
     const recipient = combat.partyCount();
     const attacker = recipient + 1;
-    combat.progress.party[2].rune = for (content.systems.?.runes, 0..) |rune, index| {
+    combat.progress.party.at(2).rune = for (content.systems.?.runes, 0..) |rune, index| {
         if (std.mem.eql(u8, rune.id, "boar")) break index;
     } else return error.MissingRune;
     try combat.beginSourcePhysicalRune(2, recipient);
@@ -2403,11 +2403,11 @@ test "Parry and physical rune simultaneous contacts restore party HP after a lat
     try combat.attachUniteActors(&actors.value);
     try combat.attachSpellScenes(&scenes.value);
     combat.enemy_hp = @splat(5000);
-    combat.progress.party[0].max_hp = 5000;
-    combat.progress.party[0].hp = 5000;
+    combat.progress.party.at(0).max_hp = 5000;
+    combat.progress.party.at(0).hp = 5000;
     const attacker = combat.partyCount();
     const recipient = attacker + 1;
-    combat.progress.party[2].rune = for (content.systems.?.runes, 0..) |rune, index| {
+    combat.progress.party.at(2).rune = for (content.systems.?.runes, 0..) |rune, index| {
         if (std.mem.eql(u8, rune.id, "boar")) break index;
     } else return error.MissingRune;
     try combat.beginSourcePhysicalRune(2, recipient);
@@ -2427,12 +2427,12 @@ test "Parry and physical rune simultaneous contacts restore party HP after a lat
     var draws = battle.systems.Draws{ .values = &values };
     combat.phase = .resolving;
     const before = combat;
-    const before_member = combat.progress.party[0];
+    const before_member = combat.progress.party.at(0).*;
     draws.values = values[0..1];
     try std.testing.expectError(error.RandomInputExhausted, combat.tickReplay(.{}, &draws));
     try std.testing.expectEqualDeep(before.unite_vm, combat.unite_vm);
     try std.testing.expectEqualDeep(before.enemy_hp, combat.enemy_hp);
-    try std.testing.expectEqualDeep(before_member, combat.progress.party[0]);
+    try std.testing.expectEqualDeep(before_member, combat.progress.party.at(0).*);
     try std.testing.expectEqualDeep(before.party_knockouts, combat.party_knockouts);
     try std.testing.expectEqualDeep(before.actor_camera, combat.actor_camera);
     try std.testing.expectEqual(before.camera_ticks, combat.camera_ticks);

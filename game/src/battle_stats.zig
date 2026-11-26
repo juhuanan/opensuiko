@@ -12,7 +12,7 @@ const PartyStrike = types_mod.PartyStrike;
 pub fn resolvePhysicalDamage(self: *const State, attacker: usize, target: usize, roll: u15, defending: bool) u32 {
     const base = systems.physicalDamage(self.stats(attacker).attack, self.stats(target).defense, roll, defending and target < self.partyCount());
     if (attacker >= self.partyCount()) return base;
-    const augment = self.progress.party[attacker].weapon_augment;
+    const augment = self.progress.party.at(attacker).weapon_augment;
     const weapon = if (self.partyProfile(attacker).weapon) |value| value.element else null;
     const element = systems.weaponElement(weapon, augment.rune);
     const profile = if (target < self.partyCount()) self.partyProfile(target) else self.enemy(target - self.partyCount());
@@ -123,7 +123,7 @@ pub fn canLetGo(self: *const State) bool {
     if (!self.canEscape()) return false;
     var party_levels: u32 = 0;
     var enemy_levels: u32 = 0;
-    for (self.progress.party) |member| party_levels += member.level;
+    for (self.progress.party.items()) |member| party_levels += member.level;
     for (0..self.enemyCount()) |i| enemy_levels += self.enemy(i).level;
     return party_levels * 60 / self.partyCount() >= enemy_levels * 60 / self.enemyCount();
 }
@@ -147,7 +147,7 @@ pub fn enterRoundMenu(self: *State) void {
 
 pub fn stats(self: *const State, index: usize) Stats {
     if (index >= self.partyCount()) return withTemporaryStats(self, index, self.enemy(index - self.partyCount()).stats);
-    const result = equippedStats(self.content, self.ownedMember(index), self.progress.party[index].weapon_augment);
+    const result = equippedStats(self.content, self.ownedMember(index), self.progress.party.at(index).weapon_augment);
     return self.withTemporaryStats(index, result);
 }
 
@@ -193,7 +193,7 @@ fn bonus(value: u16, amount: i16) u16 {
     return @intCast(std.math.clamp(@as(i32, value) + amount, 0, 9999));
 }
 pub fn formationSlot(self: *const State, member: usize) usize {
-    for (self.formation, 0..) |id, i| if (id == member) return i;
+    for (self.formationOrder(), 0..) |id, i| if (id == member) return i;
     unreachable;
 }
 pub fn partyRow(self: *const State, member: usize) Row {
@@ -252,7 +252,7 @@ pub fn canAttackTarget(self: *const State, member: usize, target: usize) bool {
     if (!self.canStartAttack(member) or target >= self.enemyCount() or self.enemy_hp[target] == 0) return false;
     if (self.partyProfile(member).motion == null and self.partyProfile(member).attack.len == 0) {
         const packet = (self.unite_actors orelse return false).counterPacket() orelse return false;
-        if (packet.rangedAttacker(self.progress.party[member].id) == null) return false;
+        if (packet.rangedAttacker(self.progress.party.at(member).id) == null) return false;
     }
     return self.weaponRange(member).reaches(self.partyRow(member), self.enemyRow(target));
 }
@@ -268,7 +268,7 @@ pub fn canFreeWill(self: *const State) bool {
         if (!self.participates(member) or action == null or action.? != .attack) continue;
         const timing = self.partyAttackTiming(member) orelse return false;
         if (self.hasRune(member, "double-beat") and timing.motion == null) return false;
-        if (art.attackTracks(self.progress.party[member].id, action.?.attack) == null) return false;
+        if (art.attackTracks(self.progress.party.at(member).id, action.?.attack) == null) return false;
     }
     return true;
 }
@@ -281,7 +281,7 @@ pub fn chooseFreeWill(self: *State) void {
         count += 1;
     };
     var cursor: usize = 0;
-    for (self.formation) |member| {
+    for (self.formationOrder()) |member| {
         if (member >= self.partyCount() or self.departed[member]) continue;
         self.actions[member] = .defend;
         var reachable = false;
@@ -316,24 +316,24 @@ pub fn promoteRearMembers(self: *State) void {
                 self.formation_shifts[fallen] = .{ .from_slot = self.formationSlot(fallen), .started_at = self.camera_ticks -% 1 };
                 self.formation_shifts[replacement] = .{ .from_slot = self.formationSlot(replacement), .started_at = self.camera_ticks -% 1 };
             }
-            std.mem.swap(u8, &self.formation[self.formationSlot(fallen)], &self.formation[self.formationSlot(replacement)]);
+            self.formation.swap(self.formationSlot(fallen), self.formationSlot(replacement));
             break;
         }
     }
 }
 pub fn swapFormation(self: *State, first: usize, second: usize) !void {
     if (first >= self.partyCount() or second >= self.partyCount()) return error.InvalidMember;
-    std.mem.swap(u8, &self.formation[first], &self.formation[second]);
+    self.formation.swap(first, second);
     if (self.phase == .command) self.choose(self.actor);
 }
 pub fn weaponName(self: *const State, member: usize) []const u8 {
     const weapon = self.partyProfile(member).weapon orelse return "Weapon";
-    return weapon.names[self.progress.party[member].weapon_level - 1];
+    return weapon.names[self.progress.party.at(member).weapon_level - 1];
 }
 pub fn sharpenPrice(self: *const State, member: usize, limit: u8) !u32 {
     if (member >= self.partyCount() or limit == 0 or limit > 16) return error.InvalidMember;
     const weapon = self.partyProfile(member).weapon orelse return error.InvalidWeapon;
-    const level = self.progress.party[member].weapon_level;
+    const level = self.progress.party.at(member).weapon_level;
     if (level == 0 or level > 16) return error.InvalidWeapon;
     if (level >= limit) return error.WeaponLimit;
     return weapon.upgrade_costs[level];
@@ -341,6 +341,6 @@ pub fn sharpenPrice(self: *const State, member: usize, limit: u8) !u32 {
 pub fn sharpen(self: *State, member: usize, limit: u8, money: *u32) !void {
     const price = try self.sharpenPrice(member, limit);
     if (money.* < price) return error.InsufficientFunds;
-    self.progress.party[member].weapon_level += 1;
+    self.progress.party.at(member).weapon_level += 1;
     money.* -= price;
 }

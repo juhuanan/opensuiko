@@ -64,7 +64,7 @@ pub fn useMirror(catalogue: *const teleport.catalogue.Loaded, package: field.Pac
         break;
     }
     if (!outside) return error.OutsideRequired;
-    const bag = &state.progress.party[member].inventory;
+    const bag = &state.progress.party.at(member).inventory;
     if (slot >= bag.count() or bag.slots[slot].?.id != .blinking_mirror) return error.ItemNotInSlot;
     const spec = teleport.catalogue;
     const story = state.progress.story.scenario orelse return error.MissingSourceStoryState;
@@ -81,7 +81,7 @@ pub fn useMirror(catalogue: *const teleport.catalogue.Loaded, package: field.Pac
         .story = story,
         .world_mode = 1,
         .castle_stage = story.castle_tier,
-        .item = .{ .item_id = spec.blinking_mirror_item, .slot = @intCast(slot), .present = true, .owner = state.progress.party[member].id },
+        .item = .{ .item_id = spec.blinking_mirror_item, .slot = @intCast(slot), .present = true, .owner = state.progress.party.at(member).id },
     });
     const proposal = try session.confirmItem();
     try commitTeleport(&session, package, state, proposal);

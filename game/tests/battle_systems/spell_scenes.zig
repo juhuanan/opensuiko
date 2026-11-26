@@ -31,17 +31,17 @@ test "combat checkpoints rebind imported spell data and refuse a different libra
     _ = try draws.next();
     var session = try combat_session.Session.begin(entry, source, &scratch, draws);
     const checkpoint = try session.capture(draws);
-    const campaign_member = source.progress.party[0];
-    session.state.progress.party[0].experience = (campaign_member.experience + 1) % 1000;
-    session.state.progress.party[0].weapon_augment = .{ .rune = .fire, .fragments = 2 };
-    try std.testing.expectEqualDeep(campaign_member, source.progress.party[0]);
+    const campaign_member = source.progress.party.at(0).*;
+    session.state.progress.party.at(0).experience = (campaign_member.experience + 1) % 1000;
+    session.state.progress.party.at(0).weapon_augment = .{ .rune = .fire, .fragments = 2 };
+    try std.testing.expectEqualDeep(campaign_member, source.progress.party.at(0).*);
     var other_draws = draws;
     other_draws.prng = .init(18);
     try std.testing.expectError(error.RandomStreamMismatch, session.tick(.{}, &other_draws));
     session.state.spell_scenes = &rebound;
     try session.restore(checkpoint, &draws);
     try std.testing.expectEqualDeep(checkpoint.draws, draws);
-    try std.testing.expectEqualDeep(campaign_member, session.state.progress.party[0]);
+    try std.testing.expectEqualDeep(campaign_member, session.state.progress.party.at(0).*);
     try std.testing.expect(session.state.spell_scenes == &rebound);
     session.state.spell_scenes = null;
     try std.testing.expectError(error.CombatContentMismatch, session.restore(checkpoint, &draws));
@@ -67,9 +67,9 @@ test "imported Firestorm shares the action camera and drives group damage withou
     try std.testing.expectEqual(@as(usize, 3), combat.enemyCount());
     try combat.attachSpellScenes(&packet.value);
     combat.enemy_hp[0] = 0;
-    combat.progress.party[0].rune = fixture.view.systems.?.runeIndex("fire");
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = fixture.view.systems.?.runeIndex("fire");
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     var firestorm: usize = 0;
     for (fixture.view.systems.?.spells, 0..) |spell, i| if (std.mem.eql(u8, spell.id, "spell_2")) {
@@ -148,8 +148,8 @@ test "imported Firestorm shares the action camera and drives group damage withou
         try combat.tickReplay(.{}, &draws);
     }
     try std.testing.expectEqual(@as(u16, 434), combat.action_ticks);
-    try std.testing.expectEqual(@as(u8, 8), combat.progress.party[0].rune_charges[1]);
-    try std.testing.expectEqual(@as(u8, 9), combat.progress.party[0].rune_charges[0]);
+    try std.testing.expectEqual(@as(u8, 8), combat.progress.party.at(0).rune_charges[1]);
+    try std.testing.expectEqual(@as(u8, 9), combat.progress.party.at(0).rune_charges[0]);
     try std.testing.expectEqual(@as(usize, 1), draws.cursor);
 }
 
@@ -177,9 +177,9 @@ test "imported Fog retains enemy bonuses and applies its group modifier only on 
     combat.actor_conditions[party].stat_modifiers.skill_bonus = 70;
     combat.actor_conditions[party + 1].stat_modifiers = .{ .skill_bonus = 50, .defense_bonus = 91 };
     combat.actor_conditions[party + 2].stat_modifiers = .{ .skill_bonus = -51, .defense_bonus = -7 };
-    combat.progress.party[0].rune = fixture.view.systems.?.runeIndex("water");
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = fixture.view.systems.?.runeIndex("water");
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     var spell_index: usize = 0;
     for (fixture.view.systems.?.spells, 0..) |spell, i| if (std.mem.eql(u8, spell.id, "spell_10")) {
         spell_index = i;
@@ -209,7 +209,7 @@ test "imported Fog retains enemy bonuses and applies its group modifier only on 
         }
         try std.testing.expectEqual(@as(u16, 319), combat.action_ticks);
     }
-    try std.testing.expectEqual(@as(u8, 7), combat.progress.party[0].rune_charges[1]);
+    try std.testing.expectEqual(@as(u8, 7), combat.progress.party.at(0).rune_charges[1]);
     try std.testing.expectEqual(@as(usize, 2), draws.cursor);
 }
 
@@ -222,7 +222,7 @@ test "Spark launches an ordinary source strike and lets remaining allies follow 
     var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
     try sourceRoundBoundary(&combat, source.value);
     combat.content.party_attacks = source.value.party_attacks;
-    combat.progress.party[0].rune = fixture.view.systems.?.runeIndex("spark");
+    combat.progress.party.at(0).rune = fixture.view.systems.?.runeIndex("spark");
     try std.testing.expect(combat.hasRune(0, "spark"));
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .attack = 0 };
@@ -268,10 +268,10 @@ test "generated Water heals living allies at246 and binds four orbits per party 
     var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
     combat.integration = .{ .host = host };
     try combat.attachSpellScenes(&packet.value);
-    combat.progress.party[0].rune = fixture.view.systems.?.runeIndex("water");
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-    for (combat.progress.party, 0..) |*member, index| {
+    combat.progress.party.at(0).rune = fixture.view.systems.?.runeIndex("water");
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+    for (combat.progress.party.items(), 0..) |member, index| {
         member.max_hp = 1000;
         member.hp = if (index == 2) 0 else @intCast(10 + index);
         member.status = if (index == 2) .unconscious else .poisoned;
@@ -297,7 +297,7 @@ test "generated Water heals living allies at246 and binds four orbits per party 
     try std.testing.expectEqual(@as(u8, 5), combat.active.?.scene.?.target_count);
     while (combat.active != null) {
         const tick = combat.effectTicks();
-        for (combat.progress.party, 0..) |member, index| {
+        for (combat.progress.party.items(), 0..) |member, index| {
             const hp: u16 = if (index == 2) 0 else @intCast(10 + index + @as(usize, if (tick >= 246 and index != 3) 300 else 0));
             try std.testing.expectEqual(hp, member.hp);
             if (tick >= 246 and index != 2) try std.testing.expectEqual(.healthy, member.status);
@@ -312,7 +312,7 @@ test "generated Water heals living allies at246 and binds four orbits per party 
         try combat.tickReplay(.{}, &draws);
     }
     try std.testing.expectEqual(@as(u16, 307), combat.action_ticks);
-    try std.testing.expectEqual(@as(u8, 8), combat.progress.party[0].rune_charges[2]);
+    try std.testing.expectEqual(@as(u8, 8), combat.progress.party.at(0).rune_charges[2]);
     try std.testing.expectEqual(@as(usize, 73), draws.cursor);
 }
 
@@ -326,17 +326,17 @@ test "all four source consumables dispatch with exact effects and separate owner
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
         combat.content.medicine_timings = source.value.medicine_timings;
-        combat.progress.party[target].max_hp = 1000;
-        combat.progress.party[target].hp = 100;
-        combat.progress.party[target].status = .poisoned;
-        combat.progress.party[target].balloons = 2;
+        combat.progress.party.at(target).max_hp = 1000;
+        combat.progress.party.at(target).hp = 100;
+        combat.progress.party.at(target).status = .poisoned;
+        combat.progress.party.at(target).balloons = 2;
         combat.actor_conditions[target].rune_blocked = true;
         combat.actor_conditions[target].accuracy_reduced = true;
         combat.unbalanced[target] = 2;
         combat.actor_conditions[target].protection_rounds = if (protected) 3 else 0;
-        combat.progress.party[user].inventory.slots = @splat(null);
-        combat.progress.party[user].inventory.slots[0] = .{ .id = id, .uses = 1 };
-        combat.progress.party[user].inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
+        combat.progress.party.at(user).inventory.slots = @splat(null);
+        combat.progress.party.at(user).inventory.slots[0] = .{ .id = id, .uses = 1 };
+        combat.progress.party.at(user).inventory.slots[1] = .{ .id = .bandanna, .uses = 0 };
         combat.actions = @splat(.defend);
         combat.actions[user] = .{ .item = .{ .slot = 0, .target = target, .id = id } };
         combat.acted = @splat(true);
@@ -345,7 +345,7 @@ test "all four source consumables dispatch with exact effects and separate owner
         var draws = rules.Draws{ .values = &.{} };
         try combat.tickReplay(.{}, &draws);
         try std.testing.expectEqual(id, combat.medicine_action.?.id);
-        try std.testing.expectEqual(field.items.Id.bandanna, combat.progress.party[user].inventory.slots[0].?.id);
+        try std.testing.expectEqual(field.items.Id.bandanna, combat.progress.party.at(user).inventory.slots[0].?.id);
         const timing = combat.medicine_action.?.timing;
         const impact_delay: u16 = switch (id) {
             .medicine, .mega_medicine => 32,
@@ -370,9 +370,9 @@ test "all four source consumables dispatch with exact effects and separate owner
                 .mega_medicine => 500,
                 else => 0,
             };
-            try std.testing.expectEqual(@as(u16, 100) + amount, combat.progress.party[target].hp);
-            try std.testing.expectEqual(if (after and id == .antitoxin) field.game_state.Status.healthy else .poisoned, combat.progress.party[target].status);
-            try std.testing.expectEqual(@as(u8, if (after and id == .needle) 1 else 2), combat.progress.party[target].balloons);
+            try std.testing.expectEqual(@as(u16, 100) + amount, combat.progress.party.at(target).hp);
+            try std.testing.expectEqual(if (after and id == .antitoxin) field.game_state.Status.healthy else .poisoned, combat.progress.party.at(target).status);
+            try std.testing.expectEqual(@as(u8, if (after and id == .needle) 1 else 2), combat.progress.party.at(target).balloons);
             try std.testing.expectEqual(age >= timing.target_release, combat.medicine_action.?.target_released);
             try combat.tickReplay(.{}, &draws);
         }
@@ -396,7 +396,7 @@ test "no-effect cure self-use spends a use and retains the preparation owner" {
         combat.content.medicine_timings = source.value.medicine_timings;
         combat.actions = @splat(.defend);
         combat.actions[0] = .{ .item = .{ .slot = 0, .target = 0, .id = id } };
-        combat.progress.party[0].inventory.slots[0] = .{ .id = id, .uses = 2 };
+        combat.progress.party.at(0).inventory.slots[0] = .{ .id = id, .uses = 2 };
         combat.acted = @splat(true);
         combat.phase = .resolving;
         combat.coordinator = .{ .stage = .dispatch, .current_actor = 0, .cached = .round_end };
@@ -412,7 +412,7 @@ test "no-effect cure self-use spends a use and retains the preparation owner" {
             try combat.tickReplay(.{}, &draws);
         }
         try std.testing.expect(combat.medicine_action.?.owner_released);
-        try std.testing.expectEqual(@as(u16, 1), combat.progress.party[0].inventory.slots[0].?.uses);
+        try std.testing.expectEqual(@as(u16, 1), combat.progress.party.at(0).inventory.slots[0].?.uses);
         try std.testing.expectEqual(@as(usize, 0), draws.cursor);
     }
 }
@@ -431,17 +431,17 @@ test "direct Earth buffs preserve ailments and accept a Turtle target in both sp
         const spell = for (systems.spells, 0..) |definition, i| {
             if (std.mem.eql(u8, definition.name, name)) break i;
         } else return error.MissingBuff;
-        combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
+        combat.progress.party.at(0).rune = for (systems.runes, 0..) |rune, i| {
             var owns = false;
             for (rune.spells) |maybe| if (maybe == spell) {
                 owns = true;
             };
             if (owns) break i;
         } else return error.MissingBuffRune;
-        combat.progress.party[1].rune = systems.runeIndex("turtle").?;
-        combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        combat.progress.party[1].status = .poisoned;
-        combat.progress.party[1].balloons = 2;
+        combat.progress.party.at(1).rune = systems.runeIndex("turtle").?;
+        combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(1).status = .poisoned;
+        combat.progress.party.at(1).balloons = 2;
         combat.actor_conditions[1].sleep_turns = 1;
         combat.unbalanced[1] = 2;
         combat.actor_conditions[1].accuracy_reduced = true;
@@ -450,7 +450,7 @@ test "direct Earth buffs preserve ailments and accept a Turtle target in both sp
         combat.actor_conditions[2].stat_modifiers.defense_bonus = 50;
         var draws = rules.Draws{ .values = &.{} };
         combat.replay_draws = &draws;
-        const before = combat.progress.party[1].hp;
+        const before = combat.progress.party.at(1).hp;
         var effect = battle.Effect{ .actor = 0, .target = 1, .kind = .cast, .spell = spell };
         combat.applySpell(&effect);
         combat.replay_draws = null;
@@ -460,9 +460,9 @@ test "direct Earth buffs preserve ailments and accept a Turtle target in both sp
         try std.testing.expectEqual(@as(i16, 73), combat.actor_conditions[1].stat_modifiers.skill_bonus);
         try std.testing.expectEqual(@as(u8, if (copper) 3 else 0), combat.actor_conditions[1].protection_rounds);
         try std.testing.expectEqual(@as(i16, if (std.mem.eql(u8, name, "Guardian of Earth")) 75 else 50), combat.actor_conditions[2].stat_modifiers.defense_bonus);
-        try std.testing.expectEqual(before, combat.progress.party[1].hp);
-        try std.testing.expectEqual(field.game_state.Status.poisoned, combat.progress.party[1].status);
-        try std.testing.expectEqual(@as(u8, 2), combat.progress.party[1].balloons);
+        try std.testing.expectEqual(before, combat.progress.party.at(1).hp);
+        try std.testing.expectEqual(field.game_state.Status.poisoned, combat.progress.party.at(1).status);
+        try std.testing.expectEqual(@as(u8, 2), combat.progress.party.at(1).balloons);
         try std.testing.expectEqual(@as(u8, 1), combat.actor_conditions[1].sleep_turns);
         try std.testing.expectEqual(@as(u8, 2), combat.unbalanced[1]);
         try std.testing.expect(combat.actor_conditions[1].accuracy_reduced and combat.actor_conditions[1].rune_blocked);
@@ -484,9 +484,9 @@ test "generated Clay applies one Turtle-compatible buff and rolls back a late pa
         var combat = try battle.State.init(fixture.view, fixture.items.value, &members, 17);
         combat.integration = .{ .host = host };
         try combat.attachSpellScenes(&packet.value);
-        combat.progress.party[0].rune = combat.content.systems.?.runeIndex("earth").?;
-        combat.progress.party[1].rune = combat.content.systems.?.runeIndex("turtle").?;
-        combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).rune = combat.content.systems.?.runeIndex("earth").?;
+        combat.progress.party.at(1).rune = combat.content.systems.?.runeIndex("turtle").?;
+        combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
         combat.actor_conditions[1].stat_modifiers.defense_bonus = -51;
         const spell = for (combat.content.systems.?.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.name, "Clay Guardian")) break i;
@@ -514,18 +514,18 @@ test "generated Clay applies one Turtle-compatible buff and rolls back a late pa
             try std.testing.expectEqual(cursor, draws.cursor);
             continue;
         }
-        const hp = combat.progress.party[1].hp;
+        const hp = combat.progress.party.at(1).hp;
         var stopped_draws: usize = 0;
         while (combat.active != null) {
             const age = combat.effectTicks();
             if (age == 272) stopped_draws = draws.cursor;
             try std.testing.expectEqual(@as(i16, if (age < 177) -51 else -76), combat.actor_conditions[1].stat_modifiers.defense_bonus);
-            try std.testing.expectEqual(hp, combat.progress.party[1].hp);
+            try std.testing.expectEqual(hp, combat.progress.party.at(1).hp);
             if (age == 210 or age == 244) try std.testing.expectEqualDeep([3]u8{ 128, 128, 128 }, combat.spellReaction(1).?.color);
             try combat.tickReplay(.{}, &draws);
         }
         try std.testing.expectEqual(stopped_draws, draws.cursor);
-        try std.testing.expectEqual(@as(u8, 8), combat.progress.party[0].rune_charges[0]);
+        try std.testing.expectEqual(@as(u8, 8), combat.progress.party.at(0).rune_charges[0]);
         try std.testing.expectEqual(@as(u16, 337), combat.action_ticks);
     }
 }
@@ -547,21 +547,21 @@ test "generated Guardian of Earth buffs living allies once at289 and releases353
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.name, "Guardian of Earth")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
+    combat.progress.party.at(0).rune = for (systems.runes, 0..) |rune, i| {
         var owns = false;
         for (rune.spells) |maybe| if (maybe == spell) {
             owns = true;
         };
         if (owns) break i;
     } else unreachable;
-    combat.progress.party[1].rune = systems.runeIndex("turtle").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(1).rune = systems.runeIndex("turtle").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
     combat.actor_conditions[1].stat_modifiers.defense_bonus = -51;
     combat.actor_conditions[2].stat_modifiers.defense_bonus = 50;
-    combat.progress.party[2].hp = 0;
-    combat.progress.party[2].status = .unconscious;
+    combat.progress.party.at(2).hp = 0;
+    combat.progress.party.at(2).status = .unconscious;
     combat.actor_conditions[1].protection_rounds = 2;
-    const hp = combat.progress.party[1].hp;
+    const hp = combat.progress.party.at(1).hp;
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 1 } };
     combat.acted = @splat(true);
@@ -578,13 +578,13 @@ test "generated Guardian of Earth buffs living allies once at289 and releases353
         if (age == 320) stop_draws = draws.cursor;
         try std.testing.expectEqual(@as(i16, if (age < 289) -51 else -76), combat.actor_conditions[1].stat_modifiers.defense_bonus);
         try std.testing.expectEqual(@as(i16, 50), combat.actor_conditions[2].stat_modifiers.defense_bonus);
-        try std.testing.expectEqual(hp, combat.progress.party[1].hp);
+        try std.testing.expectEqual(hp, combat.progress.party.at(1).hp);
         try std.testing.expect(combat.spellReaction(2) == null);
         if (age == 161 or age == 193 or age == 225 or age == 257) try std.testing.expectEqualDeep([3]u8{ 128, 128, 128 }, combat.spellReaction(1).?.color);
         try combat.tickReplay(.{}, &draws);
     }
     try std.testing.expectEqual(stop_draws, draws.cursor);
-    try std.testing.expectEqual(@as(u8, 8), combat.progress.party[0].rune_charges[3]);
+    try std.testing.expectEqual(@as(u8, 8), combat.progress.party.at(0).rune_charges[3]);
     try std.testing.expectEqual(@as(u16, 353), combat.action_ticks);
 }
 
@@ -605,12 +605,12 @@ test "generated Copper Flesh protects a Turtle target at225 and releases449" {
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_23")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("earth").?;
-    combat.progress.party[1].rune = systems.runeIndex("turtle").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[1].status = .poisoned;
-    const hp = combat.progress.party[1].hp;
+    combat.progress.party.at(0).rune = systems.runeIndex("earth").?;
+    combat.progress.party.at(1).rune = systems.runeIndex("turtle").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(1).status = .poisoned;
+    const hp = combat.progress.party.at(1).hp;
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 1 } };
     combat.acted = @splat(true);
@@ -624,13 +624,13 @@ test "generated Copper Flesh protects a Turtle target at225 and releases449" {
     while (combat.active != null) {
         const age = combat.effectTicks();
         try std.testing.expectEqual(@as(u8, if (age < 225) 0 else 3), combat.actor_conditions[1].protection_rounds);
-        try std.testing.expectEqual(hp, combat.progress.party[1].hp);
-        try std.testing.expectEqual(field.game_state.Status.poisoned, combat.progress.party[1].status);
+        try std.testing.expectEqual(hp, combat.progress.party.at(1).hp);
+        try std.testing.expectEqual(field.game_state.Status.poisoned, combat.progress.party.at(1).status);
         if (age == 225 or age == 259 or age == 293) try std.testing.expectEqualDeep([3]u8{ 128, 128, 128 }, combat.spellReaction(1).?.color);
         try combat.tickReplay(.{}, &draws);
     }
     try std.testing.expectEqual(cursor, draws.cursor);
-    try std.testing.expectEqual(@as(u8, 8), combat.progress.party[0].rune_charges[2]);
+    try std.testing.expectEqual(@as(u8, 8), combat.progress.party.at(0).rune_charges[2]);
     try std.testing.expectEqual(@as(u16, 449), combat.action_ticks);
 }
 
@@ -651,32 +651,32 @@ test "generated Mother Ocean binds fallen allies and heals once at366 before rel
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_30")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
+    combat.progress.party.at(0).rune = for (systems.runes, 0..) |rune, i| {
         var owns = false;
         for (rune.spells) |maybe| if (maybe == spell) {
             owns = true;
         };
         if (owns) break i;
     } else unreachable;
-    combat.progress.party[1].rune = systems.runeIndex("turtle").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[1].status = .poisoned;
-    combat.progress.party[1].hp = 1;
-    combat.progress.party[2].hp = 0;
-    combat.progress.party[2].status = .unconscious;
-    combat.progress.party[3].hp = combat.progress.party[3].max_hp / 2;
-    combat.progress.party[3].balloons = 3;
+    combat.progress.party.at(1).rune = systems.runeIndex("turtle").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(1).status = .poisoned;
+    combat.progress.party.at(1).hp = 1;
+    combat.progress.party.at(2).hp = 0;
+    combat.progress.party.at(2).status = .unconscious;
+    combat.progress.party.at(3).hp = combat.progress.party.at(3).max_hp / 2;
+    combat.progress.party.at(3).balloons = 3;
     combat.beginDeparture(3);
     combat.actor_conditions[1].protection_rounds = 2;
-    combat.progress.party[4].hp = 0;
-    combat.progress.party[4].status = .unconscious;
+    combat.progress.party.at(4).hp = 0;
+    combat.progress.party.at(4).status = .unconscious;
     combat.actor_conditions[4].rune_blocked = true;
     combat.actor_conditions[4].protection_rounds = 2;
     var fallback_members = members;
     var fallback = combat;
     fallback.integration = null;
-    fallback.progress.party = &fallback_members;
+    fallback.progress.party = .init(&fallback_members);
     fallback.party_knockouts[2].pending = true;
     var effect: battle.Effect = .{ .kind = .cast, .actor = 0, .target = 1, .spell = spell };
     fallback.applySpell(&effect);
@@ -700,24 +700,24 @@ test "generated Mother Ocean binds fallen allies and heals once at366 before rel
     try std.testing.expectEqual(@as(u8, 6), combat.active.?.scene.?.target_count);
     while (combat.active != null) {
         const age = combat.effectTicks();
-        try std.testing.expectEqual(@as(u16, 1), combat.progress.party[1].hp);
-        try std.testing.expectEqual(if (age < 366) field.game_state.Status.poisoned else field.game_state.Status.healthy, combat.progress.party[1].status);
-        try std.testing.expectEqual(@as(u16, if (age < 366) 0 else combat.progress.party[2].max_hp), combat.progress.party[2].hp);
-        try std.testing.expectEqual(if (age < 366) field.game_state.Status.unconscious else field.game_state.Status.healthy, combat.progress.party[2].status);
+        try std.testing.expectEqual(@as(u16, 1), combat.progress.party.at(1).hp);
+        try std.testing.expectEqual(if (age < 366) field.game_state.Status.poisoned else field.game_state.Status.healthy, combat.progress.party.at(1).status);
+        try std.testing.expectEqual(@as(u16, if (age < 366) 0 else combat.progress.party.at(2).max_hp), combat.progress.party.at(2).hp);
+        try std.testing.expectEqual(if (age < 366) field.game_state.Status.unconscious else field.game_state.Status.healthy, combat.progress.party.at(2).status);
         try std.testing.expectEqual(age >= 366, combat.acted[2]);
         try std.testing.expect(!combat.acted[3]);
         try std.testing.expectEqual(age < 366, combat.departed[3]);
-        try std.testing.expectEqual(@as(u16, if (age < 366) combat.progress.party[3].max_hp / 2 else combat.progress.party[3].max_hp), combat.progress.party[3].hp);
-        try std.testing.expectEqual(@as(u8, if (age < 366) 3 else 0), combat.progress.party[3].balloons);
-        try std.testing.expectEqual(@as(u16, 0), combat.progress.party[4].hp);
-        try std.testing.expectEqual(.unconscious, combat.progress.party[4].status);
+        try std.testing.expectEqual(@as(u16, if (age < 366) combat.progress.party.at(3).max_hp / 2 else combat.progress.party.at(3).max_hp), combat.progress.party.at(3).hp);
+        try std.testing.expectEqual(@as(u8, if (age < 366) 3 else 0), combat.progress.party.at(3).balloons);
+        try std.testing.expectEqual(@as(u16, 0), combat.progress.party.at(4).hp);
+        try std.testing.expectEqual(.unconscious, combat.progress.party.at(4).status);
         try std.testing.expect(!combat.party_knockouts[4].pending);
         try std.testing.expectEqual(age < 366, combat.actor_conditions[4].rune_blocked);
         if (age == 247) try std.testing.expect(combat.spellReaction(2) != null);
         try combat.tickReplay(.{}, &draws);
     }
     try std.testing.expectEqual(cursor, draws.cursor);
-    try std.testing.expectEqual(@as(u8, 8), combat.progress.party[0].rune_charges[3]);
+    try std.testing.expectEqual(@as(u8, 8), combat.progress.party.at(0).rune_charges[3]);
     try std.testing.expectEqual(@as(u16, 431), combat.action_ticks);
     try combat.tickReplay(.{}, &draws);
     try std.testing.expectEqual(@as(usize, 3), combat.active.?.actor);
@@ -741,23 +741,23 @@ test "generated Rain of Kindness heals living allies once396 and releases397" {
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_12")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
+    combat.progress.party.at(0).rune = for (systems.runes, 0..) |rune, i| {
         var owns = false;
         for (rune.spells) |maybe| if (maybe == spell) {
             owns = true;
         };
         if (owns) break i;
     } else unreachable;
-    combat.progress.party[1].rune = systems.runeIndex("turtle").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[1].status = .poisoned;
-    combat.progress.party[1].hp = 1;
-    combat.progress.party[2].hp = 0;
-    combat.progress.party[2].status = .unconscious;
+    combat.progress.party.at(1).rune = systems.runeIndex("turtle").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(1).status = .poisoned;
+    combat.progress.party.at(1).hp = 1;
+    combat.progress.party.at(2).hp = 0;
+    combat.progress.party.at(2).status = .unconscious;
     combat.actor_conditions[1].protection_rounds = 2;
-    combat.progress.party[3].hp = 1;
-    combat.progress.party[3].status = .poisoned;
+    combat.progress.party.at(3).hp = 1;
+    combat.progress.party.at(3).status = .poisoned;
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 1 } };
     combat.acted = @splat(true);
@@ -772,11 +772,11 @@ test "generated Rain of Kindness heals living allies once396 and releases397" {
     while (combat.active != null) {
         const age = combat.effectTicks();
         if (age == 336) cursor = draws.cursor;
-        try std.testing.expectEqual(@as(u16, 1), combat.progress.party[1].hp);
-        try std.testing.expectEqual(if (age < 396) field.game_state.Status.poisoned else field.game_state.Status.healthy, combat.progress.party[1].status);
-        try std.testing.expectEqual(@as(u16, 0), combat.progress.party[2].hp);
-        try std.testing.expectEqual(@as(u16, if (age < 396) 1 else combat.progress.party[3].max_hp), combat.progress.party[3].hp);
-        try std.testing.expectEqual(field.game_state.Status.unconscious, combat.progress.party[2].status);
+        try std.testing.expectEqual(@as(u16, 1), combat.progress.party.at(1).hp);
+        try std.testing.expectEqual(if (age < 396) field.game_state.Status.poisoned else field.game_state.Status.healthy, combat.progress.party.at(1).status);
+        try std.testing.expectEqual(@as(u16, 0), combat.progress.party.at(2).hp);
+        try std.testing.expectEqual(@as(u16, if (age < 396) 1 else combat.progress.party.at(3).max_hp), combat.progress.party.at(3).hp);
+        try std.testing.expectEqual(field.game_state.Status.unconscious, combat.progress.party.at(2).status);
         if (age == 277) {
             try std.testing.expect(combat.spellReaction(2) == null);
             try std.testing.expect(combat.spellReaction(3) != null);
@@ -784,7 +784,7 @@ test "generated Rain of Kindness heals living allies once396 and releases397" {
         try combat.tickReplay(.{}, &draws);
     }
     try std.testing.expectEqual(cursor, draws.cursor);
-    try std.testing.expectEqual(@as(u8, 8), combat.progress.party[0].rune_charges[3]);
+    try std.testing.expectEqual(@as(u8, 8), combat.progress.party.at(0).rune_charges[3]);
     try std.testing.expectEqual(@as(u16, 397), combat.action_ticks);
 }
 
@@ -810,9 +810,9 @@ test "generated Angry Blow lands twice reacts189 damages240 and releases305" {
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_17")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("lightning").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("lightning").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -832,7 +832,7 @@ test "generated Angry Blow lands twice reacts189 damages240 and releases305" {
         const age = combat.effectTicks();
         try std.testing.expectEqual(@as(u16, if (age < 240) 5000 else 4818), combat.enemy_hp[0]);
         if (age < 240) try std.testing.expectEqual(before + @as(usize, if (age < 177) 0 else if (age < 189) 2 else if (age < 201) 5 else 6), draws.cursor);
-        try std.testing.expectEqual(@as(u8, if (age < 240) 9 else 8), combat.progress.party[0].rune_charges[0]);
+        try std.testing.expectEqual(@as(u8, if (age < 240) 9 else 8), combat.progress.party.at(0).rune_charges[0]);
         const reaction = combat.spellReaction(combat.partyCount());
         if (age < 189 or age >= 223) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
         if (age == 192) try std.testing.expectEqual(pose.shock_entries.?[0], reaction.?.entry.?);
@@ -866,9 +866,9 @@ test "generated Rainstorm keeps KO formation gaps reacts289 damages345 and relea
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_18")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("lightning").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("lightning").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -888,7 +888,7 @@ test "generated Rainstorm keeps KO formation gaps reacts289 damages345 and relea
         try std.testing.expectEqual(@as(u16, if (age < 345) 5000 else 4868), combat.enemy_hp[1]);
         try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
         if (age >= 289) try std.testing.expectEqual(before + 30, draws.cursor);
-        try std.testing.expectEqual(@as(u8, if (age < 345) 9 else 8), combat.progress.party[0].rune_charges[1]);
+        try std.testing.expectEqual(@as(u8, if (age < 345) 9 else 8), combat.progress.party.at(0).rune_charges[1]);
         try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
         const reaction = combat.spellReaction(combat.partyCount() + 1);
         if (age < 289 or age >= 323) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
@@ -935,9 +935,9 @@ test "generated arranged lightning reacts268 damages337 and releases401 without 
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_19")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("lightning").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("lightning").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -957,7 +957,7 @@ test "generated arranged lightning reacts268 damages337 and releases401 without 
         const age = combat.effectTicks();
         try std.testing.expectEqual(@as(u16, if (age < 337) 5000 else 4368), combat.enemy_hp[0]);
         try std.testing.expectEqual(before, draws.cursor);
-        try std.testing.expectEqual(@as(u8, if (age < 337) 9 else 8), combat.progress.party[0].rune_charges[2]);
+        try std.testing.expectEqual(@as(u8, if (age < 337) 9 else 8), combat.progress.party.at(0).rune_charges[2]);
         const reaction = combat.spellReaction(combat.partyCount());
         if (age < 268 or age >= 302) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
         if (age == 272) try std.testing.expectEqual(pose.shock_entries.?[0], reaction.?.entry.?);
@@ -988,9 +988,9 @@ test "generated contracting lightning preserves reaction gaps damages384 and rel
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_20")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("lightning").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("lightning").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -1010,7 +1010,7 @@ test "generated contracting lightning preserves reaction gaps damages384 and rel
         const age = combat.effectTicks();
         try std.testing.expectEqual(@as(u16, if (age < 384) 5000 else 3968), combat.enemy_hp[0]);
         try std.testing.expectEqual(before, draws.cursor);
-        try std.testing.expectEqual(@as(u8, if (age < 384) 9 else 8), combat.progress.party[0].rune_charges[3]);
+        try std.testing.expectEqual(@as(u8, if (age < 384) 9 else 8), combat.progress.party.at(0).rune_charges[3]);
         const reaction = combat.spellReaction(combat.partyCount());
         if (!(age >= 225 and age < 259) and !(age >= 261 and age < 295) and !(age >= 297 and age < 331)) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
         if (age == 264) try std.testing.expectEqual(pose.shock_entries.?[0], reaction.?.entry.?);
@@ -1037,19 +1037,19 @@ test "generated sound scenes revive368 or heal364 and consume only scheduled dra
         const spell = for (systems.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, id)) break i;
         } else unreachable;
-        combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
+        combat.progress.party.at(0).rune = for (systems.runes, 0..) |rune, i| {
             var owns = false;
             for (rune.spells) |maybe| if (maybe == spell) {
                 owns = true;
             };
             if (owns) break i;
         } else unreachable;
-        combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-        combat.progress.party[1].hp = if (variant == 0) 0 else 1;
-        combat.progress.party[1].status = if (variant == 0) .unconscious else .poisoned;
-        combat.progress.party[2].hp = 0;
-        combat.progress.party[2].status = .unconscious;
+        combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(1).hp = if (variant == 0) 0 else 1;
+        combat.progress.party.at(1).status = if (variant == 0) .unconscious else .poisoned;
+        combat.progress.party.at(2).hp = 0;
+        combat.progress.party.at(2).status = .unconscious;
         combat.actions = @splat(.defend);
         combat.actions[0] = .{ .spell = .{ .index = spell, .target = 1 } };
         combat.acted = @splat(true);
@@ -1061,12 +1061,12 @@ test "generated sound scenes revive368 or heal364 and consume only scheduled dra
         combat.replay_draws = null;
         const cursor = draws.cursor;
         const impact: u16 = if (variant == 0) 368 else 364;
-        const healed: u16 = if (variant == 0) combat.progress.party[1].max_hp / 3 else @min(combat.progress.party[1].max_hp, 301);
+        const healed: u16 = if (variant == 0) combat.progress.party.at(1).max_hp / 3 else @min(combat.progress.party.at(1).max_hp, 301);
         while (combat.active != null) {
             const age = combat.effectTicks();
-            try std.testing.expectEqual(if (age < impact) @as(u16, if (variant == 0) 0 else 1) else healed, combat.progress.party[1].hp);
-            try std.testing.expectEqual(@as(u16, 0), combat.progress.party[2].hp);
-            if (age >= impact) try std.testing.expectEqual(field.game_state.Status.healthy, combat.progress.party[1].status);
+            try std.testing.expectEqual(if (age < impact) @as(u16, if (variant == 0) 0 else 1) else healed, combat.progress.party.at(1).hp);
+            try std.testing.expectEqual(@as(u16, 0), combat.progress.party.at(2).hp);
+            if (age >= impact) try std.testing.expectEqual(field.game_state.Status.healthy, combat.progress.party.at(1).status);
             try combat.tickReplay(.{}, &draws);
         }
         try std.testing.expectEqual(cursor + @as(usize, if (variant == 0) 33 else 162), draws.cursor);
@@ -1099,9 +1099,9 @@ test "generated Storm keeps KO formation gaps reacts171 damages224 and releases2
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_16")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("wind").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("wind").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -1121,7 +1121,7 @@ test "generated Storm keeps KO formation gaps reacts171 damages224 and releases2
         try std.testing.expectEqual(@as(u16, if (age < 224) 5000 else 4468), combat.enemy_hp[1]);
         try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
         if (age >= 224) try std.testing.expectEqual(before, draws.cursor);
-        try std.testing.expectEqual(@as(u8, if (age < 224) 9 else 8), combat.progress.party[0].rune_charges[3]);
+        try std.testing.expectEqual(@as(u8, if (age < 224) 9 else 8), combat.progress.party.at(0).rune_charges[3]);
         try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
         const reaction = combat.spellReaction(combat.partyCount() + 1);
         if (age < 171 or age >= 186) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
@@ -1152,9 +1152,9 @@ test "generated paired wind reacts163 damages208 and releases265 without visual 
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_14")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("wind").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("wind").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -1169,7 +1169,7 @@ test "generated paired wind reacts163 damages208 and releases265 without visual 
         const age = combat.effectTicks();
         try std.testing.expectEqual(@as(u16, if (age < 208) 5000 else 4568), combat.enemy_hp[0]);
         try std.testing.expectEqual(before, draws.cursor);
-        try std.testing.expectEqual(@as(u8, if (age < 208) 9 else 8), combat.progress.party[0].rune_charges[1]);
+        try std.testing.expectEqual(@as(u8, if (age < 208) 9 else 8), combat.progress.party.at(0).rune_charges[1]);
         const reaction = combat.spellReaction(combat.partyCount());
         if (age < 163 or age >= 178) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
         if (age == 164) try std.testing.expectEqualDeep([3]u8{ 64, 64, 255 }, reaction.?.color);
@@ -1196,20 +1196,20 @@ test "generated Healing Wind respects HP protection cures288 and releases289 wit
         const spell = for (systems.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, "spell_15")) break i;
         } else unreachable;
-        combat.progress.party[0].rune = for (systems.runes, 0..) |rune, i| {
+        combat.progress.party.at(0).rune = for (systems.runes, 0..) |rune, i| {
             var owns = false;
             for (rune.spells) |maybe| if (maybe == spell) {
                 owns = true;
             };
             if (owns) break i;
         } else unreachable;
-        combat.progress.party[1].rune = systems.runeIndex("turtle").?;
-        combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
-        combat.progress.party[1].status = .poisoned;
-        combat.progress.party[1].hp = 1;
-        combat.progress.party[2].hp = 0;
-        combat.progress.party[2].status = .unconscious;
+        combat.progress.party.at(1).rune = systems.runeIndex("turtle").?;
+        combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(1).status = .poisoned;
+        combat.progress.party.at(1).hp = 1;
+        combat.progress.party.at(2).hp = 0;
+        combat.progress.party.at(2).status = .unconscious;
         combat.actor_conditions[1].protection_rounds = protection;
         combat.actions = @splat(.defend);
         combat.actions[0] = .{ .spell = .{ .index = spell, .target = 1 } };
@@ -1223,17 +1223,17 @@ test "generated Healing Wind respects HP protection cures288 and releases289 wit
         const cursor = draws.cursor;
         while (combat.active != null) {
             const age = combat.effectTicks();
-            try std.testing.expectEqual(@as(u16, if (age < 288 or protection != 0) 1 else combat.progress.party[1].max_hp), combat.progress.party[1].hp);
-            try std.testing.expectEqual(if (age < 288) field.game_state.Status.poisoned else field.game_state.Status.healthy, combat.progress.party[1].status);
-            try std.testing.expectEqual(@as(u16, 0), combat.progress.party[2].hp);
-            try std.testing.expectEqual(field.game_state.Status.unconscious, combat.progress.party[2].status);
+            try std.testing.expectEqual(@as(u16, if (age < 288 or protection != 0) 1 else combat.progress.party.at(1).max_hp), combat.progress.party.at(1).hp);
+            try std.testing.expectEqual(if (age < 288) field.game_state.Status.poisoned else field.game_state.Status.healthy, combat.progress.party.at(1).status);
+            try std.testing.expectEqual(@as(u16, 0), combat.progress.party.at(2).hp);
+            try std.testing.expectEqual(field.game_state.Status.unconscious, combat.progress.party.at(2).status);
             try std.testing.expect(combat.spellReaction(2) == null);
             if (age == 193) try std.testing.expectEqual(@as(u8, 0), combat.spellReaction(1).?.animation);
-            try std.testing.expectEqual(@as(u8, if (age < 288) 9 else 8), combat.progress.party[0].rune_charges[2]);
+            try std.testing.expectEqual(@as(u8, if (age < 288) 9 else 8), combat.progress.party.at(0).rune_charges[2]);
             try combat.tickReplay(.{}, &draws);
         }
         try std.testing.expectEqual(cursor, draws.cursor);
-        try std.testing.expectEqual(@as(u8, 8), combat.progress.party[0].rune_charges[2]);
+        try std.testing.expectEqual(@as(u8, 8), combat.progress.party.at(0).rune_charges[2]);
         try std.testing.expectEqual(@as(u16, 289), combat.action_ticks);
     }
 }
@@ -1266,9 +1266,9 @@ test "generated Wind of Sleep preserves KO gaps wards and HP protection and roll
         const spell = for (systems.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, "spell_13")) break i;
         } else unreachable;
-        combat.progress.party[0].rune = systems.runeIndex("wind").?;
-        combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).rune = systems.runeIndex("wind").?;
+        combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
         combat.actions = @splat(.defend);
         combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
         combat.acted = @splat(true);
@@ -1291,7 +1291,7 @@ test "generated Wind of Sleep preserves KO gaps wards and HP protection and roll
                 try std.testing.expectEqual(@as(u8, 0), combat.actor_conditions[combat.partyCount() + 1].sleep_turns);
                 try std.testing.expectEqual(@as(u8, 0), combat.actor_conditions[combat.partyCount() + 2].sleep_turns);
             }
-            try std.testing.expectEqual(@as(u8, if (age < 361) 9 else 8), combat.progress.party[0].rune_charges[0]);
+            try std.testing.expectEqual(@as(u8, if (age < 361) 9 else 8), combat.progress.party.at(0).rune_charges[0]);
             try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
             const reaction = combat.spellReaction(combat.partyCount() + 1);
             if (immune or age < 193 or age >= 360) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
@@ -1351,9 +1351,9 @@ test "generated Dancing Flames repeats target reactions preserves KO gaps damage
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_3")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("fire").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("fire").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -1370,7 +1370,7 @@ test "generated Dancing Flames repeats target reactions preserves KO gaps damage
         try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
         try std.testing.expectEqual(@as(u16, if (age < 493) 5000 else 4568), combat.enemy_hp[1]);
         try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
-        try std.testing.expectEqual(@as(u8, if (age < 493) 9 else 8), combat.progress.party[0].rune_charges[2]);
+        try std.testing.expectEqual(@as(u8, if (age < 493) 9 else 8), combat.progress.party.at(0).rune_charges[2]);
         try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
         const reaction = combat.spellReaction(combat.partyCount() + 1);
         if (age < 238 or age >= 454) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
@@ -1429,9 +1429,9 @@ test "generated Judgment retargets KO respects protection and ignores death ward
         var view = systems;
         view.runes = runes;
         combat.content.systems = view;
-        combat.progress.party[0].rune = systems.runes.len;
-        combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).rune = systems.runes.len;
+        combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
         combat.actions = @splat(.defend);
         combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
         combat.acted = @splat(true);
@@ -1450,7 +1450,7 @@ test "generated Judgment retargets KO respects protection and ignores death ward
             try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
             try std.testing.expectEqual(@as(u16, if (age < 504 or protected) 5000 else 3468), combat.enemy_hp[1]);
             try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
-            try std.testing.expectEqual(@as(u8, if (age < 504) 9 else 8), combat.progress.party[0].rune_charges[3]);
+            try std.testing.expectEqual(@as(u8, if (age < 504) 9 else 8), combat.progress.party.at(0).rune_charges[3]);
             try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
             const reaction = combat.spellReaction(combat.partyCount() + 1);
             if (age < 303 or age >= 425) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
@@ -1495,7 +1495,7 @@ test "generated Shining Wind heals cures and damages384 with distinct reactions 
         };
         combat.enemy_hp[0] = 0;
         if (protected) combat.actor_conditions[combat.partyCount() + 1].protection_rounds = 2;
-        for (combat.progress.party, 0..) |*member, i| {
+        for (combat.progress.party.items(), 0..) |member, i| {
             member.max_hp = 1000;
             member.hp = if (i == 2) 0 else @intCast(10 + i);
             member.status = if (i == 2) .unconscious else .poisoned;
@@ -1504,9 +1504,9 @@ test "generated Shining Wind heals cures and damages384 with distinct reactions 
         combat.actor_conditions[4].rune_blocked = true;
         combat.actor_conditions[4].accuracy_reduced = true;
         try combat.attachSpellScenes(&packet.value);
-        combat.progress.party[0].rune = fixture.view.systems.?.runeIndex("cyclone");
-        combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).rune = fixture.view.systems.?.runeIndex("cyclone");
+        combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
         const spell = for (fixture.view.systems.?.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, "spell_31")) break i;
         } else unreachable;
@@ -1534,7 +1534,7 @@ test "generated Shining Wind heals cures and damages384 with distinct reactions 
                 try std.testing.expectEqual(@as(u32, if (protected) 0 else 532), effect.amounts[combat.partyCount() + 1]);
                 try std.testing.expectEqual(@as(u32, 532), effect.amounts[combat.partyCount() + 2]);
             }
-            for (combat.progress.party, 0..) |member, i| {
+            for (combat.progress.party.items(), 0..) |member, i| {
                 const hp: u16 = if (i == 2) 0 else @intCast(10 + i + @as(usize, if (age >= 384 and i != 3) 500 else 0));
                 try std.testing.expectEqual(hp, member.hp);
                 try std.testing.expectEqual(if (i == 2) field.game_state.Status.unconscious else if (age < 384) field.game_state.Status.poisoned else field.game_state.Status.healthy, member.status);
@@ -1548,7 +1548,7 @@ test "generated Shining Wind heals cures and damages384 with distinct reactions 
             }
             if (age >= 354) try std.testing.expect(ally == null);
             if (age >= 337) try std.testing.expect(enemy == null);
-            try std.testing.expectEqual(@as(u8, if (age < 384) 9 else 8), combat.progress.party[0].rune_charges[3]);
+            try std.testing.expectEqual(@as(u8, if (age < 384) 9 else 8), combat.progress.party.at(0).rune_charges[3]);
             if (age == 96) {
                 const short_values: [123]u15 = @splat(0);
                 var short_draws = rules.Draws{ .values = &short_values, .cursor = draws.cursor };
@@ -1595,9 +1595,9 @@ test "generated Explosion preserves RNG scale KO gaps protection damages448 and 
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_4")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("fire").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("fire").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -1619,7 +1619,7 @@ test "generated Explosion preserves RNG scale KO gaps protection damages448 and 
         try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
         try std.testing.expectEqual(@as(u16, if (age < 448) 5000 else 4268), combat.enemy_hp[1]);
         try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
-        try std.testing.expectEqual(@as(u8, if (age < 448) 9 else 8), combat.progress.party[0].rune_charges[3]);
+        try std.testing.expectEqual(@as(u8, if (age < 448) 9 else 8), combat.progress.party.at(0).rune_charges[3]);
         try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
         const reaction = combat.spellReaction(combat.partyCount() + 1);
         if (age < 257 or age >= 329) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
@@ -1670,9 +1670,9 @@ test "generated Earthquake preserves bounce RNG KO gaps protection damages257 an
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_24")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("earth").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("earth").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -1689,7 +1689,7 @@ test "generated Earthquake preserves bounce RNG KO gaps protection damages257 an
         try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
         try std.testing.expectEqual(@as(u16, if (age < 257) 5000 else 4268), combat.enemy_hp[1]);
         try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
-        try std.testing.expectEqual(@as(u8, if (age < 257) 9 else 8), combat.progress.party[0].rune_charges[3]);
+        try std.testing.expectEqual(@as(u8, if (age < 257) 9 else 8), combat.progress.party.at(0).rune_charges[3]);
         try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
         const reaction = combat.spellReaction(combat.partyCount() + 1);
         if (age < 159 or age >= 191) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
@@ -1740,9 +1740,9 @@ test "generated Thunder God keeps radial draws KO gaps protection damage484 and 
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_32")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("thunder").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("thunder").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -1759,7 +1759,7 @@ test "generated Thunder God keeps radial draws KO gaps protection damage484 and 
         try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
         try std.testing.expectEqual(@as(u16, if (age < 484) 5000 else 4068), combat.enemy_hp[1]);
         try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
-        try std.testing.expectEqual(@as(u8, if (age < 484) 9 else 8), combat.progress.party[0].rune_charges[3]);
+        try std.testing.expectEqual(@as(u8, if (age < 484) 9 else 8), combat.progress.party.at(0).rune_charges[3]);
         try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
         const reaction = combat.spellReaction(combat.partyCount() + 1);
         if (age < 357 or (age >= 391 and age < 393) or age >= 427) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
@@ -1810,9 +1810,9 @@ test "generated Final Flame keeps staged draws KO gaps protection damage584 and 
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_29")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("rage").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("rage").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -1830,7 +1830,7 @@ test "generated Final Flame keeps staged draws KO gaps protection damage584 and 
         try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
         try std.testing.expectEqual(@as(u16, if (age < 584) 5000 else 4068), combat.enemy_hp[1]);
         try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
-        try std.testing.expectEqual(@as(u8, if (age < 584) 9 else 8), combat.progress.party[0].rune_charges[3]);
+        try std.testing.expectEqual(@as(u8, if (age < 584) 9 else 8), combat.progress.party.at(0).rune_charges[3]);
         try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
         const reaction = combat.spellReaction(combat.partyCount() + 1);
         if (age < 229 or age >= 517) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
@@ -1905,9 +1905,9 @@ test "generated Charm Arrow keeps erosion draws KO gaps protection damage224 and
     const spell = for (systems.spells, 0..) |entry, i| {
         if (std.mem.eql(u8, entry.id, "spell_8")) break i;
     } else unreachable;
-    combat.progress.party[0].rune = systems.runeIndex("resurrection").?;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = systems.runeIndex("resurrection").?;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -1924,7 +1924,7 @@ test "generated Charm Arrow keeps erosion draws KO gaps protection damage224 and
         try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
         try std.testing.expectEqual(@as(u16, if (age < 224) 5000 else 4468), combat.enemy_hp[1]);
         try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
-        try std.testing.expectEqual(@as(u8, if (age < 224) 9 else 8), combat.progress.party[0].rune_charges[3]);
+        try std.testing.expectEqual(@as(u8, if (age < 224) 9 else 8), combat.progress.party.at(0).rune_charges[3]);
         try std.testing.expect(combat.spellReaction(combat.partyCount()) == null);
         const reaction = combat.spellReaction(combat.partyCount() + 1);
         if (age < 176 or age >= 176 + packet.value.spells[7].program.?.reaction.?.offsets.len) try std.testing.expect(reaction == null) else try std.testing.expect(reaction != null);
@@ -1979,9 +1979,9 @@ test "generated Voice of Earth keeps grounded motion protection airborne immunit
         const spell = for (systems.spells, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, "spell_22")) break i;
         } else unreachable;
-        combat.progress.party[0].rune = systems.runeIndex("earth").?;
-        combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).rune = systems.runeIndex("earth").?;
+        combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
         const casts: usize = if (airborne) 1 else 2;
         for (0..casts) |cast_index| {
             combat.actions = @splat(.defend);
@@ -1999,7 +1999,7 @@ test "generated Voice of Earth keeps grounded motion protection airborne immunit
                 try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
                 try std.testing.expectEqual(@as(u16, @intCast(if (airborne) 5000 else 5000 - 332 * (cast_index + @intFromBool(age >= 320)))), combat.enemy_hp[1]);
                 try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
-                try std.testing.expectEqual(@as(u8, @intCast(9 - cast_index - @intFromBool(age >= 320))), combat.progress.party[0].rune_charges[1]);
+                try std.testing.expectEqual(@as(u8, @intCast(9 - cast_index - @intFromBool(age >= 320))), combat.progress.party.at(0).rune_charges[1]);
                 try std.testing.expectEqual(age >= 129 and age < 320, combat.hasBackgroundWarp());
                 try std.testing.expect(combat.spellReaction(protected) == null);
                 if (airborne) {
@@ -2078,9 +2078,9 @@ test "generated Deadly Fingertips keeps retargeting immunity result306 charge an
         var view = systems;
         view.runes = runes;
         combat.content.systems = view;
-        combat.progress.party[0].rune = systems.runes.len;
-        combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-        combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).rune = systems.runes.len;
+        combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+        combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
         combat.actions = @splat(.defend);
         combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
         combat.acted = @splat(true);
@@ -2099,7 +2099,7 @@ test "generated Deadly Fingertips keeps retargeting immunity result306 charge an
             try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
             try std.testing.expectEqual(@as(u16, if (age < 306 or case.immune) 5000 else 0), combat.enemy_hp[1]);
             try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[2]);
-            try std.testing.expectEqual(@as(u8, if (age < 306) 9 else 8), combat.progress.party[0].rune_charges[0]);
+            try std.testing.expectEqual(@as(u8, if (age < 306) 9 else 8), combat.progress.party.at(0).rune_charges[0]);
             try std.testing.expectEqual(age >= 97 and age < 306, combat.hasBackgroundWarp());
             if (age >= 306 and !case.immune) {
                 try std.testing.expect(combat.active.?.instant_knockouts & (@as(u16, 1) << @intCast(target)) != 0);
@@ -2150,9 +2150,9 @@ test "Scolding replacement uses the normal owner and commits only at source impa
     var view = systems;
     view.runes = &runes;
     combat.content.systems = view;
-    combat.progress.party[0].rune = 0;
-    combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-    combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).rune = 0;
+    combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+    combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
     combat.actions = @splat(.defend);
     combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
     combat.acted = @splat(true);
@@ -2166,7 +2166,7 @@ test "Scolding replacement uses the normal owner and commits only at source impa
     try std.testing.expect(combat.active.?.scene.?.target_height > 0);
     while (combat.active != null) {
         const age = combat.effectTicks();
-        try std.testing.expectEqual(@as(u8, if (age < 256) 9 else 8), combat.progress.party[0].rune_charges[0]);
+        try std.testing.expectEqual(@as(u8, if (age < 256) 9 else 8), combat.progress.party.at(0).rune_charges[0]);
         if (age < 256) try std.testing.expectEqual(@as(u16, 5000), combat.enemy_hp[0]) else try std.testing.expect(combat.enemy_hp[0] < 5000);
         try combat.tickReplay(.{}, &draws);
     }
@@ -2221,9 +2221,9 @@ test "approved Soul casts use the canonical library and preserve outcomes charge
             var view = systems;
             view.runes = runes;
             combat.content.systems = view;
-            combat.progress.party[0].rune = systems.runes.len;
-            combat.progress.party[0].rune_charges = .{ 9, 9, 9, 9 };
-            combat.progress.party[0].max_rune_charges = .{ 9, 9, 9, 9 };
+            combat.progress.party.at(0).rune = systems.runes.len;
+            combat.progress.party.at(0).rune_charges = .{ 9, 9, 9, 9 };
+            combat.progress.party.at(0).max_rune_charges = .{ 9, 9, 9, 9 };
             combat.actions = @splat(.defend);
             combat.actions[0] = .{ .spell = .{ .index = spell, .target = 0 } };
             combat.acted = @splat(true);
@@ -2241,7 +2241,7 @@ test "approved Soul casts use the canonical library and preserve outcomes charge
                 try std.testing.expectEqual(@as(u16, 0), combat.enemy_hp[0]);
                 try std.testing.expectEqual(if (age < impact) hp else if (hell) (if (immune) hp else 0) else hp -| 332, combat.enemy_hp[1]);
                 try std.testing.expectEqual(if (hell and !immune and age >= impact) @as(u16, 0) else hp, combat.enemy_hp[2]);
-                for (0..4) |slot| try std.testing.expectEqual(@as(u8, if (slot == tier and age >= impact) 8 else 9), combat.progress.party[0].rune_charges[slot]);
+                for (0..4) |slot| try std.testing.expectEqual(@as(u8, if (slot == tier and age >= impact) 8 else 9), combat.progress.party.at(0).rune_charges[slot]);
                 const capture: ?u16 = if (age < 97) null else if (!hell) (if (age < 250) 382 else null) else if (age < 317) 381 else if (age < 436) 8 else null;
                 try std.testing.expectEqual(capture, combat.backgroundCaptureMinimum());
                 if (age >= impact) {

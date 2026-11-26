@@ -7,7 +7,7 @@ const ActorStatus = @import("battle_actor_program.zig").Status;
 pub const IconClock = struct { active: u8 = 0, started_at: [8]u32 = @splat(0) };
 
 fn partyIconMask(state: *const battle.State, actor: usize) u8 {
-    const member = state.progress.party[actor];
+    const member = state.progress.party.at(actor).*;
     const persistent = state.party_knockouts[actor].prior_status orelse member.status;
     var mask: u8 = if (persistent == .poisoned) 1 else 0;
     for (0..member.balloons) |index| mask |= @as(u8, 1) << @intCast(index + 1);
@@ -91,7 +91,7 @@ fn setStatus(state: *battle.State, target: usize, ailment: battle.Ailment) bool 
         return true;
     }
     if (target >= state.partyCount()) return false;
-    const member = &state.progress.party[target];
+    const member = state.progress.party.at(target);
     if (ailment == .poison) {
         if ((state.party_knockouts[target].prior_status orelse member.status) == .poisoned) return false;
         // Recipient scripts precede down-state commitment, even at zero HP.
@@ -109,12 +109,12 @@ fn setStatus(state: *battle.State, target: usize, ailment: battle.Ailment) bool 
 
 /// Process departures and formation changes before HP and status timers.
 pub fn applyRoundBoundaryStatuses(state: *battle.State) void {
-    for (state.progress.party, 0..) |member, index| {
+    for (state.progress.party.items(), 0..) |member, index| {
         if (member.balloons == 3) state.beginDeparture(index);
     }
     state.promoteRearMembers();
     for (&state.actor_conditions) |*conditions| conditions.protection_rounds -|= 1;
-    if (state.content.systems != null) for (state.progress.party, 0..) |*member, index| {
+    if (state.content.systems != null) for (state.progress.party.items(), 0..) |member, index| {
         if (state.participates(index) and state.actor_conditions[index].protection_rounds == 0) {
             const regeneration: i32 = if (state.hasRune(index, "sunbeam")) 5 else 0;
             const poison: i32 = if (member.status == .poisoned) systems.battlePoison(member.max_hp) else 0;
@@ -137,7 +137,7 @@ pub fn recoverSleep(state: *battle.State, actor: usize) void {
 }
 
 pub fn clearKnockoutStatuses(state: *battle.State, target: usize) void {
-    state.progress.party[target].balloons = 0;
+    state.progress.party.at(target).balloons = 0;
     const conditions = &state.actor_conditions[target];
     conditions.sleep_turns = 0;
     conditions.accuracy_reduced = false;

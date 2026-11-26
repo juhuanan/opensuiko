@@ -35,7 +35,7 @@ pub fn resolveCommanderOrder(self: *State) void {
         effect.target_reacting = true;
         effect.amount = self.resolvePhysicalDamage(child.actor, effect.target, self.roll(), self.actions[effect.target] != null and self.actions[effect.target].? == .defend);
         if (self.actor_conditions[effect.target].protection_rounds > 0) effect.amount = 0;
-        const target = &self.progress.party[effect.target];
+        const target = self.progress.party.at(effect.target);
         target.hp = @intCast(@as(u32, target.hp) -| effect.amount);
         self.markPartyKnockout(effect.target);
     }
@@ -69,7 +69,7 @@ pub fn coverDuration(self: *const State, effect: Effect) u16 {
 }
 pub fn protector(self: *const State, target: usize) !?usize {
     if (target >= self.partyCount()) return error.InvalidProtectionTarget;
-    const ward = self.progress.party[target];
+    const ward = self.progress.party.at(target).*;
     if (ward.hp >= ward.max_hp / 4) return null;
     if (self.integration) |_| return self.integratedProtector(target);
     const data = self.content.protection orelse return error.MissingBattleProtectionData;
@@ -77,7 +77,7 @@ pub fn protector(self: *const State, target: usize) !?usize {
     if (self.active != null) return error.ProtectionActorsBusy;
     for (data.pairs) |pair| {
         if (!std.mem.eql(u8, pair.ward, ward.id)) continue;
-        for (self.progress.party, 0..) |member, candidate| {
+        for (self.progress.party.items(), 0..) |member, candidate| {
             if (candidate != target and self.participates(candidate) and std.mem.eql(u8, member.id, pair.protector)) return candidate;
         }
     }
@@ -86,7 +86,7 @@ pub fn protector(self: *const State, target: usize) !?usize {
     for (1..self.partyCount()) |step| {
         const candidate = (target + step) % self.partyCount();
         if (!self.participates(candidate)) continue;
-        const candidate_type = data.characterType(self.progress.party[candidate].id) orelse return error.MissingBattleProtectionData;
+        const candidate_type = data.characterType(self.progress.party.at(candidate).id) orelse return error.MissingBattleProtectionData;
         if (candidate_type != ward_type) return candidate;
     }
     return null;
@@ -106,11 +106,11 @@ pub fn integratedProtector(self: *const State, target: usize) !?usize {
         const values = self.stats(index);
         combatants[index] = .{
             .native_id = native,
-            .character_type = if (self.content.protection) |protection| protection.characterType(self.progress.party[index].id) else null,
+            .character_type = if (self.content.protection) |protection| protection.characterType(self.progress.party.at(index).id) else null,
             .side = .party,
             .source_slot = @intCast(index + 1),
-            .hp = self.progress.party[index].hp,
-            .max_hp = self.progress.party[index].max_hp,
+            .hp = self.progress.party.at(index).hp,
+            .max_hp = self.progress.party.at(index).max_hp,
             .attack = values.attack,
             .defense = values.defense,
             .skill = values.skill,
@@ -384,7 +384,7 @@ pub fn frontProjectileDecision(self: *State, actor: usize) bool {
         }
         const hit = hitsWithAccuracyPenalty(self.stats(actor).skill, self.stats(target).skill, self.roll(), self.hasRune(target, "hazy"));
         // shortcut: interception/counters and other low-HP targets need their own C tracks.
-        const low_hp = self.hp(target) < self.progress.party[target].max_hp / 4;
+        const low_hp = self.hp(target) < self.progress.party.at(target).max_hp / 4;
         if (low_hp) {
             const guard = self.protector(target) catch |err| {
                 self.protectionFailure(err);
@@ -397,7 +397,7 @@ pub fn frontProjectileDecision(self: *State, actor: usize) bool {
             }
         }
         const release: ?u16 = if (hit) null else for (self.enemy(actor - self.partyCount()).front_projectile.?.dodges) |dodge| {
-            if (std.mem.eql(u8, dodge.id, self.progress.party[target].id)) break dodge.target_release_tick;
+            if (std.mem.eql(u8, dodge.id, self.progress.party.at(target).id)) break dodge.target_release_tick;
         } else {
             self.replay_unsupported = .coordinator_action;
             return false;
@@ -436,7 +436,7 @@ pub fn advanceFrontProjectiles(self: *State) void {
             };
             const defending = self.actions[shot.target] != null and self.actions[shot.target].? == .defend;
             const damage = self.resolvePhysicalDamage(shot.actor, shot.target, self.roll(), defending);
-            const target = &self.progress.party[shot.target];
+            const target = self.progress.party.at(shot.target);
             target.hp = @intCast(@as(u32, target.hp) -| (if (self.actor_conditions[shot.target].protection_rounds == 0) damage else 0));
             self.markPartyKnockout(shot.target);
             self.front_hurt_at[shot.target] = self.presentation_tick;
@@ -476,7 +476,7 @@ pub fn rocDecision(self: *State, actor: usize) void {
             return;
         };
         // shortcut: bound cover has a complete Gremio/Defend track; extend other protectors/actions with witnesses.
-        if (guard) |protector_index| if (target != 0 or protector_index != 1 or !std.mem.eql(u8, self.progress.party[0].id, "hero") or !std.mem.eql(u8, self.progress.party[1].id, "gremio") or self.actions[protector_index] == null or self.actions[protector_index].? != .defend or self.actor_conditions[protector_index].sleep_turns > 0) {
+        if (guard) |protector_index| if (target != 0 or protector_index != 1 or !std.mem.eql(u8, self.progress.party.at(0).id, "hero") or !std.mem.eql(u8, self.progress.party.at(1).id, "gremio") or self.actions[protector_index] == null or self.actions[protector_index].? != .defend or self.actor_conditions[protector_index].sleep_turns > 0) {
             self.replay_unsupported = .missing_protection;
             return;
         };
@@ -632,7 +632,7 @@ pub fn beginAttack(self: *State, actor: usize, requested_target: usize, mode: At
     } else if (target >= party_count or !self.participates(target)) target = self.firstLiving(true).?;
     const profile_attack = self.usesProfileAttack(if (party_actor) target - party_count else actor - party_count);
     if (party_actor and !profile_attack) if (self.unite_actors) |bundle| if (bundle.counterPacket()) |packet| {
-        if (packet.partyAttacker(self.progress.party[actor].id, .melee_hit) != null) {
+        if (packet.partyAttacker(self.progress.party.at(actor).id, .melee_hit) != null) {
             if (!self.startMeleeStrike(actor, target - party_count) and self.replay_unsupported == null and !self.replay_exhausted) self.acted[actor] = false;
             if (self.active) |*effect| if (effect.actor == actor and effect.counter_attack) {
                 effect.followup_from = previous_target;
@@ -640,7 +640,7 @@ pub fn beginAttack(self: *State, actor: usize, requested_target: usize, mode: At
             };
             return;
         }
-        if (packet.rangedAttacker(self.progress.party[actor].id) != null) {
+        if (packet.rangedAttacker(self.progress.party.at(actor).id) != null) {
             if (!self.startRangedStrike(actor, target - party_count) and self.replay_unsupported == null and !self.replay_exhausted) self.acted[actor] = false;
             return;
         }
@@ -704,7 +704,7 @@ pub fn chooseEnemyTarget(self: *State, enemy_index: usize) ?usize {
     };
 }
 pub fn applyFieldStatuses(self: *State) void {
-    for (self.progress.party) |*member| {
+    for (self.progress.party.items()) |member| {
         if (member.status != .poisoned) continue;
         const result = systems.fieldPoison(member.hp, member.max_hp, self.roll());
         if (result.cured) member.status = .healthy;
@@ -724,24 +724,24 @@ pub fn gearIndex(self: State, id: field.items.Id) ?usize {
     return null;
 }
 pub fn depositToStorage(self: *State, store: *field.game_state.storage.Storage, owner: usize, slot: usize) !void {
-    if (owner >= self.partyCount() or slot >= self.progress.party[owner].inventory.count()) return error.InvalidItem;
+    if (owner >= self.partyCount() or slot >= self.progress.party.at(owner).inventory.count()) return error.InvalidItem;
     if (self.itemEquipped(owner, slot)) return error.EquippedItem;
-    try store.deposit(&self.progress.party[owner].inventory, slot);
+    try store.deposit(&self.progress.party.at(owner).inventory, slot);
 }
 pub fn gearCount(self: State, member: usize, item: usize) usize {
-    return self.content.characterRules().gearCount(self.progress.party[member], item);
+    return self.content.characterRules().gearCount(self.progress.party.at(member).*, item);
 }
 pub fn itemEquipped(self: State, member: usize, slot: usize) bool {
-    return self.content.characterRules().itemEquipped(self.progress.party[member], slot);
+    return self.content.characterRules().itemEquipped(self.progress.party.at(member).*, slot);
 }
 pub fn equipOwned(self: *State, member: usize, item: ?usize) !void {
     try self.equipSlotOwned(member, .head, item);
 }
 pub fn equipSlotOwned(self: *State, member: usize, slot: systems.EquipmentSlot, item: ?usize) !void {
     if (member >= self.partyCount()) return error.InvalidEquipment;
-    try self.content.characterRules().equipOwned(&self.progress.party[member], slot, item);
+    try self.content.characterRules().equipOwned(self.progress.party.at(member), slot, item);
 }
 pub fn checkEquipment(self: State, member: usize, slot: systems.EquipmentSlot, item: ?usize) !void {
     if (member >= self.partyCount()) return error.InvalidEquipment;
-    try self.content.characterRules().checkEquipment(self.progress.party[member], slot, item);
+    try self.content.characterRules().checkEquipment(self.progress.party.at(member).*, slot, item);
 }

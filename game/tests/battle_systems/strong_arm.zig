@@ -23,7 +23,7 @@ test "Strong Arm live branches preserve ally selection protector HP KO Buddha an
         combat.startEncounter();
         try combat.attachUniteActors(&bundle.value);
         try combat.attachSpellScenes(&spells.value);
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| {
             member.max_hp = 5000;
             member.hp = 5000;
             member.inventory.slots = @splat(null);
@@ -31,7 +31,7 @@ test "Strong Arm live branches preserve ally selection protector HP KO Buddha an
         combat.phase = .resolving;
         combat.acted = @splat(true);
         combat.actions = @splat(.defend);
-        for (combat.progress.party) |*member| member.rune = null;
+        for (combat.progress.party.items()) |member| member.rune = null;
         const owner = combat.partyCount() + 1;
         const covered = scenario >= 3 and scenario <= 6;
         const victim: usize = if (covered) 1 else 0;
@@ -40,10 +40,10 @@ test "Strong Arm live branches preserve ally selection protector HP KO Buddha an
         if (scenario == 2) for (0..combat.enemyCount()) |index| {
             if (index != 1) combat.enemy_hp[index] = 0;
         };
-        if (covered) combat.progress.party[0].hp = 1;
+        if (covered) combat.progress.party.at(0).hp = 1;
         if (scenario == 4) combat.actor_conditions[victim].protection_rounds = 2;
-        if (scenario == 5 or scenario == 6) combat.progress.party[victim].hp = 1;
-        if (scenario == 6) combat.progress.party[victim].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
+        if (scenario == 5 or scenario == 6) combat.progress.party.at(victim).hp = 1;
+        if (scenario == 6) combat.progress.party.at(victim).inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
         if (scenario == 7) try combat.beginMelee(combat.partyCount(), 1, true);
         var values: [128]u15 = @splat(24);
         var draws = h.rules.Draws{ .values = &values };
@@ -118,7 +118,7 @@ test "Strong Arm source formation8 completes two queued rounds without spending 
     combat.integration = .{ .host = rules_host };
     try combat.attachUniteActors(&bundle.value);
     try combat.attachSpellScenes(&spells.value);
-    for (combat.progress.party) |*member| {
+    for (combat.progress.party.items()) |member| {
         member.max_hp = 5000;
         member.hp = 5000;
     }

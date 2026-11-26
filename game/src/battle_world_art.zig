@@ -420,7 +420,7 @@ fn dodgeSample(data: Data, state: *const battle.State, index: usize) ?Sample {
 fn cActorSample(data: Data, state: *const battle.State, index: usize) Visual {
     const actor = data.actors[index];
     const home = if (index < 6) data.formation_slots[state.formationSlot(index)] else data.enemy_positions[index - 6];
-    const stance: usize = if (index >= 6) 0 else if (state.partyInactive(index)) 3 else if (state.hp(index) < state.progress.party[index].max_hp / 4) 2 else 0;
+    const stance: usize = if (index >= 6) 0 else if (state.partyInactive(index)) 3 else if (state.hp(index) < state.progress.party.at(index).max_hp / 4) 2 else 0;
     var result: Visual = .{ .sample = .{ .position = home, .pose = clipPose(actor, stance, state.presentation_tick), .offset = .{ 0, 0 } } };
     if (index >= 6) if (state.dodge_idle_at[index - 6]) |started| {
         result.sample.pose = clipPose(actor, 0, state.presentation_tick - started);
@@ -466,7 +466,7 @@ fn cActorSample(data: Data, state: *const battle.State, index: usize) Visual {
         if (index == strike.target and !strike.missed) {
             const hurt_end = timing.impact_tick + timing.target_release_delay;
             if (strike.ticks >= timing.impact_tick and strike.ticks < hurt_end) {
-                const reaction = data.targetReaction(state.progress.party[strike.actor].id, index - 6, false);
+                const reaction = data.targetReaction(state.progress.party.at(strike.actor).id, index - 6, false);
                 result.sample = reaction[strike.ticks - timing.impact_tick];
             }
             if (strike.target_down) {
@@ -533,7 +533,7 @@ pub fn actorSample(data: Data, state: *const battle.State, index: usize) Visual 
                 result.visible = true;
                 const hurt_end = timing.impact_tick + timing.target_release_delay;
                 if (strike.ticks >= timing.impact_tick and strike.ticks < hurt_end) {
-                    const reaction = data.targetReaction(state.progress.party[strike.actor].id, index - 6, state.roc_home_restored);
+                    const reaction = data.targetReaction(state.progress.party.at(strike.actor).id, index - 6, state.roc_home_restored);
                     result.sample = reaction[strike.ticks - timing.impact_tick];
                 }
                 if (strike.target_down) {
@@ -549,7 +549,7 @@ pub fn actorSample(data: Data, state: *const battle.State, index: usize) Visual 
     }
     const actor = data.actors[index];
     const home = if (index < 6) data.formation_slots[index] else data.enemy_positions[0];
-    const low = index < 6 and state.hp(index) < state.progress.party[index].max_hp / 4;
+    const low = index < 6 and state.hp(index) < state.progress.party.at(index).max_hp / 4;
     var result: Visual = .{ .sample = .{ .position = home, .pose = clipPose(actor, if (index < 6 and state.partyInactive(index)) 3 else if (low) 2 else 0, state.presentation_tick), .offset = .{ 0, 0 } } };
     const covered = state.roc_cover;
     const effect_tick = state.effectTicks();

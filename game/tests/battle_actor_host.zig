@@ -1945,10 +1945,10 @@ test "exported actor recovery programs use party Turtle gates draws and retained
             var state = try Battle.State.init(content.value, items.value, &members, 17);
             const turtle = variant == 1;
             const existing: u8 = if (variant == 2 or turtle) 1 else 0;
-            state.progress.party[0].rune = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
+            state.progress.party.at(0).rune = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
             state.unbalanced[0] = existing;
-            state.progress.party[0].status = .poisoned;
-            state.progress.party[0].balloons = 2;
+            state.progress.party.at(0).status = .poisoned;
+            state.progress.party.at(0).balloons = 2;
             state.actor_conditions[0].accuracy_reduced = true;
             state.actor_conditions[0].protection_rounds = 3;
             const values = [_]u15{roll};
@@ -1968,8 +1968,8 @@ test "exported actor recovery programs use party Turtle gates draws and retained
             try std.testing.expectEqual(@as(usize, 1), bridge.requests);
             try std.testing.expectEqual(@as(usize, if (turtle) 0 else 1), draws.cursor);
             try std.testing.expectEqual(@as(u8, if (existing != 0) existing else 2), state.unbalanced[0]);
-            try std.testing.expectEqual(Field.game_state.Status.poisoned, state.progress.party[0].status);
-            try std.testing.expectEqual(@as(u8, 2), state.progress.party[0].balloons);
+            try std.testing.expectEqual(Field.game_state.Status.poisoned, state.progress.party.at(0).status);
+            try std.testing.expectEqual(@as(u8, 2), state.progress.party.at(0).balloons);
             try std.testing.expect(state.actor_conditions[0].accuracy_reduced);
             try std.testing.expectEqual(@as(u8, 3), state.actor_conditions[0].protection_rounds);
             state.replay_draws = null;
@@ -1990,7 +1990,7 @@ test "actor recovery refuses invalid targets and exhausted draws without applyin
     defer items.deinit();
     var members: [6]Battle.Member = undefined;
     var state = try Battle.State.init(content.value, items.value, &members, 17);
-    state.progress.party[0].rune = null;
+    state.progress.party.at(0).rune = null;
     var empty = Rules.Draws{};
     state.replay_draws = &empty;
     try std.testing.expectError(error.InvalidActorRecovery, state.requestUniteRecovery(state.partyCount(), 2));
@@ -2890,7 +2890,8 @@ test "Beat callback child survives normal playback rebind and preserves its disp
         var members: [6]Battle.Member = undefined;
         var scene = try Battle.State.init(content.value, items.value, &members, 17);
         scene.unite_actors = &bundle;
-        scene.progress.party = scene.progress.party[0..party.len];
+        scene.progress.party = .init(members[0..party.len]);
+        scene.setFormation(.{ 0, 1, 2, 3, 4, 5 });
         const playback = &scene.unite_vm;
         try playback.begin(&bundle, 27, @intCast(order), 2, &party, &homes, 0);
         var spawned = false;
@@ -2992,7 +2993,7 @@ test "actor status thresholds preserve side Turtle duplicate and zero HP orderin
         if (!party and (kind == .poison or kind == .balloon)) continue;
         const target = if (party) @as(usize, 0) else state.partyCount();
         const turtle = variant == 1;
-        state.progress.party[0].rune = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
+        state.progress.party.at(0).rune = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
         const values = [_]u15{ roll, roll };
         var draws = Rules.Draws{ .values = &values };
         state.replay_draws = &draws;
@@ -3000,8 +3001,8 @@ test "actor status thresholds preserve side Turtle duplicate and zero HP orderin
         try state.requestActorStatus(target, request);
         const expected = !turtle and (if (party) percent < threshold else percent >= threshold);
         const actual = switch (kind) {
-            .poison => state.progress.party[0].status == .poisoned,
-            .balloon => state.progress.party[0].balloons > 0,
+            .poison => state.progress.party.at(0).status == .poisoned,
+            .balloon => state.progress.party.at(0).balloons > 0,
             .sleep => state.actor_conditions[target].sleep_turns > 0,
             .accuracy_reduced => state.actor_conditions[target].accuracy_reduced,
             .rune_blocked => state.actor_conditions[target].rune_blocked,
@@ -3013,17 +3014,17 @@ test "actor status thresholds preserve side Turtle duplicate and zero HP orderin
     };
     var members: [6]Battle.Member = undefined;
     var state = try Battle.State.init(content.value, items.value, &members, 17);
-    state.progress.party[0].rune = null;
-    state.progress.party[0].hp = 0;
+    state.progress.party.at(0).rune = null;
+    state.progress.party.at(0).hp = 0;
     state.markPartyKnockout(0);
     const values = [_]u15{0};
     var draws = Rules.Draws{ .values = &values };
     state.replay_draws = &draws;
     try state.requestActorStatus(0, .{ .kind = .poison, .threshold_percent = 20 });
     try std.testing.expectEqual(Field.game_state.Status.poisoned, state.party_knockouts[0].prior_status.?);
-    try std.testing.expectEqual(Field.game_state.Status.unconscious, state.progress.party[0].status);
+    try std.testing.expectEqual(Field.game_state.Status.unconscious, state.progress.party.at(0).status);
     try std.testing.expectEqual(@as(u8, 1), state.status_icons[0].active & 1);
-    state.progress.party[0].inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
+    state.progress.party.at(0).inventory.slots[0] = .{ .id = .sacrificial_buddha, .uses = 0 };
     try std.testing.expect(!state.commitPartyKnockout(0));
     try std.testing.expectEqual(Field.game_state.Status.poisoned, state.party_knockouts[0].revival.?.original_status);
     const revival_start = state.party_knockouts[0].revival.?.started_at;
@@ -3032,7 +3033,7 @@ test "actor status thresholds preserve side Turtle duplicate and zero HP orderin
     state.camera_ticks = revival_start + state.rules.automatic_revival.?.impact_delay;
     state.advanceRevivals();
     try std.testing.expect(state.hp(0) > 0);
-    try std.testing.expectEqual(Field.game_state.Status.poisoned, state.progress.party[0].status);
+    try std.testing.expectEqual(Field.game_state.Status.poisoned, state.progress.party.at(0).status);
     const poisoned = state;
     try std.testing.expectError(error.RandomInputExhausted, state.requestActorStatus(0, .{ .kind = .accuracy_reduced, .threshold_percent = 100 }));
     try std.testing.expect(!state.actor_conditions[0].accuracy_reduced);
@@ -3064,7 +3065,7 @@ test "actor status reaches the live playback bridge at its own script clock" {
         status_code[1].command.status.kind = kind;
         var members: [6]Battle.Member = undefined;
         var state = try Battle.State.init(content.value, items.value, &members, 17);
-        state.progress.party[1].rune = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
+        state.progress.party.at(1).rune = if (turtle) content.value.systems.?.runeIndex("turtle").? else null;
         state.unite_actors = &bundle;
         const homes: [12][3]i32 = @splat(.{ 0, 0, 0 });
         try state.unite_vm.begin(&bundle, 0, 1, 6, content.value.initial_party.?, homes[0 .. state.partyCount() + state.enemyCount()], 0);
@@ -3097,8 +3098,8 @@ test "actor status balloons draw before worn-hat duplicate and departure guards"
     for (0..6) |actor| for (0..4) |existing| for (0..4) |variant| {
         var members: [6]Battle.Member = undefined;
         var state = try Battle.State.init(content.value, items.value, &members, 17);
-        state.progress.party[actor].rune = if (variant == 3) content.value.systems.?.runeIndex("turtle").? else null;
-        state.progress.party[actor].loadout.head = if (variant == 1) state.gearIndex(.pointed_hat).? else null;
+        state.progress.party.at(actor).rune = if (variant == 3) content.value.systems.?.runeIndex("turtle").? else null;
+        state.progress.party.at(actor).loadout.head = if (variant == 1) state.gearIndex(.pointed_hat).? else null;
         if (variant == 1 or variant == 2) members[actor].inventory.slots[0] = .{ .id = .pointed_hat, .uses = 0 };
         members[actor].balloons = @intCast(existing);
         const before = members[actor];
@@ -3122,7 +3123,7 @@ test "actor status balloons draw before worn-hat duplicate and departure guards"
     };
     var members: [6]Battle.Member = undefined;
     var state = try Battle.State.init(content.value, items.value, &members, 17);
-    state.progress.party[0].rune = null;
+    state.progress.party.at(0).rune = null;
     var empty = Rules.Draws{ .values = &.{} };
     state.replay_draws = &empty;
     const before = members;

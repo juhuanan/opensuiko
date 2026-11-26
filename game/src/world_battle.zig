@@ -292,14 +292,14 @@ pub const Adapter = struct {
     pub fn beginTransactional(self: *Adapter, link: *field_link.Session, combat: *battle.State, data: Data, draws: world.Draws, last_receipt: u64) !void {
         if (self.original != null or self.transaction != null or link.travel.mode != .battle or combat.pending_enemy_actor != null or combat.coordinator != null) return error.WorldBattleNotReady;
         if (combat.partyCount() != 6) return error.UnsupportedWorldCombatParty;
-        if (combat.progress.party.ptr != link.field_state.progress.party.ptr or combat.partyCount() != link.field_state.progress.party.len) return error.WorldPartyMismatch;
+        if (!combat.progress.party.equal(link.field_state.progress.party)) return error.WorldPartyMismatch;
         var view = try data.view(link.content, combat.content);
         const id = link.travel.selected orelse return error.WorldBattleNotReady;
         var index = for (view.encounters, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, id)) break i;
         } else return error.UnknownWorldEncounter;
         if (!data.supports(view.encounters[index])) return error.UnsupportedWorldEncounter;
-        const bound = try data.bindPresentation(link.allocator, view, index, combat.progress.party, combat.formation);
+        const bound = try data.bindPresentation(link.allocator, view, index, combat.progress.party.values()[0..combat.partyCount()], combat.formationOrder());
         view = bound.content;
         index = bound.encounter;
         try checkActorBindings(combat.*, view, index);
@@ -363,7 +363,7 @@ pub const Adapter = struct {
             var next = tx.session.state;
             next.content = tx.original.content;
             next.encounter = tx.original.encounter;
-            next.progress.party = members[0..result.member_count];
+            next.progress.party = .init(members[0..result.member_count]);
             for (0..result.member_count) |i| {
                 const current = tx.original.ownedMember(i);
                 if (!std.meta.eql(current, tx.admitted[i]) or !std.mem.eql(u8, current.id, result.members[i].id)) return error.StaleCombatParty;
@@ -380,7 +380,7 @@ pub const Adapter = struct {
                 if (slot >= result.member_count or seen[slot]) return error.InvalidFormation;
                 seen[slot] = true;
             }
-            next.formation = result.formation;
+            next.setFormation(result.formation);
             next.progress.money = result.money;
             next.clearSleep();
             next.clearTemporaryStats();
@@ -390,8 +390,9 @@ pub const Adapter = struct {
             var acknowledged = tx.session;
             try acknowledged.acknowledge(draws.*);
             const destination = tx.original.progress.party;
-            @memcpy(destination, members[0..result.member_count]);
+            destination.copyFrom(members[0..result.member_count]);
             next.progress.party = destination;
+            next.setFormation(result.formation);
             link.travel = plan.after;
             link.field_state.progress.* = next.progress;
             combat.* = next;
@@ -416,13 +417,13 @@ pub const Adapter = struct {
     }
     pub fn begin(self: *Adapter, session: *field_link.Session, combat: *battle.State, data: Data) !void {
         if (self.original != null or session.travel.mode != .battle or combat.pending_enemy_actor != null or combat.coordinator != null) return error.WorldBattleNotReady;
-        if (combat.progress.party.ptr != session.field_state.progress.party.ptr or combat.partyCount() != session.field_state.progress.party.len) return error.WorldPartyMismatch;
+        if (!combat.progress.party.equal(session.field_state.progress.party)) return error.WorldPartyMismatch;
         var view = try data.view(session.content, combat.content);
         const id = session.travel.selected orelse return error.WorldBattleNotReady;
         var index = for (view.encounters, 0..) |entry, i| {
             if (std.mem.eql(u8, entry.id, id)) break i;
         } else return error.UnknownWorldEncounter;
-        const bound = try data.bindPresentation(session.allocator, view, index, combat.progress.party, combat.formation);
+        const bound = try data.bindPresentation(session.allocator, view, index, combat.progress.party.values()[0..combat.partyCount()], combat.formationOrder());
         view = bound.content;
         index = bound.encounter;
         try checkActorBindings(combat.*, view, index);

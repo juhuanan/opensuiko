@@ -13,7 +13,7 @@ const exploration = @import("exploration.zig");
 const modes = @import("modes.zig");
 
 pub fn roomEventBinding(state: *journey.State, rooms: *field_events.BattleRooms, binding: field_events.Binding) !field_events.Binding {
-    for (state.field_state.progress.party, rooms.party[0..state.field_state.progress.party.len]) |member, *id| {
+    for (state.field_state.progress.party.items(), rooms.party[0..state.field_state.progress.party.len]) |member, *id| {
         id.* = battle.IntegrationHost.characterIdByName(member.id) orelse return error.UnknownFieldEventPartyMember;
     }
     @memset(&rooms.character_levels, 0);
@@ -22,20 +22,21 @@ pub fn roomEventBinding(state: *journey.State, rooms: *field_events.BattleRooms,
         rooms.character_levels[character.source_character_id] = character.seed.level;
     };
     for (rooms.party[0..state.field_state.progress.party.len], 0..) |id, index|
-        rooms.character_levels[id] = state.combat.progress.party[index].level;
-    for (state.reserves) |entry| if (entry) |owned| {
+        rooms.character_levels[id] = state.combat.progress.party.at(index).level;
+    for (state.reserve_slots) |entry| if (entry) |slot| {
+        const owned = state.combat.progress.party.backing()[slot];
         const id = battle.IntegrationHost.characterIdByName(owned.id) orelse return error.UnknownFieldEventPartyMember;
         rooms.character_levels[id] = owned.level;
     };
     var carried_count: usize = 0;
     var equipped_count: usize = 0;
-    for (state.field_state.progress.party, 0..) |member, index| {
+    for (state.field_state.progress.party.items(), 0..) |member, index| {
         for (member.inventory.slots) |entry| if (entry) |item| {
             rooms.carried_items[carried_count] = item.id.sourceId();
             carried_count += 1;
         };
-        inline for (comptime std.meta.fieldNames(@TypeOf(state.combat.progress.party[0].loadout))) |slot| {
-            if (@field(state.combat.progress.party[index].loadout, slot)) |gear| {
+        inline for (comptime std.meta.fieldNames(@TypeOf(state.combat.progress.party.at(0).loadout))) |slot| {
+            if (@field(state.combat.progress.party.at(index).loadout, slot)) |gear| {
                 const rules = state.combat.content.systems orelse return error.InvalidEquipment;
                 if (gear >= rules.equipment.len) return error.InvalidEquipment;
                 const id = std.meta.stringToEnum(field.items.Id, rules.equipment[gear].id) orelse return error.UnknownFieldEventItem;
@@ -241,7 +242,7 @@ pub fn validateScenePartyChanges(state: *const journey.State) !void {
 }
 
 fn prepareSceneInventory(combat: *const battle.State, member: usize, edit: field.game_state.event_runtime.InventoryEdit) !?field.items.Inventory {
-    var inventory = combat.progress.party[member].inventory;
+    var inventory = combat.progress.party.at(member).inventory;
     if (edit.take) |name| {
         const id = std.meta.stringToEnum(field.items.Id, name) orelse return error.InvalidItem;
         const slot = for (inventory.slots[0..inventory.count()], 0..) |item, index| {
@@ -305,7 +306,7 @@ fn collectFacilityItems(state: *journey.State, ids: []const field.items.Id) !u8 
     const catalogue = state.shared_item_catalogue orelse return error.MissingSharedItemCatalogue;
     var view = try item_ledger.ledger.viewOf(catalogue, state.shared_items, 0);
     var inventories: [6]field.items.Inventory = undefined;
-    for (state.field_state.progress.party, inventories[0..state.field_state.progress.party.len]) |member, *inventory| inventory.* = member.inventory;
+    for (state.field_state.progress.party.items(), inventories[0..state.field_state.progress.party.len]) |member, *inventory| inventory.* = member.inventory;
     var collected: u8 = 0;
     for (ids, 0..) |id, index| {
         const source = try item_ledger.catalogue.sharedKey(catalogue, @tagName(id));
@@ -325,7 +326,7 @@ fn collectFacilityItems(state: *journey.State, ids: []const field.items.Id) !u8 
         }
     }
     state.shared_items = try item_ledger.ledger.slotsOf(catalogue, view);
-    for (state.field_state.progress.party, inventories[0..state.field_state.progress.party.len]) |*member, inventory| member.inventory = inventory;
+    for (state.field_state.progress.party.items(), inventories[0..state.field_state.progress.party.len]) |member, inventory| member.inventory = inventory;
     return collected;
 }
 
@@ -339,9 +340,10 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
             if (state.combat.replay_draws != null) return error.InvalidCharacterGrowth;
             var members: [6]battle.Member = undefined;
             const count = state.combat.partyCount();
-            @memcpy(members[0..count], state.combat.progress.party);
+            state.combat.progress.party.copyTo(members[0..count]);
             var next = state.combat.*;
-            next.progress.party = members[0..count];
+            next.progress.party = .init(members[0..count]);
+            next.setFormation(state.combat.formationOrder());
             try next.sceneExperience(effect.kind == .party_gain_experience);
             try owner.session.acknowledgePartyEdit(binding, true, &story);
             for (0..count) |index| state.combat.setOwnedMember(index, next.ownedMember(index));
@@ -349,8 +351,8 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
         } else if (effect.kind == .advance_character) {
             var advances = effect.level_advances.?;
             if (effect.add_hero_level == true) {
-                const hero_level = for (state.combat.progress.party, 0..) |member, index| {
-                    if (std.mem.eql(u8, member.id, "hero")) break state.combat.progress.party[index].level;
+                const hero_level = for (state.combat.progress.party.items(), 0..) |member, index| {
+                    if (std.mem.eql(u8, member.id, "hero")) break state.combat.progress.party.at(index).level;
                 } else return error.InvalidCharacterGrowth;
                 advances = @min(advances +| hero_level, 99);
             }
@@ -361,11 +363,11 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
             const id = effect.character.?;
             const equipment = (state.combat.content.systems orelse return error.InvalidSystems).equipment;
             const catalogue = state.shared_item_catalogue orelse return error.MissingSharedItemCatalogue;
-            const active = for (state.combat.progress.party, 0..) |member, index| {
+            const active = for (state.combat.progress.party.items(), 0..) |member, index| {
                 if (std.mem.eql(u8, member.id, id)) break @as(?usize, index);
             } else null;
-            const reserve = if (active == null) for (&state.reserves) |*entry| {
-                const member = if (entry.*) |*owned| owned else break null;
+            const reserve = if (active == null) for (state.reserve_slots[0..state.reserveCount()]) |entry| {
+                const member = &state.combat.progress.party.backing()[entry.?];
                 if (std.mem.eql(u8, member.id, id)) break member;
             } else null else null;
             if (active != null or reserve != null) {
@@ -388,7 +390,7 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
                 }
                 try owner.session.acknowledgePartyEdit(binding, true, &story);
                 if (active) |index| {
-                    state.combat.progress.party[index].inventory = inventory;
+                    state.combat.progress.party.at(index).inventory = inventory;
                 } else {
                     reserve.?.inventory = inventory;
                 }
@@ -399,21 +401,21 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
             try owner.session.acknowledgePartyEdit(binding, inventory != null, &story);
             if (inventory) |next| state.shared_items = next;
         } else {
-            const member = for (state.combat.progress.party, 0..) |character, index| {
+            const member = for (state.combat.progress.party.items(), 0..) |character, index| {
                 if (std.mem.eql(u8, character.id, effect.character.?)) break @as(?usize, index);
             } else null;
             if (effect.inventory) |edit| {
                 const inventory = if (member) |index| try prepareSceneInventory(state.combat, index, edit) else null;
                 try owner.session.acknowledgePartyEdit(binding, inventory != null, &story);
-                if (inventory) |next| state.combat.progress.party[member.?].inventory = next;
+                if (inventory) |next| state.combat.progress.party.at(member.?).inventory = next;
             } else {
                 const rules = state.combat.content.systems orelse return error.InvalidRune;
                 const rune = rules.runeIndex(effect.rune.?) orelse return error.InvalidRune;
                 const slot: *?usize, var owned: battle.OwnedMember = if (member) |index|
-                    .{ &state.combat.progress.party[index].rune, state.combat.ownedMember(index) }
+                    .{ &state.combat.progress.party.at(index).rune, state.combat.ownedMember(index) }
                 else reserve: {
-                    for (&state.reserves) |*entry| {
-                        const record = if (entry.*) |*record| record else break;
+                    for (state.reserve_slots[0..state.reserveCount()]) |entry| {
+                        const record = &state.combat.progress.party.backing()[entry.?];
                         if (std.mem.eql(u8, record.id, effect.character.?)) break :reserve .{ &record.rune, record.* };
                     }
                     return error.InvalidMember;
@@ -424,7 +426,7 @@ noinline fn commitScenePartyEffect(state: *journey.State, owner: journey.ActiveF
                 try owner.session.acknowledgePartyEdit(binding, true, &story);
                 slot.* = rune;
                 if (was_empty and member != null) {
-                    const party_member = &state.combat.progress.party[member.?];
+                    const party_member = state.combat.progress.party.at(member.?);
                     if (std.mem.allEqual(u16, &party_member.rune_charges, 0)) {
                         party_member.rune_charges = party_member.max_rune_charges;
                     }

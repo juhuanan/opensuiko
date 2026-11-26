@@ -39,6 +39,7 @@ pub const priority = damage_rules.priority;
 pub const Rect = types_mod.Rect;
 pub const trial_seed = types_mod.trial_seed;
 pub const Member = types_mod.Member;
+pub const Party = field.game_state.Party;
 pub const Stats = types_mod.Stats;
 pub const Ailment = types_mod.Ailment;
 pub const Pose = types_mod.Pose;
@@ -223,7 +224,7 @@ pub const State = struct {
     seed: u64,
     item_slot: usize = 0,
     spell_slot: usize = 0,
-    formation: [6]u8 = .{ 0, 1, 2, 3, 4, 5 },
+    formation: field.game_state.Formation = .{},
     double_beat_pending: [6]bool = @splat(false),
     spark_pending: bool = false,
     departed: [6]bool = @splat(false),
@@ -246,13 +247,13 @@ pub const State = struct {
         try content.validate();
         try rules.validate();
         if (members.len != content.initialPartyCount()) return error.InvalidParty;
-        var result = State{ .content = content, .progress = .{ .money = 350, .party = members }, .rules = rules, .random = .init(seed), .seed = seed, .picker = try menu.Picker.init(.{ true, true, false, true, false }, .attack) };
+        var result = State{ .content = content, .progress = .{ .money = 350, .party = .init(members) }, .rules = rules, .random = .init(seed), .seed = seed, .picker = try menu.Picker.init(.{ true, true, false, true, false }, .attack) };
         result.restart();
         return result;
     }
 
     pub fn restart(self: *State) void {
-        for (self.progress.party, 0..) |*member, i| {
+        for (self.progress.party.items(), 0..) |member, i| {
             const profile = self.content.initialProfile(i);
             member.* = .{
                 .id = profile.id,
@@ -270,7 +271,7 @@ pub const State = struct {
             for (0..2) |slot| member.inventory.slots[slot] = .{ .id = .medicine, .uses = self.rules.medicine.uses };
             if (self.content.systems != null) self.refillMagic(i);
         }
-        self.formation = .{ 0, 1, 2, 3, 4, 5 };
+        self.setFormation(field.game_state.Formation.default_order);
         self.unbalanced = @splat(0);
         self.escape_allowed = true;
         self.reward_drop = false;
@@ -290,13 +291,28 @@ pub const State = struct {
         return self.progress.party.len;
     }
     pub fn partyProfile(self: *const State, member: usize) Profile {
-        return self.content.partyProfile(self.progress.party[member].id) orelse unreachable;
+        return self.content.partyProfile(self.progress.party.at(member).id) orelse unreachable;
     }
+    pub fn formationOrder(self: *const State) [6]u8 {
+        return self.formation.ordered(self.progress.party);
+    }
+
+    pub fn setFormation(self: *State, order: [6]u8) void {
+        self.formation = .fromOrder(self.progress.party, order);
+    }
+
+    pub fn formationMember(self: *const State, index: usize) u8 {
+        return switch (self.formation.positions[index]) {
+            .member => |slot| @intCast(self.progress.party.indexOf(slot).?),
+            .empty => |slot| slot,
+        };
+    }
+
     pub fn ownedMember(self: *const State, index: usize) OwnedMember {
-        return self.progress.party[index];
+        return self.progress.party.at(index).*;
     }
     pub fn noteItemImpact(self: *State, actor: usize, before: Member) void {
-        const member = &self.progress.party[actor];
+        const member = self.progress.party.at(actor);
         const impact: types_mod.ItemImpact = .{
             .issued_at = self.camera_ticks,
             .recovered_hp = member.hp -| before.hp,
@@ -313,9 +329,9 @@ pub const State = struct {
     }
     pub fn setOwnedMember(self: *State, index: usize, owned: OwnedMember) void {
         const profile = self.content.partyProfile(owned.id).?;
-        self.progress.party[index] = owned;
-        self.progress.party[index].id = profile.id;
-        self.progress.party[index].name = profile.name;
+        self.progress.party.at(index).* = owned;
+        self.progress.party.at(index).id = profile.id;
+        self.progress.party.at(index).name = profile.name;
     }
     pub fn validateOwnedMember(self: *const State, owned: OwnedMember) !void {
         try self.content.characterRules().validate(owned);

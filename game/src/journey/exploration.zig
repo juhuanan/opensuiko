@@ -162,7 +162,7 @@ pub fn tickFieldExploration(state: *journey.State, input: pause.Input, room_even
             return effect;
         };
         state.menu.message = "Rune piece attached to weapon.";
-        state.menu.slot = @min(state.menu.slot, state.combat.progress.party[state.menu.member].inventory.count() -| 1);
+        state.menu.slot = @min(state.menu.slot, state.combat.progress.party.at(state.menu.member).inventory.count() -| 1);
         effect = .none;
     }
     const moved = update.movement.movement_advanced;
@@ -284,12 +284,12 @@ pub fn applyFieldInteractions(state: *journey.State, old_room: usize, old_dialog
         const npc = room.npcs[dialogue.source.npc];
         for (state.data.treasures) |treasure| if (std.mem.eql(u8, treasure.room, room.id) and std.mem.eql(u8, treasure.npc, npc.id) and !state.combat.progress.story.has(treasure.flag)) {
             var recipient: ?usize = null;
-            for (state.combat.progress.party, 0..) |member, i| if (member.inventory.count() < 9) {
+            for (state.combat.progress.party.items(), 0..) |member, i| if (member.inventory.count() < 9) {
                 recipient = i;
                 break;
             };
             if (recipient) |i| {
-                const inventory = &state.combat.progress.party[i].inventory;
+                const inventory = &state.combat.progress.party.at(i).inventory;
                 inventory.slots[inventory.count()] = .{ .id = treasure.item, .uses = treasure.uses };
                 state.combat.progress.story.complete(treasure.flag);
             } else {

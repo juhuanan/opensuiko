@@ -231,7 +231,7 @@ test "world completion applies shared healing and poison before the encounter dr
     const initial = state;
     const initial_members = members;
     var draws: world.Draws = .{ .values = &.{255} };
-    const party: world.Party = .{ .members = &members, .level_sum = 30, .step_healing_rune = true };
+    const party: world.Party = .{ .members = .init(&members), .level_sum = 30, .step_healing_rune = true };
     try std.testing.expectError(error.RandomInputExhausted, state.tick(data.value, .{}, &draws, party));
     try std.testing.expectEqualDeep(initial, state);
     try std.testing.expectEqualDeep(initial_members, members);
@@ -253,7 +253,7 @@ test "source step-healing restores a zero-HP member without an extra poison draw
     var members = [_]field.game_state.Member{.{ .id = "hero", .name = "Hero", .hp = 0, .max_hp = 100, .status = .unconscious, .rune_charges = @splat(0), .max_rune_charges = @splat(0) }};
     var state: world.State = .{ .camera = data.value.return_camera, .heading = .south, .remaining = 1 };
     var draws: world.Draws = .{ .values = &.{} };
-    _ = try state.tick(data.value, .{}, &draws, .{ .members = &members, .level_sum = 1, .step_healing_rune = true });
+    _ = try state.tick(data.value, .{}, &draws, .{ .members = .init(&members), .level_sum = 1, .step_healing_rune = true });
     try std.testing.expectEqual(@as(u16, 1), members[0].hp);
     try std.testing.expectEqual(.healthy, members[0].status);
     try std.testing.expectEqual(@as(usize, 0), draws.cursor);
@@ -269,7 +269,7 @@ test "real village field controller links world entry, walking and source return
     const package = try field.load(allocator, @embedFile("fixtures/journey_room.json"));
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var initial_progress: field.game_state.Progress = .{ .money = 1500, .party = &members };
+    var initial_progress: field.game_state.Progress = .{ .money = 1500, .party = .init(&members) };
     const initial = field.State.init(package.value, &initial_progress);
     var session = try @import("world_field").Session.open(allocator, data.value, package.value, initial, .north);
     defer session.deinit();
@@ -302,7 +302,7 @@ test "field-to-world party and draw continuity survive a supplied battle result 
     const package = try field.load(allocator, @embedFile("fixtures/journey_room.json"));
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var initial_progress: field.game_state.Progress = .{ .money = 1500, .party = &members };
+    var initial_progress: field.game_state.Progress = .{ .money = 1500, .party = .init(&members) };
     const initial = field.State.init(package.value, &initial_progress);
     var session = try @import("world_field").Session.open(allocator, data.value, package.value, initial, .south);
     defer session.deinit();
@@ -374,32 +374,32 @@ test "C actor world binding preserves legacy identities and rejects missing or m
     try std.testing.expect(!overlay.supports(view.encounters[1]));
     var members: [6]battle.Member = undefined;
     const combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1);
-    try std.testing.expectError(error.MissingSourceActorPresentation, overlay.bindPresentation(allocator, view, 1, combat.progress.party, combat.formation));
+    try std.testing.expectError(error.MissingSourceActorPresentation, overlay.bindPresentation(allocator, view, 1, combat.progress.party.values()[0..combat.partyCount()], combat.formationOrder()));
     overlay.actor_content = source;
-    try std.testing.expectError(error.InvalidWorldBattleData, overlay.bindPresentation(allocator, view, 1, combat.progress.party, combat.formation));
+    try std.testing.expectError(error.InvalidWorldBattleData, overlay.bindPresentation(allocator, view, 1, combat.progress.party.values()[0..combat.partyCount()], combat.formationOrder()));
     overlay.schema = complete.value.schema;
     try std.testing.expect(overlay.supports(view.encounters[1]));
-    const bound = try overlay.bindPresentation(allocator, view, 1, combat.progress.party, combat.formation);
+    const bound = try overlay.bindPresentation(allocator, view, 1, combat.progress.party.values()[0..combat.partyCount()], combat.formationOrder());
     try std.testing.expect(bound.content.presentation_ready and bound.content.world_art == null);
     try std.testing.expectEqualStrings("world_c_encounter_2", bound.content.encounters[bound.encounter].id);
     try std.testing.expectEqual(@as(usize, 3), bound.content.encounters[bound.encounter].enemies.len);
     try std.testing.expect(!overlay.supports(view.encounters[0]));
     overlay.presentation = complete.value.presentation.?;
     try std.testing.expect(overlay.supports(view.encounters[0]));
-    const existing = try overlay.bindPresentation(allocator, view, 0, combat.progress.party, combat.formation);
+    const existing = try overlay.bindPresentation(allocator, view, 0, combat.progress.party.values()[0..combat.partyCount()], combat.formationOrder());
     try std.testing.expect(existing.content.world_art != null and existing.content.presentation_ready);
     try std.testing.expectEqualDeep(source.ground, existing.content.ground);
     var profiles = try allocator.dupe(battle.Profile, source.party);
     defer allocator.free(profiles);
     overlay.actor_content.?.party = profiles;
     profiles[0].stats.attack += 1;
-    try std.testing.expectError(error.WorldPartyArtMismatch, overlay.bindPresentation(allocator, view, 1, combat.progress.party, combat.formation));
+    try std.testing.expectError(error.WorldPartyArtMismatch, overlay.bindPresentation(allocator, view, 1, combat.progress.party.values()[0..combat.partyCount()], combat.formationOrder()));
     profiles[0] = source.party[0];
     var enemies = try allocator.dupe(battle.Profile, source.enemies);
     defer allocator.free(enemies);
     overlay.actor_content.?.enemies = enemies;
     enemies[0].stats.attack += 1;
-    try std.testing.expectError(error.InvalidWorldBattleData, overlay.bindPresentation(allocator, view, 1, combat.progress.party, combat.formation));
+    try std.testing.expectError(error.InvalidWorldBattleData, overlay.bindPresentation(allocator, view, 1, combat.progress.party.values()[0..combat.partyCount()], combat.formationOrder()));
     try std.testing.expect(overlay.supports(view.encounters[2]));
 }
 
@@ -418,12 +418,12 @@ test "C actor world transactions run source melee cover Parry and counters throu
     for (0..4) |scenario| {
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| {
             member.max_hp = 5000;
             member.hp = 5000;
         }
         combat.progress.money = 1500;
-        const initial_charges = combat.progress.party[0].rune_charges;
+        const initial_charges = combat.progress.party.at(0).rune_charges;
         var session_progress = combat.progress;
         var session = try world_field.Session.open(allocator, map.value, fixture.rooms.value, field.State.init(fixture.rooms.value, &session_progress), .south);
         defer session.deinit();
@@ -470,7 +470,7 @@ test "C actor world transactions run source melee cover Parry and counters throu
                 retained.enemy_hp[2] = 0;
                 retained.acted[retained.partyCount() + 1] = false;
             } else {
-                retained.progress.party[0].hp = 1;
+                retained.progress.party.at(0).hp = 1;
                 retained.acted[retained.partyCount()] = false;
                 values[0] = 0;
                 values[1] = 99;
@@ -491,7 +491,7 @@ test "C actor world transactions run source melee cover Parry and counters throu
                 if (!ready) continue;
                 const saved = combat;
                 var saved_members: [6]battle.Member = undefined;
-                @memcpy(&saved_members, combat.progress.party);
+                combat.progress.party.copyTo(&saved_members);
                 const cursor = draws.cursor;
                 draws.values = values[0..cursor];
                 try std.testing.expectError(error.RandomStreamMismatch, adapter.tickTransactional(&session, &combat, .{}, &draws, &receipt));
@@ -499,7 +499,7 @@ test "C actor world transactions run source melee cover Parry and counters throu
                 adapter.transaction.?.session.draws.values = draws.values;
                 try std.testing.expectError(error.RandomInputExhausted, adapter.tickTransactional(&session, &combat, .{}, &draws, &receipt));
                 try std.testing.expectEqualDeep(saved, combat);
-                try std.testing.expectEqualDeep(saved_members, combat.progress.party[0..6].*);
+                try std.testing.expectEqualDeep(saved_members, combat.progress.party.values());
                 try std.testing.expectEqual(cursor, draws.cursor);
                 try std.testing.expectEqual(@as(u64, 0), receipt);
                 draws.values = &values;
@@ -518,7 +518,7 @@ test "C actor world transactions run source melee cover Parry and counters throu
             };
             if (combat.phase != .resolving) break;
         }
-        try std.testing.expectEqualDeep(initial_charges, combat.progress.party[0].rune_charges);
+        try std.testing.expectEqualDeep(initial_charges, combat.progress.party.at(0).rune_charges);
         try std.testing.expect(contact_rollback);
         try std.testing.expect(!combat.unite_vm.hasActors());
         if (scenario != 2) {
@@ -568,7 +568,7 @@ test "C archer knockout and Buddha survive the world battle transaction" {
     for ([_]bool{ false, true }) |buddha| {
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 17);
-        for (combat.progress.party, 0..) |*member, index| {
+        for (combat.progress.party.items(), 0..) |member, index| {
             member.max_hp = 100;
             member.hp = if (index == 1) 50 else 100;
             member.inventory.slots = @splat(null);
@@ -589,9 +589,9 @@ test "C archer knockout and Buddha survive the world battle transaction" {
         var receipt: u64 = 0;
         try adapter.beginTransactional(&session, &combat, data.value, draws, receipt);
         const retained = &adapter.transaction.?.session.state;
-        for (retained.progress.party, 0..) |_, index| {
-            retained.progress.party[index].base_stats.defense = 40;
-            retained.progress.party[index].base_stats.skill = 0;
+        for (retained.progress.party.items(), 0..) |_, index| {
+            retained.progress.party.at(index).base_stats.defense = 40;
+            retained.progress.party.at(index).base_stats.skill = 0;
         }
         const owner = retained.partyCount();
         try std.testing.expectEqualStrings("kobold_type_2", retained.enemy(0).id);
@@ -644,7 +644,7 @@ test "C actor world transactions retain source archers mages and Strong Arm thro
     for ([_]usize{ 2, 3, 4, 5, 6, 7 }) |encounter| {
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
-        for (combat.progress.party) |*member| {
+        for (combat.progress.party.items()) |member| {
             member.max_hp = 5000;
             member.hp = 5000;
         }
@@ -705,13 +705,13 @@ test "C actor world transactions retain source archers mages and Strong Arm thro
             try std.testing.expectEqual(expected_archers, seen_archers);
             try std.testing.expectEqual(encounter == 4 or encounter == 7, seen_strong_arm);
             try std.testing.expect(combat.phase == .battle_menu and !combat.unite_vm.hasActors() and combat.active == null);
-            try std.testing.expectEqualDeep(charges, combat.progress.party[0].rune_charges);
+            try std.testing.expectEqualDeep(charges, combat.progress.party.at(0).rune_charges);
             try std.testing.expect(receipt == 0 and session.travel.mode == .battle and adapter.transaction != null);
         }
         try std.testing.expect(combat.hp(0) > 0 and combat.hp(0) < 5000 and draws.cursor > 0);
         if (encounter == 3 or encounter == 4 or encounter == 6 or encounter == 7) {
             var remaining: [6]u16 = undefined;
-            for (combat.progress.party, 0..) |member, index| remaining[index] = member.hp;
+            for (combat.progress.party.items(), 0..) |member, index| remaining[index] = member.hp;
             _ = try adapter.tickTransactional(&session, &combat, .{ .down = true }, &draws, &receipt);
             _ = try adapter.tickTransactional(&session, &combat, .{ .confirm = true }, &draws, &receipt);
             for (0..100) |_| {
@@ -771,17 +771,17 @@ test "world battle entry carries live roster rune pieces with identity and rollb
     for ([_]bool{ false, true }) |transactional| {
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
-        combat.progress.party[0].base_stats.attack = 500;
+        combat.progress.party.at(0).base_stats.attack = 500;
         const field_state = field.State.init(fixture.rooms.value, &combat.progress);
         var state = try @import("world_travel").State.open(allocator, fixture.map.value, art.value, fixture.overlay.value, fixture.rooms.value, &combat, field_state);
         defer state.deinit();
         const progress = state.link.field_state.progress;
         const bits = progress.money;
-        const count = progress.party[0].inventory.count();
+        const count = progress.party.at(0).inventory.count();
         const medicine = fixture.items.value.medicine;
         try progress.buyItem(fixture.items.value, .medicine, 0);
         try std.testing.expectEqual(bits - medicine.price, state.progress().money);
-        try std.testing.expectEqual(.medicine, state.combat.progress.party[0].inventory.slots[count].?.id);
+        try std.testing.expectEqual(.medicine, state.combat.progress.party.at(0).inventory.slots[count].?.id);
         state.party_transactions = transactional;
         state.link.travel.mode = .battle_pending;
         state.link.travel.selected = fixture.map.value.encounters[1].id;
@@ -818,14 +818,14 @@ test "world battle entry carries live roster rune pieces with identity and rollb
         std.mem.swap(?[]const u8, &roster.active[0], &roster.active[1]);
         roster.extras[5].?.weapon_fragments[0] = 4;
         try std.testing.expect((try state.advance(.{}, &draws)) == .battle_started);
-        try std.testing.expectEqual(battle.systems.WeaponRune.fire, state.combat.progress.party[0].weapon_augment.rune);
-        try std.testing.expectEqual(@as(u8, 4), state.combat.progress.party[0].weapon_augment.fragments);
+        try std.testing.expectEqual(battle.systems.WeaponRune.fire, state.combat.progress.party.at(0).weapon_augment.rune);
+        try std.testing.expectEqual(@as(u8, 4), state.combat.progress.party.at(0).weapon_augment.fragments);
         var neutral = state.combat.*;
         var neutral_members: [6]battle.Member = undefined;
         const neutral_party = neutral_members[0..neutral.partyCount()];
-        @memcpy(neutral_party, neutral.progress.party);
-        neutral.progress.party = neutral_party;
-        neutral.progress.party[0].weapon_augment = .{};
+        neutral.progress.party.copyTo(neutral_party);
+        neutral.progress.party = .init(neutral_party);
+        neutral.progress.party.at(0).weapon_augment = .{};
         try std.testing.expect(state.combat.resolvePhysicalDamage(0, state.combat.partyCount(), 0, false) > neutral.resolvePhysicalDamage(0, neutral.partyCount(), 0, false));
         try std.testing.expectError(error.WorldBattleNotReady, state.attachPartySnapshot(&roster));
         _ = try state.advance(.{ .combat = .{ .down = true } }, &draws);
@@ -838,14 +838,14 @@ test "world battle entry carries live roster rune pieces with identity and rollb
         try std.testing.expect((try state.advance(.{ .combat = .{ .confirm = true } }, &draws)) == .battle_returned);
         try std.testing.expect(state.link.field_state.progress == progress);
         try std.testing.expect(state.progress() == progress);
-        try std.testing.expectEqual(.medicine, progress.party[0].inventory.slots[count].?.id);
+        try std.testing.expectEqual(.medicine, progress.party.at(0).inventory.slots[count].?.id);
         roster.extras[5].?.weapon_element = .wind;
         roster.extras[5].?.weapon_fragments = .{ 0, 0, 5, 0, 0 };
         state.link.travel.mode = .battle_pending;
         state.link.travel.selected = fixture.map.value.encounters[1].id;
         try std.testing.expect((try state.advance(.{}, &draws)) == .battle_started);
-        try std.testing.expectEqual(battle.systems.WeaponRune.wind, state.combat.progress.party[0].weapon_augment.rune);
-        try std.testing.expectEqual(@as(u8, 5), state.combat.progress.party[0].weapon_augment.fragments);
+        try std.testing.expectEqual(battle.systems.WeaponRune.wind, state.combat.progress.party.at(0).weapon_augment.rune);
+        try std.testing.expectEqual(@as(u8, 5), state.combat.progress.party.at(0).weapon_augment.fragments);
     }
 }
 
@@ -902,7 +902,7 @@ test "all eight B rosters allow verified Run and Let go without executing unsupp
     for (0..8) |index| for ([_]bool{ false, true }) |release| {
         var members: [6]battle.Member = undefined;
         var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
-        for (combat.progress.party) |*member| member.level = if (release) 99 else 1;
+        for (combat.progress.party.items()) |member| member.level = if (release) 99 else 1;
         members[0].hp -= 7;
         const original = members;
         var session_progress = combat.progress;
@@ -999,7 +999,7 @@ test "world encounter runs actual combat and rewards then resumes without reseed
     const cursor = draws.cursor;
     try std.testing.expectEqual(.returned, try adapter.tick(&session, &combat, .{ .confirm = true }, &draws));
     try std.testing.expectEqualDeep(camera, session.travel.camera);
-    try std.testing.expectEqual(@as(u16, final_hp), session.field_state.progress.party[0].hp);
+    try std.testing.expectEqual(@as(u16, final_hp), session.field_state.progress.party.at(0).hp);
     try std.testing.expectEqual(@as(u32, 1700), session.field_state.progress.money);
     try std.testing.expectEqual(cursor, draws.cursor);
     try std.testing.expect(cursor > 2);
@@ -1042,7 +1042,7 @@ test "world battle Run and Let go resolve through combat while defeat never heal
         var combat = try battle.State.init(fixture.base.value, fixture.items.value, &members, 1234);
         combat.progress.money = 1500;
         if (scenario == 1) {
-            for (combat.progress.party) |*member| member.level = 20;
+            for (combat.progress.party.items()) |member| member.level = 20;
         }
         if (scenario == 2) for (&members) |*member| {
             member.hp = 1;

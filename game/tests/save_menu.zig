@@ -17,7 +17,7 @@ test "save and restart restore semantic party state, scene, facing and usable ex
     const package = try content();
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(package.value, &game_progress);
     try game.progress.stay(100);
     game.x = 48;
@@ -32,7 +32,7 @@ test "save and restart restore semantic party state, scene, facing and usable ex
     defer allocator.free(bytes);
     try std.testing.expect(std.mem.indexOf(u8, bytes, "\"rune_charges\": [") != null);
     var fresh_members = [_]field.game_state.Member{hero()};
-    var restarted_progress: field.game_state.Progress = .{ .money = 350, .party = &fresh_members };
+    var restarted_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&fresh_members) };
     var restarted = field.State.init(package.value, &restarted_progress);
     const loaded = try saves.restore(allocator, io, directory.dir, package.value, &restarted);
     defer loaded.deinit();
@@ -41,9 +41,9 @@ test "save and restart restore semantic party state, scene, facing and usable ex
     try std.testing.expectEqual(@as(i32, 8), restarted.y);
     try std.testing.expectEqual(field.Direction.down, restarted.facing);
     try std.testing.expectEqual(@as(u32, 250), restarted.progress.money);
-    try std.testing.expectEqual(@as(u16, 100), restarted.progress.party[0].hp);
-    try std.testing.expectEqual(field.game_state.Status.healthy, restarted.progress.party[0].status);
-    try std.testing.expectEqual([_]u16{ 3, 2, 1, 0 }, restarted.progress.party[0].rune_charges);
+    try std.testing.expectEqual(@as(u16, 100), restarted.progress.party.at(0).hp);
+    try std.testing.expectEqual(field.game_state.Status.healthy, restarted.progress.party.at(0).status);
+    try std.testing.expectEqual([_]u16{ 3, 2, 1, 0 }, restarted.progress.party.at(0).rune_charges);
     for (0..6) |_| restarted.tick(package.value, .{ .direction = .down });
     try std.testing.expectEqualStrings("inn", package.value.rooms[restarted.room].id);
     try saves.write(allocator, io, directory.dir, package.value, restarted);
@@ -56,7 +56,7 @@ test "a failed flush preserves the prior save and removes its temporary file" {
     const package = try content();
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(package.value, &game_progress);
     var directory = std.testing.tmpDir(.{ .iterate = true });
     defer directory.cleanup();
@@ -84,7 +84,7 @@ test "missing, corrupt, oversized and unsupported saves cannot mutate the game" 
     const package = try content();
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(package.value, &game_progress);
     var directory = std.testing.tmpDir(.{});
     defer directory.cleanup();
@@ -105,7 +105,7 @@ test "missing, corrupt, oversized and unsupported saves cannot mutate the game" 
     try directory.dir.writeFile(io, .{ .sub_path = saves.filename, .data = future });
     try std.testing.expectError(error.UnsupportedSaveVersion, saves.restore(allocator, io, directory.dir, package.value, &game));
     try std.testing.expectEqual(@as(u32, 350), game.progress.money);
-    try std.testing.expectEqual(@as(u16, 35), game.progress.party[0].hp);
+    try std.testing.expectEqual(@as(u16, 35), game.progress.party.at(0).hp);
     try std.testing.expectEqual(@as(i32, 8), game.x);
     try std.testing.expectEqual(@as(usize, 0), game.room);
 }
@@ -114,7 +114,7 @@ test "save references, member IDs and statistics validate before apply or write"
     const package = try content();
     defer package.deinit();
     var members = [_]field.game_state.Member{ hero(), hero() };
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = members[0..1] };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(members[0..1]) };
     var game = field.State.init(package.value, &game_progress);
     const original = try saves.Snapshot.capture(game, package.value);
     var bad = original;
@@ -124,7 +124,7 @@ test "save references, member IDs and statistics validate before apply or write"
     bad.x = 16;
     try std.testing.expectError(error.InvalidSavePosition, bad.apply(package.value, &game));
     bad = original;
-    bad.party = &members;
+    bad.party = .init(&members);
     try std.testing.expectError(error.DuplicateMember, bad.apply(package.value, &game));
     members[1].id = "other";
     members[1].hp = 101;
@@ -147,7 +147,7 @@ test "pause waits for arrival, freezes the field and skips unfinished commands" 
     const package = try content();
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(package.value, &game_progress);
     var menu = pause.State{};
     _ = menu.tick(package.value, &game, .{ .field = .{ .direction = .up } });
@@ -181,7 +181,7 @@ test "save and load require explicit confirmation and emit only once" {
     const package = try content();
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(package.value, &game_progress);
     for ([_]pause.Command{ .save, .load }) |command| {
         var menu = pause.State{ .phase = .root, .selected = command };
@@ -205,7 +205,7 @@ test "new game requires explicit confirmation and emits once" {
     const package = try content();
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(package.value, &game_progress);
     var menu = pause.State{ .phase = .root, .selected = .new_game };
     const confirm = pause.Input{ .field = .{ .action = true } };
@@ -225,7 +225,7 @@ test "menu input during conversation closes dialogue without opening a menu" {
     const package = try content();
     defer package.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(package.value, &game_progress);
     game.dialogue = .{ .source = .{ .npc = 0 } };
     var menu = pause.State{};
@@ -247,7 +247,7 @@ test "six-member saves round-trip and Strength cycles through that party" {
         member.* = hero();
         member.id = id;
     }
-    var game_progress: field.game_state.Progress = .{ .money = 12345, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 12345, .party = .init(&members) };
     var game = field.State.init(package.value, &game_progress);
     const snapshot = try saves.Snapshot.capture(game, package.value);
     const bytes = try std.json.Stringify.valueAlloc(allocator, snapshot, .{});
@@ -256,7 +256,7 @@ test "six-member saves round-trip and Strength cycles through that party" {
     defer parsed.deinit();
     try parsed.value.apply(package.value, &game);
     try std.testing.expectEqual(@as(usize, 6), game.progress.party.len);
-    try std.testing.expectEqualStrings("five", game.progress.party[5].id);
+    try std.testing.expectEqualStrings("five", game.progress.party.at(5).id);
     var menu = pause.State{ .phase = .strength };
     _ = menu.tick(package.value, &game, .{ .left = true });
     try std.testing.expectEqual(@as(usize, 5), menu.member);
@@ -295,7 +295,7 @@ test "a coordinate event commits once, freezes input and survives save restart a
     const package = withEvent(parsed.value, &rooms);
     try package.validate();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 350, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 350, .party = .init(&members) };
     var game = field.State.init(package, &game_progress);
     var menu = pause.State{};
     _ = menu.tick(package, &game, .{ .field = .{ .direction = .down } });
@@ -320,7 +320,7 @@ test "a coordinate event commits once, freezes input and survives save restart a
     var directory = std.testing.tmpDir(.{});
     defer directory.cleanup();
     try saves.write(allocator, io, directory.dir, package, game);
-    var restarted_progress: field.game_state.Progress = .{ .money = 1, .party = &members };
+    var restarted_progress: field.game_state.Progress = .{ .money = 1, .party = .init(&members) };
     var restarted = field.State.init(package, &restarted_progress);
     const loaded = try saves.restore(allocator, io, directory.dir, package, &restarted);
     defer loaded.deinit();
@@ -361,7 +361,7 @@ test "existing version-one saves retain progress and acquire clear story state o
     const parsed = try content();
     defer parsed.deinit();
     var members = [_]field.game_state.Member{hero()};
-    var game_progress: field.game_state.Progress = .{ .money = 250, .party = &members };
+    var game_progress: field.game_state.Progress = .{ .money = 250, .party = .init(&members) };
     var game = field.State.init(parsed.value, &game_progress);
     var legacy = try saves.Snapshot.capture(game, parsed.value);
     legacy.schema = "suikoden-save/1";
