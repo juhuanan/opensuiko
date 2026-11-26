@@ -44,6 +44,7 @@ What it proves
    `0x800D8DB0`; and `0x800D9E78` reaches `0x800D9E90` (the inn), not
    `0x800E9E90`.
 """
+import json
 from pathlib import Path
 import struct
 import sys
@@ -57,7 +58,7 @@ import mipsdec  # noqa: E402
 import menu_flow as MF  # noqa: E402
 
 MAIN_BASE = 0x800C0800
-AZ_PATH = _KIT / "extracted" / "bin_overlays" / "DATA" / "03_SHIRO" / "AZUKARI.BIN"
+DISC_CATALOGUE = _KIT / "data" / "catalogs" / "extracted" / "iso_files.json"
 AZ_BASE = 0x80080000
 
 
@@ -65,11 +66,10 @@ AZ_BASE = 0x80080000
 # own loaders / decoders
 # ---------------------------------------------------------------------------
 
-def main_image() -> bytes:
-    import json
-    with open(_KIT / "extracted" / "iso_files.json") as fh:
-        rec = next(r for r in json.load(fh) if r.get("path") == "MAIN.EXE")
-    return disc.extract(rec["lba"], rec["size"])[2048:]
+def read_disc_file(path: str) -> bytes:
+    catalogue = json.loads(DISC_CATALOGUE.read_text())
+    entry = next(record for record in catalogue if record["path"] == path)
+    return disc.extract(entry["lba"], entry["size"])
 
 
 def w32(img, base, va):
@@ -197,11 +197,7 @@ def const_at(img, base, hi_site, lo_site):
 
 # ---------------------------------------------------------------------------
 
-def check_warehouse_predicate():
-    import json
-    catalogue = json.loads((_KIT / 'extracted/iso_files.json').read_text())
-    source = next(r for r in catalogue if r['path'].endswith('/AZUKARI.BIN'))
-    az = disc.extract(source['lba'], source['size'])
+def check_warehouse_predicate(az: bytes):
     anchors = {
         0x80084FB0: 0x8CC6579C, 0x80084FB4: 0x34030294,
         0x80084FBC: 0x8CA20294, 0x80084FC4: 0x10820006,
@@ -242,9 +238,9 @@ def check_warehouse_predicate():
 
 
 def check():
-    check_warehouse_predicate()
-    img = main_image()
-    az = AZ_PATH.read_bytes()
+    img = read_disc_file("MAIN.EXE")[2048:]
+    az = read_disc_file("DATA/03_SHIRO/AZUKARI.BIN")
+    check_warehouse_predicate(az)
 
     # --- 1. the one state byte, exhaustively enumerated ----------------------
     st = MF.MENU_STATE_BYTE["addr"]

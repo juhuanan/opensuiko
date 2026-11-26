@@ -34,10 +34,10 @@ Overlays use the **same** byte and the **same** slot table for their own menus
 
 Provenance
 ----------
-Disc file `MAIN.EXE` (LBA in `kit/extracted/iso_files.json`), image base
-`0x800C0800`; overlay `DATA/03_SHIRO/AZUKARI.BIN`, load base `0x800800A0`
-(from its own `file[0]`).  Every address below is re-checked against those bytes
-by `kit/tests/test_menu_flow.py`, which fails loudly if a word moves.
+The disc catalogue at `kit/data/catalogs/extracted/iso_files.json` locates
+`MAIN.EXE` (image base `0x800C0800`) and `DATA/03_SHIRO/AZUKARI.BIN`
+(load base `0x80080000`, entry point `0x800800A0`).
+`kit/tests/test_menu_flow.py` rechecks every address below against those bytes.
 
 Usage
 -----
@@ -57,16 +57,18 @@ import struct
 import sys
 
 _TOOLS = os.path.dirname(os.path.abspath(__file__))
-_KIT = os.path.dirname(_TOOLS)
 sys.path.insert(0, _TOOLS)
+
+import disc  # noqa: E402
 
 MAIN_BASE = 0x800C0800
 MAIN_LBA = 17976
 MAIN_SIZE = 757760            # 2048-byte PS-X header + image
 MAIN_HEADER = 2048
 
-AZUKARI_PATH = os.path.join("extracted", "bin_overlays", "DATA", "03_SHIRO",
-                            "AZUKARI.BIN")
+# DATA/03_SHIRO/AZUKARI.BIN in the US v1.1 disc catalogue.
+AZUKARI_LBA = 63261
+AZUKARI_SIZE = 111552
 #: AZUKARI.BIN's load base.  PROOF (see `verify()` and `kit/docs/menu_flow.md`
 #: §7): `file[0] == 0x800800A0` is the *entry-point* pointer, not the load base.
 #: Under base `0x80080000` the six state arms at file offset 0x4C decode as six
@@ -1043,23 +1045,7 @@ UI_STATE_DISPATCHER = {
 
 def _read_main() -> bytes:
     """MAIN.EXE image at MAIN_BASE (2048-byte PS-X header stripped)."""
-    import disc
-    rec = None
-    iso = os.path.join(_KIT, "extracted", "iso_files.json")
-    if os.path.exists(iso):
-        with open(iso) as fh:
-            for r in json.load(fh):
-                if r.get("path") == "MAIN.EXE":
-                    rec = r
-                    break
-    if rec:
-        return disc.extract(rec["lba"], rec["size"])[MAIN_HEADER:]
     return disc.extract(MAIN_LBA, MAIN_SIZE)[MAIN_HEADER:]
-
-
-def _read_overlay(rel: str) -> bytes:
-    with open(os.path.join(_KIT, rel), "rb") as fh:
-        return fh.read()
 
 
 def _word(img: bytes, base: int, va: int):
@@ -1249,7 +1235,7 @@ def verify() -> list[str]:
     ck("ui_state_dispatcher table has 29 code entries", n == 29, f"found {n}")
 
     # --- AZUKARI overlay: base proof ---------------------------------------
-    az = _read_overlay(AZUKARI_PATH)
+    az = disc.extract(AZUKARI_LBA, AZUKARI_SIZE)
     ck("AZUKARI file[0] is the entry point 0x800800A0",
        struct.unpack_from("<I", az, 0)[0] == 0x800800A0,
        f"{struct.unpack_from('<I', az, 0)[0]:#x}")
