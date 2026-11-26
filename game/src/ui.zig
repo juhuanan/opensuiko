@@ -3,39 +3,53 @@ const rl = @import("raylib");
 const ui_font = @import("ui_font");
 const WindowAppearance = @import("field").game_state.event_runtime.WindowAppearance;
 
+/// Borrows the content font and the renderer's atlas for one frame.
 pub const Context = struct {
-    font: ?*const ui_font.Font = null,
-    atlas: ?rl.Texture2D = null,
+    source: ?struct { font: *const ui_font.Font, atlas: rl.Texture2D } = null,
     appearance: WindowAppearance = .{},
 
-    pub fn text(self: Context, bytes: []const u8, x: i32, y: i32, size: i32, color: rl.Color) void {
-        textWith(self, bytes, x, y, size, color);
+    pub fn text(self: *const Context, bytes: []const u8, x: i32, y: i32, size: i32, color: rl.Color) void {
+        if (self.source) |source| return drawSourceText(source.font, source.atlas, bytes, x, y, size, color);
+        var buffer: [4097]u8 = undefined;
+        const length = @min(bytes.len, buffer.len - 1);
+        @memcpy(buffer[0..length], bytes[0..length]);
+        buffer[length] = 0;
+        rl.drawText(buffer[0..length :0], x, y, size, color);
     }
 
-    pub fn numberText(self: Context, comptime format: []const u8, values: anytype, x: i32, y: i32, size: i32, color: rl.Color) void {
+    pub fn multilineText(self: *const Context, bytes: []const u8, x: i32, y: i32, line_step: i32, size: i32, color: rl.Color) void {
+        var lines = std.mem.splitScalar(u8, bytes, '\n');
+        var row_y = y;
+        while (lines.next()) |line| : (row_y += line_step) {
+            self.text(line, x, row_y, size, color);
+        }
+    }
+
+    pub fn numberText(self: *const Context, comptime format: []const u8, values: anytype, x: i32, y: i32, size: i32, color: rl.Color) void {
         var buffer: [256]u8 = undefined;
         self.text(std.fmt.bufPrint(&buffer, format, values) catch return, x, y, size, color);
     }
 
-    pub fn selectedText(self: Context, bytes: []const u8, x: i32, y: i32, size: i32, color: rl.Color) void {
+    pub fn selectedText(self: *const Context, bytes: []const u8, x: i32, y: i32, size: i32, color: rl.Color) void {
         self.text(bytes, x, y - 1, size, color);
     }
 
-    pub fn panel(self: Context, x: i32, y: i32, w: i32, h: i32) void {
+    pub fn panel(self: *const Context, x: i32, y: i32, w: i32, h: i32) void {
         _ = self;
-        primitivePanel(x, y, w, h);
+        framedRect(x, y, w, h, .{ .r = 12, .g = 26, .b = 87, .a = 255 }, .{ .r = 190, .g = 200, .b = 222, .a = 255 });
+        rl.drawRectangleLines(x + 2, y + 2, w - 4, h - 4, .{ .r = 70, .g = 90, .b = 150, .a = 255 });
     }
 
-    pub fn selection(self: Context, x: i32, y: i32, w: i32, h: i32) void {
+    pub fn selection(self: *const Context, x: i32, y: i32, w: i32, h: i32) void {
         _ = self;
-        rl.drawRectangle(x, y, w, h, .{ .r = 32, .g = 48, .b = 64, .a = 255 });
-        rl.drawRectangleLines(x, y, w, h, .{ .r = 110, .g = 120, .b = 140, .a = 255 });
+        framedRect(x, y, w, h, .{ .r = 32, .g = 48, .b = 64, .a = 255 }, .{ .r = 110, .g = 120, .b = 140, .a = 255 });
     }
 
-    pub fn window(self: Context, x: i32, y: i32, w: i32, h: i32) void {
+    pub fn window(self: *const Context, x: i32, y: i32, w: i32, h: i32) void {
         if (!self.appearance.isDefault()) return drawWindowAppearance(self.appearance, x, y, w, h);
-        const font = self.font orelse return self.panel(x, y, w, h);
-        const atlas = self.atlas orelse return self.panel(x, y, w, h);
+        const source = self.source orelse return self.panel(x, y, w, h);
+        const font = source.font;
+        const atlas = source.atlas;
         const corner: i32 = 12;
         drawPiece(atlas, font.piece(.center).?.rect, x + corner, y + corner, w - corner * 2, h - corner * 2);
         drawPiece(atlas, font.piece(.top).?.rect, x + corner, y, w - corner * 2, corner);
@@ -48,20 +62,6 @@ pub const Context = struct {
         drawPiece(atlas, font.piece(.bottom_right).?.rect, x + w - corner, y + h - corner, corner, corner);
     }
 };
-
-var active: Context = .{};
-
-pub fn configure(font: *const ui_font.Font, atlas: rl.Texture2D) void {
-    active = .{ .font = font, .atlas = atlas };
-}
-
-pub fn context() *const Context {
-    return &active;
-}
-
-pub fn setWindowAppearance(appearance: WindowAppearance) void {
-    active.appearance = appearance;
-}
 
 pub fn drawWindowAppearance(appearance: WindowAppearance, x: i32, y: i32, w: i32, h: i32) void {
     const palette = [_]rl.Color{
@@ -78,8 +78,8 @@ pub fn drawWindowAppearance(appearance: WindowAppearance, x: i32, y: i32, w: i32
         rl.drawRectangleRounded(.{ .x = @floatFromInt(x + 2), .y = @floatFromInt(y + 2), .width = @floatFromInt(w - 4), .height = @floatFromInt(h - 4) }, 0.22, 8, background);
         return;
     }
-    rl.drawRectangle(x, y, w, h, background);
     if (appearance.style == .corners) {
+        rl.drawRectangle(x, y, w, h, background);
         const length = @min(14, @divTrunc(@min(w, h), 3));
         for ([_]i32{ 0, w - 1 }, [_]i32{ 1, -1 }) |dx, sx| {
             for ([_]i32{ 0, h - 1 }, [_]i32{ 1, -1 }) |dy, sy| {
@@ -89,45 +89,14 @@ pub fn drawWindowAppearance(appearance: WindowAppearance, x: i32, y: i32, w: i32
         }
         return;
     }
-    rl.drawRectangleLines(x, y, w, h, if (appearance.style == .inset) secondary else border);
+    framedRect(x, y, w, h, background, if (appearance.style == .inset) secondary else border);
     if (w > 8 and h > 8 and (appearance.style == .double or appearance.style == .inset))
         rl.drawRectangleLines(x + 3, y + 3, w - 6, h - 6, if (appearance.style == .inset) border else secondary);
 }
 
-pub fn text(bytes: []const u8, x: i32, y: i32, size: i32, color: rl.Color) void {
-    active.text(bytes, x, y, size, color);
-}
-
-pub fn numberText(comptime format: []const u8, values: anytype, x: i32, y: i32, size: i32, color: rl.Color) void {
-    active.numberText(format, values, x, y, size, color);
-}
-
-pub fn selection(x: i32, y: i32, w: i32, h: i32) void {
-    active.selection(x, y, w, h);
-}
-
-pub fn selectedText(bytes: []const u8, x: i32, y: i32, size: i32, color: rl.Color) void {
-    active.selectedText(bytes, x, y, size, color);
-}
-
-pub fn panel(x: i32, y: i32, w: i32, h: i32) void {
-    active.panel(x, y, w, h);
-}
-
-pub fn window(x: i32, y: i32, w: i32, h: i32) void {
-    active.window(x, y, w, h);
-}
-
-fn textWith(ctx: Context, bytes: []const u8, x: i32, y: i32, size: i32, color: rl.Color) void {
-    if (ctx.font) |font| if (ctx.atlas) |atlas| {
-        drawSourceText(font, atlas, bytes, x, y, size, color);
-        return;
-    };
-    var buffer: [4097]u8 = undefined;
-    const length = @min(bytes.len, buffer.len - 1);
-    @memcpy(buffer[0..length], bytes[0..length]);
-    buffer[length] = 0;
-    rl.drawText(buffer[0..length :0], x, y, size, color);
+pub fn framedRect(x: i32, y: i32, w: i32, h: i32, fill: rl.Color, border: rl.Color) void {
+    rl.drawRectangle(x, y, w, h, fill);
+    rl.drawRectangleLines(x, y, w, h, border);
 }
 
 fn drawSourceText(font: *const ui_font.Font, atlas: rl.Texture2D, bytes: []const u8, x: i32, y: i32, size: i32, color: rl.Color) void {
@@ -153,12 +122,6 @@ fn drawSourceText(font: *const ui_font.Font, atlas: rl.Texture2D, bytes: []const
         }
         cursor += @as(f32, @floatFromInt(glyph.advance)) * scale;
     }
-}
-
-fn primitivePanel(x: i32, y: i32, w: i32, h: i32) void {
-    rl.drawRectangle(x, y, w, h, .{ .r = 12, .g = 26, .b = 87, .a = 255 });
-    rl.drawRectangleLines(x, y, w, h, .{ .r = 190, .g = 200, .b = 222, .a = 255 });
-    rl.drawRectangleLines(x + 2, y + 2, w - 4, h - 4, .{ .r = 70, .g = 90, .b = 150, .a = 255 });
 }
 
 fn drawPiece(atlas: rl.Texture2D, rect: @import("field").Rect, x: i32, y: i32, w: i32, h: i32) void {

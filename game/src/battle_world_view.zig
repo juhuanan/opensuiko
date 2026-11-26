@@ -1,3 +1,4 @@
+const ui = @import("ui");
 const std = @import("std");
 const rl = @import("raylib");
 const battle = @import("battle");
@@ -59,19 +60,19 @@ fn drawSpellVfx(state: battle.State, data: art.Data) void {
     }
 }
 
-pub fn prepare(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, ground_texture: ?rl.Texture2D, effect_atlas: ?rl.Texture2D, dynamic: ?*@import("battle_spell_view.zig").DynamicTexture) void {
+pub fn prepare(context: *const ui.Context, state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, ground_texture: ?rl.Texture2D, effect_atlas: ?rl.Texture2D, dynamic: ?*@import("battle_spell_view.zig").DynamicTexture) void {
     if (state.backgroundCaptureMinimum()) |minimum| if (dynamic) |cache| {
         rl.beginTextureMode(cache.background);
-        drawScene(state, atlas, floor, ground_texture, effect_atlas, dynamic, minimum);
+        drawScene(context, state, atlas, floor, ground_texture, effect_atlas, dynamic, minimum);
         rl.endTextureMode();
     };
 }
 
-pub fn draw(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, ground_texture: ?rl.Texture2D, effect_atlas: ?rl.Texture2D, dynamic: ?*@import("battle_spell_view.zig").DynamicTexture) void {
-    drawScene(state, atlas, floor, ground_texture, effect_atlas, dynamic, null);
+pub fn draw(context: *const ui.Context, state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, ground_texture: ?rl.Texture2D, effect_atlas: ?rl.Texture2D, dynamic: ?*@import("battle_spell_view.zig").DynamicTexture) void {
+    drawScene(context, state, atlas, floor, ground_texture, effect_atlas, dynamic, null);
 }
 
-fn drawScene(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, ground_texture: ?rl.Texture2D, effect_atlas: ?rl.Texture2D, dynamic: ?*@import("battle_spell_view.zig").DynamicTexture, minimum_depth: ?u16) void {
+fn drawScene(context: *const ui.Context, state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, ground_texture: ?rl.Texture2D, effect_atlas: ?rl.Texture2D, dynamic: ?*@import("battle_spell_view.zig").DynamicTexture, minimum_depth: ?u16) void {
     const data = battle.layout.sceneArt(state);
     const list = art.compose(data, state);
     rl.clearBackground(if (minimum_depth != null) .blank else .black);
@@ -156,13 +157,13 @@ fn drawScene(state: battle.State, atlas: rl.Texture2D, floor: rl.Texture2D, grou
     }
     if (minimum_depth == null) for (0..state.partyCount() + state.enemyCount()) |index| {
         const actor = art.actorLayout(data, state, index);
-        @import("battle_trial_view.zig").drawActorFeedback(state, index, actor.point.x, actor.point.y, actor.point.y - @as(f32, @floatFromInt(actor.sprite.anchor_y)) * actor.scale);
+        @import("battle_trial_view.zig").drawActorFeedback(context, state, index, actor.point.x, actor.point.y, actor.point.y - @as(f32, @floatFromInt(actor.sprite.anchor_y)) * actor.scale);
     };
     if (minimum_depth == null) {
         const view = @import("battle_trial_view.zig");
         if (view.selectionTarget(&state)) |target| {
             const actor = art.actorLayout(data, state, target);
-            view.drawTargetMarker(actor.point.x, actor.point.y);
+            view.drawTargetMarker(context, actor.point.x, actor.point.y);
         }
     }
     if (minimum_depth == null) if (spell_frame) |frame| {

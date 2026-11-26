@@ -84,6 +84,6 @@ pub fn run(init: std.process.Init, selector_arg: ?[]const u8) !void {
         rl.beginDrawing();
         defer rl.endDrawing();
         rl.clearBackground(.black);
-        try platform.draw(&model, &session_value.engine, session_value.command_index, "Press R to restart");
+        try platform.draw(&model, &session_value.engine, session_value.command_index, "Press R to restart", &.{});
     }
 }

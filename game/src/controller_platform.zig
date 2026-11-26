@@ -3,7 +3,7 @@ const controller = @import("pause_menu").controller;
 pub const State = struct {
     device: ?i32 = null,
     controls: controller.State = .{},
-    pub fn poll(self: *State) controller.Output {
+    pub fn poll(self: *State, frame_seconds: f32) controller.Output {
         if (self.device) |id| if (!rl.isGamepadAvailable(id)) {
             self.* = .{};
         };
@@ -24,6 +24,6 @@ pub const State = struct {
             .confirm = rl.isGamepadButtonDown(id, .right_face_down),
             .cancel = rl.isGamepadButtonDown(id, .right_face_right),
             .menu = rl.isGamepadButtonDown(id, .middle_right),
-        }, rl.getFrameTime());
+        }, frame_seconds);
     }
 };

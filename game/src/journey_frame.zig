@@ -7,8 +7,6 @@ const field = @import("field");
 const pause = @import("pause_menu");
 const persistence = @import("journey_persistence");
 const boot = @import("journey_boot");
-const ui = @import("ui");
-const recovery_layer = @import("platform_recovery");
 const journey = @import("journey");
 
 const atlas_checks = @import("journey_frame/atlas_checks.zig");
@@ -16,6 +14,7 @@ const resources_mod = @import("journey_frame/resources.zig");
 const audio_sync = @import("journey_frame/audio_sync.zig");
 const input_mod = @import("journey_frame/input.zig");
 const render_mod = @import("journey_frame/render.zig");
+const tick_seconds = 1.0 / 60.0;
 
 pub const checkCrossingAtlas = atlas_checks.checkCrossingAtlas;
 pub const checkFieldAtlas = atlas_checks.checkFieldAtlas;
@@ -61,19 +60,16 @@ const App = struct {
     resources: resources_mod.Resources,
     input: input_mod.InputState = .{},
     title: pause.title.State,
-    clock: f64 = 0,
-    mode_fade: recovery_layer.display.ModeFade = .{},
-    presented_mode: ?journey.Mode = null,
+    simulation_seconds: f64 = 0,
+    title_seconds: f64 = 0,
+    presentation: render_mod.Presentation = .{},
 
     fn init(init_ctx: std.process.Init, boot_state: *boot.Boot, initial_state: journey.State) !App {
-        var resources = try resources_mod.Resources.init(init_ctx, boot_state, &initial_state);
-        errdefer resources.deinit(init_ctx.gpa);
-
         var app = App{
             .init_ctx = init_ctx,
             .boot_state = boot_state,
             .state = initial_state,
-            .resources = resources,
+            .resources = try resources_mod.Resources.init(init_ctx, boot_state, &initial_state),
             .title = pause.title.State.bootWithMovies(),
         };
         app.title.opening_context = true;
@@ -84,7 +80,7 @@ const App = struct {
     }
 
     fn deinit(self: *App) void {
-        self.resources.deinit(self.init_ctx.gpa);
+        self.resources.deinit();
         self.state.releaseRestoredSave();
     }
 
@@ -92,12 +88,14 @@ const App = struct {
         const preferences = self.state.menu.preferences;
         self.state.releaseRestoredSave();
         self.state = next;
+        self.state.bind();
         self.state.menu.preferences = preferences;
-        self.clock = 0;
+        self.simulation_seconds = 0;
+        self.title_seconds = 0;
         self.input.resetForGameplay(clear_edges);
     }
 
-    fn stepTitle(self: *App, frame_input: input_mod.FrameInput) !bool {
+    fn stepTitle(self: *App, frame_input: input_mod.FrameInput, frame_seconds: f32) !bool {
         const safe = frame_input.safe;
         const effect = self.title.tick(.{
             .up = safe.navigation == .up,
@@ -124,7 +122,8 @@ const App = struct {
                 self.state.menu.save_slot = self.title.slot;
                 if (persistence.apply(self.init_ctx, save, &self.state, .load)) |_| {
                     self.title.phase = .playing;
-                    self.clock = 0;
+                    self.simulation_seconds = 0;
+                    self.title_seconds = 0;
                     self.input.resetForGameplay(false);
                 } else |_| self.title.message = "Load failed. Choose another slot or return.";
             } else {
@@ -136,8 +135,8 @@ const App = struct {
             self.resources.movie_player.stop();
             self.resources.title_media.syncAudio(false, 0);
         } else {
-            self.clock += @min(rl.getFrameTime(), 0.1);
-            while (self.clock >= 1.0 / 60.0) : (self.clock -= 1.0 / 60.0) {
+            self.title_seconds += @min(frame_seconds, 0.1);
+            while (self.title_seconds >= tick_seconds) : (self.title_seconds -= tick_seconds) {
                 _ = self.title.advanceFrame(.{});
             }
             const vol = self.state.menu.preferences.musicVolume();
@@ -197,7 +196,8 @@ const App = struct {
             inspectTitleSaves(self.init_ctx, self.boot_state.save_path, &self.state, &self.title);
             try self.resources.audio_player.update(package.rooms[self.state.field_state.room].id, self.state.audioScene(), null);
             _ = self.input.recovery.begin(.title);
-            self.clock = 0;
+            self.simulation_seconds = 0;
+            self.title_seconds = 0;
             self.input.clearStepEdges(null);
             return false;
         }
@@ -208,40 +208,28 @@ const App = struct {
         return true;
     }
 
-    fn update(self: *App) !struct { running: bool, fade_updates: u8 } {
-        var fade_updates: u8 = 0;
+    fn update(self: *App, frame_seconds: f32) !struct { running: bool, gameplay_ticks: u8 } {
+        var gameplay_ticks: u8 = 0;
         const focused = rl.isWindowFocused();
         self.input.recovery.focus(focused);
         if (focused) {
-            const frame_input = self.input.pollFocused(self.title.phase, &self.state);
+            const frame_input = self.input.pollFocused(self.title.phase, &self.state, frame_seconds);
             if (self.title.phase != .playing) {
-                if (!try self.stepTitle(frame_input)) return .{ .running = false, .fade_updates = fade_updates };
+                if (!try self.stepTitle(frame_input, frame_seconds)) return .{ .running = false, .gameplay_ticks = gameplay_ticks };
             } else {
                 self.input.accumulateGameplay(frame_input.safe);
-                self.clock += @min(rl.getFrameTime(), 0.1);
-                while (self.clock >= 1.0 / 60.0) : (self.clock -= 1.0 / 60.0) {
-                    fade_updates += 1;
+                self.simulation_seconds += @min(frame_seconds, 0.1);
+                while (self.simulation_seconds >= tick_seconds) : (self.simulation_seconds -= tick_seconds) {
+                    gameplay_ticks += 1;
                     if (!try self.stepSimulationTick(frame_input.safe.direction)) break;
                 }
             }
         } else {
-            self.clock = 0;
+            self.simulation_seconds = 0;
+            self.title_seconds = 0;
             self.input.clearUnfocused();
         }
-        return .{ .running = true, .fade_updates = fade_updates };
-    }
-
-    fn render(self: *App, fade_updates: u8) !void {
-        self.state.bind();
-        self.resources.ui_context.appearance = if (self.title.phase == .playing)
-            (if (self.state.field_state.progress.story.scenario) |story| story.window_appearance else .{})
-        else
-            .{};
-        ui.setWindowAppearance(self.resources.ui_context.appearance);
-        const scene = render_mod.resolveScene(&self.state, self.title);
-        try self.resources.syncPartyBackground(scene == .party_selection);
-        try render_mod.prepareSubRenderers(self.init_ctx.gpa, self.boot_state, &self.state, &self.resources, scene, self.input.collision);
-        try render_mod.presentFrame(self.boot_state, &self.state, self.title, &self.resources, &self.input.recovery, &self.mode_fade, &self.presented_mode, fade_updates, scene);
+        return .{ .running = true, .gameplay_ticks = gameplay_ticks };
     }
 };
 
@@ -262,9 +250,10 @@ pub fn run(init: std.process.Init, boot_state: *boot.Boot) !void {
     settings_platform.apply(initial_state.menu.preferences);
     var app = try App.init(init, boot_state, initial_state);
     defer app.deinit();
+    app.state.bind();
     while (!rl.windowShouldClose()) {
-        const step = try app.update();
+        const step = try app.update(rl.getFrameTime());
         if (!step.running) break;
-        try app.render(step.fade_updates);
+        try app.presentation.present(boot_state, &app.state, app.title, &app.resources, &app.input.recovery, step.gameplay_ticks, app.input.collision);
     }
 }

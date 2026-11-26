@@ -27,8 +27,8 @@ pub const InputState = struct {
     typed: [32]u8 = undefined,
     typed_len: usize = 0,
 
-    pub fn pollFocused(self: *InputState, title_phase: @FieldType(pause.title.State, "phase"), state: *const journey.State) FrameInput {
-        const pad = self.controller.poll();
+    pub fn pollFocused(self: *InputState, title_phase: @FieldType(pause.title.State, "phase"), state: *const journey.State, frame_seconds: f32) FrameInput {
+        const pad = self.controller.poll(frame_seconds);
         self.recovery.device(self.controller.device != null, self.controller.device);
         self.dice_input.merge(dice_view.poll(&self.dice_sampler, title_phase == .playing and state.dice_game != null, self.controller.device));
         const naming = state.menu.phase == .name_save or title_phase == .hero_name;

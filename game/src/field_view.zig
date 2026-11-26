@@ -2,8 +2,6 @@ const std = @import("std");
 const rl = @import("raylib");
 const field = @import("field");
 const ui = @import("ui");
-const text = ui.text;
-const numberText = ui.numberText;
 pub const effect_half_fragment =
     \\#version 330
     \\in vec4 fragColor;
@@ -110,7 +108,7 @@ fn drawWheelMap(atlas: rl.Texture2D, rect: field.Rect, layer: WheelLayer) void {
     gl.rlSetTexture(0);
 }
 
-pub fn drawScene(state: field.State, package: field.Package, atlas: rl.Texture2D, scenery: rl.Texture2D, show_collision: bool, camera: field.CameraOffset, extras: []const ExtraSprite, hero: ?ExtraSprite, hero_visible: bool, wheel_layer: ?WheelLayer, shadow_shader: ?rl.Shader) void {
+pub fn drawScene(context: *const ui.Context, state: field.State, package: field.Package, atlas: rl.Texture2D, scenery: rl.Texture2D, show_collision: bool, camera: field.CameraOffset, extras: []const ExtraSprite, hero: ?ExtraSprite, hero_visible: bool, wheel_layer: ?WheelLayer, shadow_shader: ?rl.Shader) void {
     std.debug.assert(extras.len <= max_extra_sprites);
     var draw_indices: [4096]usize = undefined;
     const room = package.rooms[state.room];
@@ -166,7 +164,7 @@ pub fn drawScene(state: field.State, package: field.Package, atlas: rl.Texture2D
         const y: i32 = @intFromFloat(oy + @as(f32, @floatFromInt(npc.y)));
         if (npc.marker == .service) {
             rl.drawCircleLines(x, y - 8, 9, .gold);
-            text("Smith", x - 18, y - 28, 12, .gold);
+            context.text("Smith", x - 18, y - 28, 12, .gold);
             continue;
         }
         rl.drawRectangle(x - 7, y - 11, 15, 12, .{ .r = 67, .g = 43, .b = 20, .a = 255 });
@@ -182,10 +180,10 @@ pub fn drawScene(state: field.State, package: field.Package, atlas: rl.Texture2D
             const walkable = if (scenery_state) |visit| room.canStandWithScenery(visit, x, y) else cell != '0';
             if (!walkable) rl.drawRectangle(@as(i32, @intFromFloat(ox)) + x, @as(i32, @intFromFloat(oy)) + y, 8, 8, .{ .r = 240, .g = 50, .b = 50, .a = 90 });
         }
-        text("DEBUG: collision overlay - F2 to hide", 8, 24, 12, .gold);
+        context.text("DEBUG: collision overlay - F2 to hide", 8, 24, 12, .gold);
     }
     if (scrolling) rl.endScissorMode();
-    text(room.title, 8, 4, 16, .ray_white);
+    context.text(room.title, 8, 4, 16, .ray_white);
     var hp: u32 = 0;
     var max_hp: u32 = 0;
     var ailments: usize = 0;
@@ -194,52 +192,52 @@ pub fn drawScene(state: field.State, package: field.Package, atlas: rl.Texture2D
         max_hp += member.max_hp;
         if (member.status != .healthy or member.balloons > 0) ailments += 1;
     }
-    numberText("Party HP: {d}/{d}   Status ailments: {d}", .{ hp, max_hp, ailments }, 8, 392, 12, .ray_white);
-    numberText("{d} bits", .{state.progress.money}, 402, 4, 12, .gold);
-    text("Arrows/WASD: walk   Z/Enter: talk   Tab/Esc: menu   F2: collision", 8, 414, 10, .light_gray);
+    context.numberText("Party HP: {d}/{d}   Status ailments: {d}", .{ hp, max_hp, ailments }, 8, 392, 12, .ray_white);
+    context.numberText("{d} bits", .{state.progress.money}, 402, 4, 12, .gold);
+    context.text("Arrows/WASD: walk   Z/Enter: talk   Tab/Esc: menu   F2: collision", 8, 414, 10, .light_gray);
     if (state.dialogue) |dialogue| {
-        ui.window(12, 270, 488, 134);
-        text(dialogue.name(room), 24, 278, 16, .gold);
+        context.window(12, 270, 488, 134);
+        context.text(dialogue.name(room), 24, 278, 16, .gold);
         switch (dialogue.phase) {
             .pages => {
                 const page = dialogue.pages(room)[dialogue.page];
                 const shown = page[0..dialogue.revealedLength(page.len, state.scene_ticks)];
-                text(shown, 24, 302, field.dialogueTextSize(page), .ray_white);
+                context.text(shown, 24, 302, field.dialogueTextSize(page), .ray_white);
             },
             .recruitment_choices => {
                 for (room.npcs[dialogue.source.npc].recruitment.?.choices, 0..) |label, i| {
                     const y: i32 = 302 + @as(i32, @intCast(i)) * 24;
-                    text(if (dialogue.choice == i) ">" else " ", 24, y, 16, .gold);
-                    text(label, 44, y, 16, if (dialogue.choice == i) .gold else .ray_white);
+                    context.text(if (dialogue.choice == i) ">" else " ", 24, y, 16, .gold);
+                    context.text(label, 44, y, 16, if (dialogue.choice == i) .gold else .ray_white);
                 }
             },
             .recruitment_accepted => {
                 const reply = room.npcs[dialogue.source.npc].recruitment.?;
-                numberText("{s}{s}{s}", .{ reply.accepted_prefix, state.progress.story.castleName(), reply.accepted_suffix }, 24, 302, 16, .ray_white);
+                context.numberText("{s}{s}{s}", .{ reply.accepted_prefix, state.progress.story.castleName(), reply.accepted_suffix }, 24, 302, 16, .ray_white);
             },
             .recruitment_declined => {
                 const page = room.npcs[dialogue.source.npc].recruitment.?.declined[dialogue.page];
-                text(page, 24, 302, field.dialogueTextSize(page), .ray_white);
+                context.text(page, 24, 302, field.dialogueTextSize(page), .ray_white);
             },
-            .recruitment_joined => numberText("{s} {s}", .{ room.npcs[dialogue.source.npc].name, room.npcs[dialogue.source.npc].recruitment.?.joined }, 24, 302, 16, .ray_white),
+            .recruitment_joined => context.numberText("{s} {s}", .{ room.npcs[dialogue.source.npc].name, room.npcs[dialogue.source.npc].recruitment.?.joined }, 24, 302, 16, .ray_white),
             .choices => {
                 const rules = state.inn_rules.?;
-                numberText("Stay for {d} bits? ({d} per person)", .{ state.progress.cost(rules.price_per_member), rules.price_per_member }, 24, 302, 16, .ray_white);
+                context.numberText("Stay for {d} bits? ({d} per person)", .{ state.progress.cost(rules.price_per_member), rules.price_per_member }, 24, 302, 16, .ray_white);
                 for (rules.choices, 0..) |label, i| {
                     const y: i32 = 330 + @as(i32, @intCast(i)) * 24;
-                    text(if (dialogue.choice == i) ">" else " ", 24, y, 16, .gold);
-                    text(label, 44, y, 16, if (dialogue.choice == i) .gold else .ray_white);
+                    context.text(if (dialogue.choice == i) ">" else " ", 24, y, 16, .gold);
+                    context.text(label, 44, y, 16, if (dialogue.choice == i) .gold else .ray_white);
                 }
-                text("Up/Down: choose", 24, 380, 10, .light_gray);
+                context.text("Up/Down: choose", 24, 380, 10, .light_gray);
             },
-            .insufficient_funds => text(state.inn_rules.?.insufficient_funds, 24, 302, 16, .ray_white),
+            .insufficient_funds => context.text(state.inn_rules.?.insufficient_funds, 24, 302, 16, .ray_white),
             .shop, .service => {},
-            .unavailable => text("Your party cannot rest.", 24, 302, 16, .ray_white),
+            .unavailable => context.text("Your party cannot rest.", 24, 302, 16, .ray_white),
         }
-        text("Z/Enter: continue   X: cancel", 274, 380, 10, .light_gray);
+        context.text("Z/Enter: continue   X: cancel", 274, 380, 10, .light_gray);
     }
     if (state.rest_ticks > 0) {
         rl.drawRectangle(0, 0, 512, 384, .{ .r = 0, .g = 0, .b = 0, .a = @intFromFloat(state.restOpacity() * 255) });
-        text("Resting...", 214, 200, 16, .ray_white);
+        context.text("Resting...", 214, 200, 16, .ray_white);
     }
 }

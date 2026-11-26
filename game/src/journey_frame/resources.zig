@@ -8,10 +8,10 @@ const boot = @import("journey_boot");
 const field_view = @import("../field_view.zig");
 const battle_spell_view = @import("../battle_spell_view.zig");
 const ui = @import("ui");
+const Preferences = @import("pause_menu").Value;
 const title_view = @import("../title_view.zig");
 const movie_player_mod = @import("../movie_player.zig");
 const journey = @import("journey");
-const Preferences = @import("pause_menu").Value;
 const duel_presentation = @import("journey_content").duel_presentation;
 const party_view = @import("../party_view.zig");
 const world_view = @import("world_view");
@@ -40,7 +40,7 @@ pub const WarRenderer = struct {
         self.* = undefined;
     }
 
-    pub fn prepare(self: *WarRenderer, allocator: std.mem.Allocator, engine: *const journey.war.Engine, command_index: u8) !void {
+    pub fn prepare(self: *WarRenderer, allocator: std.mem.Allocator, engine: *const journey.war.Engine, command_index: u8, context: *const ui.Context) !void {
         if (self.manifest == null) self.manifest = try war_content.load(allocator, war_manifest_data.json);
         if (self.platform == null) self.platform = try war_view_platform.Platform.init();
         const scenario_id = engine.scenario.id;
@@ -53,15 +53,15 @@ pub const WarRenderer = struct {
         rl.beginTextureMode(self.canvas);
         defer rl.endTextureMode();
         rl.clearBackground(.black);
-        try self.platform.?.draw(&self.view_model.?, engine, command_index, "Confirm to continue");
+        try self.platform.?.draw(&self.view_model.?, engine, command_index, "Confirm to continue", context);
     }
 };
 
 pub const Resources = struct {
+    allocator: std.mem.Allocator,
     audio_player: audio.Player,
     movie_player: movie_player_mod.MoviePlayer,
     title_media: title_view.Media,
-    ui_context: ui.Context = .{},
     atlas: rl.Texture2D,
     dice_atlas: ?rl.Texture2D = null,
     duel_atlas: ?rl.Texture2D = null,
@@ -139,14 +139,9 @@ pub const Resources = struct {
         errdefer if (dice_portraits) |texture| rl.unloadTexture(texture);
         if (dice_portraits) |texture| try journey.dice.visual.validatePortraitAtlas(texture.width, texture.height);
 
-        var ui_context: ui.Context = .{};
-        if (boot_state.bundle.ui) |*font| {
-            try font.validate(atlas.width, atlas.height);
-            ui_context = .{ .font = font, .atlas = atlas };
-            ui.configure(font, atlas);
-        }
+        if (boot_state.bundle.ui) |*font| try font.validate(atlas.width, atlas.height);
 
-        const scripted_dialogue = if (boot_state.bundle.room_battles != null and ui_context.font != null)
+        const scripted_dialogue = if (boot_state.bundle.room_battles != null and boot_state.bundle.ui != null)
             try allocator.create(dialogue_presentation.List)
         else
             null;
@@ -187,10 +182,10 @@ pub const Resources = struct {
         const war_renderer = try WarRenderer.init();
 
         return .{
+            .allocator = allocator,
             .audio_player = audio_player,
             .movie_player = movie_player,
             .title_media = title_media,
-            .ui_context = ui_context,
             .atlas = atlas,
             .dice_atlas = dice_atlas,
             .duel_atlas = duel_atlas,
@@ -210,7 +205,7 @@ pub const Resources = struct {
         };
     }
 
-    pub fn deinit(self: *Resources, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *Resources) void {
         if (self.field_effect_half_shader) |shader| rl.unloadShader(shader);
         if (self.wheel_shadow_shader) |shader| rl.unloadShader(shader);
         if (self.party_background) |background| background.deinit();
@@ -223,10 +218,10 @@ pub const Resources = struct {
         if (self.effect_atlas) |image| rl.unloadTexture(image);
         self.dynamic_effect.deinit();
         rl.unloadTexture(self.actors);
-        if (self.scripted_dialogue) |list| allocator.destroy(list);
+        if (self.scripted_dialogue) |list| self.allocator.destroy(list);
         if (self.scenery) |texture| rl.unloadTexture(texture);
         if (self.dice_portraits) |texture| rl.unloadTexture(texture);
-        if (self.crossing_view) |view| allocator.destroy(view);
+        if (self.crossing_view) |view| self.allocator.destroy(view);
         if (self.crossing_atlas) |texture| rl.unloadTexture(texture);
         if (self.duel_atlas) |texture| rl.unloadTexture(texture);
         if (self.dice_atlas) |texture| rl.unloadTexture(texture);
@@ -234,6 +229,7 @@ pub const Resources = struct {
         self.title_media.deinit();
         self.movie_player.deinit();
         self.audio_player.deinit();
+        self.* = undefined;
     }
 
     pub fn syncAudioVolumes(self: *Resources, preferences: Preferences) void {
@@ -250,10 +246,10 @@ pub const Resources = struct {
         }
     }
 
-    pub fn ensureRoomScenery(self: *Resources, allocator: std.mem.Allocator, path: []const u8, room_index: usize, room: field.Room) !void {
+    pub fn ensureRoomScenery(self: *Resources, path: []const u8, room_index: usize, room: field.Room) !void {
         if (self.scenery_room == room_index) return;
         const replacement = if (room.scenery_atlas) |image_path| load: {
-            const texture = try raylib_app.loadPointTexture(allocator, path, image_path);
+            const texture = try raylib_app.loadPointTexture(self.allocator, path, image_path);
             errdefer rl.unloadTexture(texture);
             try room.validateSceneryAtlas(texture.width, texture.height);
             break :load texture;

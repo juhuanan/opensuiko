@@ -50,6 +50,22 @@ test "mode fade presents black when a frame catches up on several updates" {
     try expect(fade.alpha() < 255);
 }
 
+test "frames without gameplay ticks leave both halves of a mode fade in place" {
+    const ModeFade = recovery_mod.display.ModeFade;
+    var fade: ModeFade = .{};
+    fade.begin();
+    fade.advance(3);
+    const outgoing = fade;
+    fade.advance(0);
+    try expectEqual(outgoing, fade);
+
+    fade.advance(ModeFade.half_ticks);
+    fade.advance(3);
+    const incoming = fade;
+    fade.advance(0);
+    try expectEqual(incoming, fade);
+}
+
 // ---------------------------------------------------------------------------
 // Compile-only device/audio doubles.  They implement the same typed backend the
 // platform loop supplies to the real audio player; no platform symbol is linked.
