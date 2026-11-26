@@ -13,9 +13,8 @@ const exploration = @import("exploration.zig");
 const modes = @import("modes.zig");
 
 pub fn roomEventBinding(state: *journey.State, rooms: *field_events.BattleRooms, binding: field_events.Binding) !field_events.Binding {
-    const host = (state.combat.integration orelse return error.MissingBattleIntegration).host;
     for (state.field_state.progress.party, rooms.party[0..state.field_state.progress.party.len]) |member, *id| {
-        id.* = host.characterId(member.id) orelse return error.UnknownFieldEventPartyMember;
+        id.* = battle.IntegrationHost.characterIdByName(member.id) orelse return error.UnknownFieldEventPartyMember;
     }
     @memset(&rooms.character_levels, 0);
     if (state.party_catalog) |catalog| for (catalog.characters) |character| {
@@ -25,7 +24,7 @@ pub fn roomEventBinding(state: *journey.State, rooms: *field_events.BattleRooms,
     for (rooms.party[0..state.field_state.progress.party.len], 0..) |id, index|
         rooms.character_levels[id] = state.combat.progress.party[index].level;
     for (state.reserves) |entry| if (entry) |owned| {
-        const id = host.characterId(owned.id) orelse return error.UnknownFieldEventPartyMember;
+        const id = battle.IntegrationHost.characterIdByName(owned.id) orelse return error.UnknownFieldEventPartyMember;
         rooms.character_levels[id] = owned.level;
     };
     var carried_count: usize = 0;

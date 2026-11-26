@@ -1,0 +1,14 @@
+{
+  "schema": "suikoden-simulation-replay/1",
+  "id": "battle",
+  "steps": [
+    {"ticks": 8, "input": {"menu": {"field": {"direction": "right"}}}, "checkpoint": "arena_arrival"},
+    {"ticks": 4, "input": {"menu": {"field": {"direction": "right"}}}, "checkpoint": "encounter_admitted"},
+    {"input": {"combat": {"confirm": true}}, "checkpoint": "attack_target"},
+    {"input": {"combat": {"confirm": true}}, "checkpoint": "round_confirmation"},
+    {"input": {"combat": {"confirm": true}}, "checkpoint": "round_committed"},
+    {"ticks": 8, "checkpoint": "victory"},
+    {"input": {"combat": {"confirm": true}}, "checkpoint": "returned_to_arena"},
+    {"ticks": 8, "checkpoint": "reward_persists"}
+  ]
+}

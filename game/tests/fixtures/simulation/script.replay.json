@@ -1,0 +1,14 @@
+{
+  "schema": "suikoden-simulation-replay/1",
+  "id": "script",
+  "steps": [
+    {"ticks": 4, "input": {"menu": {"field": {"direction": "left"}}}, "checkpoint": "entered_workshop"},
+    {"checkpoint": "arrival_admitted"},
+    {"input": {"menu": {"menu": true, "field": {"direction": "right"}}}, "checkpoint": "script_blocks_player"},
+    {"checkpoint": "music_queued"},
+    {"checkpoint": "music_acknowledged"},
+    {"checkpoint": "waiting_for_delay"},
+    {"ticks": 3, "checkpoint": "story_committed"},
+    {"checkpoint": "scripted_return"}
+  ]
+}

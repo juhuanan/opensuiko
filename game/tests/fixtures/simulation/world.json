@@ -1,0 +1,680 @@
+{
+  "room": {
+    "schema": "suikoden-room/10",
+    "atlas": "atlas.png",
+    "cell_size": 8,
+    "start_room": "yard",
+    "start_x": 8,
+    "start_y": 8,
+    "step_ticks": 4,
+    "interaction_offsets": [
+      {
+        "x": 0,
+        "y": 8
+      },
+      {
+        "x": 0,
+        "y": -8
+      },
+      {
+        "x": -8,
+        "y": 0
+      },
+      {
+        "x": 8,
+        "y": 0
+      }
+    ],
+    "player_clips": [
+      {
+        "direction": "down",
+        "idle_frame": 1,
+        "frames": [
+          {
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1
+            },
+            "anchor_x": 0,
+            "anchor_y": 0,
+            "ticks": 1
+          },
+          {
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1
+            },
+            "anchor_x": 0,
+            "anchor_y": 0,
+            "ticks": 1
+          }
+        ]
+      },
+      {
+        "direction": "up",
+        "idle_frame": 1,
+        "frames": [
+          {
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1
+            },
+            "anchor_x": 0,
+            "anchor_y": 0,
+            "ticks": 1
+          },
+          {
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1
+            },
+            "anchor_x": 0,
+            "anchor_y": 0,
+            "ticks": 1
+          }
+        ]
+      },
+      {
+        "direction": "left",
+        "idle_frame": 1,
+        "frames": [
+          {
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1
+            },
+            "anchor_x": 0,
+            "anchor_y": 0,
+            "ticks": 1
+          },
+          {
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1
+            },
+            "anchor_x": 0,
+            "anchor_y": 0,
+            "ticks": 1
+          }
+        ]
+      },
+      {
+        "direction": "right",
+        "idle_frame": 1,
+        "frames": [
+          {
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1
+            },
+            "anchor_x": 0,
+            "anchor_y": 0,
+            "ticks": 1
+          },
+          {
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1
+            },
+            "anchor_x": 0,
+            "anchor_y": 0,
+            "ticks": 1
+          }
+        ]
+      }
+    ],
+    "rooms": [
+      {
+        "id": "yard",
+        "title": "Practice Yard",
+        "width": 32,
+        "height": 32,
+        "walkable": "1011111111111111",
+        "draws": [],
+        "npcs": [],
+        "exits": [
+          {
+            "x": 24,
+            "y": 8,
+            "w": 8,
+            "h": 8,
+            "room": "arena",
+            "spawn_x": 8,
+            "spawn_y": 8,
+            "direction": "right",
+            "arrival_facing": "down"
+          },
+          {
+            "x": 0,
+            "y": 8,
+            "w": 8,
+            "h": 8,
+            "room": "workshop",
+            "spawn_x": 8,
+            "spawn_y": 8,
+            "direction": "left",
+            "arrival_facing": "down"
+          }
+        ],
+        "events": [
+          {
+            "id": "marker",
+            "name": "Marker",
+            "x": 8,
+            "y": 16,
+            "w": 8,
+            "h": 8,
+            "flag": "heard_forest_warning",
+            "pages": [
+              "Ready?",
+              "Go."
+            ]
+          }
+        ]
+      },
+      {
+        "id": "arena",
+        "title": "Practice Arena",
+        "width": 32,
+        "height": 32,
+        "walkable": "1111111111111111",
+        "draws": [],
+        "npcs": [],
+        "exits": []
+      },
+      {
+        "id": "workshop",
+        "title": "Practice Workshop",
+        "width": 32,
+        "height": 32,
+        "walkable": "1111111111111111",
+        "draws": [],
+        "npcs": [],
+        "exits": []
+      }
+    ]
+  },
+  "battle": {
+    "schema": "suikoden-battle-trial/2",
+    "atlas": "actors.png",
+    "background": "floor.png",
+    "party": [
+      {
+        "id": "hero",
+        "name": "Tester",
+        "max_hp": 80,
+        "level": 1,
+        "stats": {
+          "attack": 34,
+          "defense": 8,
+          "skill": 90,
+          "speed": 20,
+          "magic": 0,
+          "luck": 0
+        },
+        "sprite": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1
+          },
+          "anchor_x": 0,
+          "anchor_y": 0
+        },
+        "attack": [
+          {
+            "pose": {
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "w": 1,
+                "h": 1
+              },
+              "anchor_x": 0,
+              "anchor_y": 0
+            },
+            "ticks": 5
+          }
+        ],
+        "motion": {
+          "approach_start": 0,
+          "approach": {
+            "ticks": 2,
+            "offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "velocity": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
+          "impact_tick": 2,
+          "return_start": 3,
+          "retreat": {
+            "ticks": 2,
+            "offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "velocity": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
+          "duration": 5
+        }
+      }
+    ],
+    "enemies": [
+      {
+        "id": "training_dummy",
+        "name": "Training dummy",
+        "max_hp": 12,
+        "level": 1,
+        "stats": {
+          "attack": 10,
+          "defense": 3,
+          "skill": 5,
+          "speed": 5,
+          "magic": 0,
+          "luck": 0
+        },
+        "sprite": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1
+          },
+          "anchor_x": 0,
+          "anchor_y": 0
+        },
+        "attack": [
+          {
+            "pose": {
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "w": 1,
+                "h": 1
+              },
+              "anchor_x": 0,
+              "anchor_y": 0
+            },
+            "ticks": 5
+          }
+        ],
+        "motion": {
+          "approach_start": 0,
+          "approach": {
+            "ticks": 2,
+            "offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "velocity": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
+          "impact_tick": 2,
+          "return_start": 3,
+          "retreat": {
+            "ticks": 2,
+            "offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "velocity": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
+          "duration": 5
+        },
+        "money": 23
+      }
+    ],
+    "encounters": [
+      {
+        "id": "practice",
+        "title": "Practice Round",
+        "enemies": [
+          "training_dummy"
+        ],
+        "experience_per_member": 27,
+        "positions": [
+          {
+            "x": 8,
+            "y": 0,
+            "z": 0
+          }
+        ]
+      }
+    ],
+    "party_positions": [
+      {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    ],
+    "formation_slots": [
+      {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "x": -8,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "x": -16,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "x": -24,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "x": -32,
+        "y": 0,
+        "z": 0
+      },
+      {
+        "x": -40,
+        "y": 0,
+        "z": 0
+      }
+    ],
+    "camera": {
+      "transform": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          100
+        ]
+      ],
+      "focal_length": 60,
+      "center_x": 0,
+      "center_y": 0
+    },
+    "sprite_scale": 1,
+    "scenery": []
+  },
+  "journey": {
+    "schema": "suikoden-journey/3",
+    "title": "Synthetic replay",
+    "battle": "battle/trial.json",
+    "encounters": [
+      {
+        "id": "arena_marker",
+        "room": "arena",
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 8,
+        "encounter": "practice",
+        "flag": "forest_battle_one_won"
+      }
+    ],
+    "treasures": []
+  },
+  "items": {
+    "schema": "suikoden-items/1",
+    "room": "shop",
+    "npc": "merchant",
+    "greeting": "Welcome.",
+    "medicine": {
+      "name": "Medicine",
+      "price": 12,
+      "uses": 6,
+      "heal_hp": 20
+    }
+  },
+  "inn": {
+    "schema": "suikoden-inn/1",
+    "room": "inn",
+    "npc": "host",
+    "price_per_member": 10,
+    "choices": [
+      "Stay",
+      "Leave"
+    ],
+    "insufficient_funds": "Please come back."
+  },
+  "opening": {
+    "hero": {
+      "member": {
+        "id": "hero",
+        "name": "Tester",
+        "hp": 80,
+        "max_hp": 80,
+        "status": "healthy",
+        "rune_charges": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "max_rune_charges": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "inventory": {
+          "slots": [
+            {
+              "id": "medicine",
+              "uses": 6
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      },
+      "level": 1,
+      "experience": 0,
+      "base_stats": {
+        "power": 34,
+        "defense": 8,
+        "skill": 90,
+        "speed": 20,
+        "magic": 0,
+        "luck": 0
+      },
+      "weapon_level": 1,
+      "rune": null,
+      "equipped": {}
+    },
+    "money": 100
+  },
+  "field_events": {
+    "schema": "suikoden-battle-field-events/26",
+    "rooms": [
+      {
+        "room": "workshop",
+        "population": {
+          "schema": "suikoden-scene-population/3",
+          "id": "workshop_population",
+          "content_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "source": {
+            "file": "synthetic_workshop",
+            "lba": 0,
+            "size": 1,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "room": 0
+          },
+          "coordinate_contract": {
+            "source_units": "half_cell",
+            "pixel_units": "pixel",
+            "source_to_pixel": "pixel = source * 8",
+            "axes": "x_right_y_down",
+            "origin": "room_top_left",
+            "source_coordinate_max": 255,
+            "pixel_coordinate_max": 2040,
+            "room_half_width": 4,
+            "room_half_height": 4
+          },
+          "duplicate_policy": "preserve_source_records",
+          "story_values": [
+            {
+              "id": "scenario_0001",
+              "storage": "scenario",
+              "byte_index": 1
+            }
+          ],
+          "programs": [
+            {
+              "id": "workshop_arrival",
+              "namespace": "suikoden-event-ir/11",
+              "content_id": "workshop_scene"
+            }
+          ],
+          "entities": [
+            {
+              "id": "workshop_entry",
+              "source_order": 0,
+              "record_role": "event",
+              "population_candidate": false,
+              "source_character_id": null,
+              "resource_id": null,
+              "resource_domain": null,
+              "position": {
+                "source_x": 0,
+                "source_y": 0,
+                "x": 0,
+                "y": 0,
+                "placement": "not_applicable"
+              },
+              "classification": {
+                "pointer_state": "null",
+                "terms": []
+              },
+              "event_selection": {
+                "pointer_state": "present",
+                "terms": []
+              },
+              "trigger": "area_entry",
+              "initialization_order": null,
+              "event": {
+                "reference": "workshop_event",
+                "status": "resolved",
+                "program_id": "workshop_arrival"
+              }
+            }
+          ]
+        },
+        "content": {
+          "schema": "suikoden-event-ir/11",
+          "id": "workshop_scene",
+          "content_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "story_values": [
+            {
+              "id": "scenario_0001",
+              "storage": "scenario",
+              "byte_index": 1,
+              "initial": 0
+            }
+          ],
+          "programs": [
+            {
+              "id": "workshop_arrival",
+              "entry": "ordinary",
+              "entity": 0,
+              "trigger": "area_entry",
+              "commands": [
+                {
+                  "kind": "story_or",
+                  "flag": {
+                    "id": "scenario_0001",
+                    "mask": 1
+                  }
+                },
+                {
+                  "kind": "play_sound",
+                  "cue": 1281
+                },
+                {
+                  "kind": "field_music",
+                  "music": "ruins"
+                },
+                {
+                  "kind": "delay",
+                  "updates": 3,
+                  "wait": {
+                    "kind": "delay",
+                    "id": "delay"
+                  }
+                },
+                {
+                  "kind": "story_or",
+                  "flag": {
+                    "id": "scenario_0001",
+                    "mask": 2
+                  }
+                },
+                {
+                  "kind": "room_transition",
+                  "destination": "yard",
+                  "x": 8,
+                  "y": 8
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

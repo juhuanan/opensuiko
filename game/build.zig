@@ -86,9 +86,15 @@ const Registry = struct {
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const raylib = try b.dependencyLazy("raylib_zig", .{ .target = target, .optimize = optimize });
+    const public_replay = b.option(bool, "public-replay", "Build the synthetic replay without private assets or raylib") orelse false;
+    const raylib = if (public_replay) null else try b.dependencyLazy("raylib_zig", .{ .target = target, .optimize = optimize });
     var r = Registry{ .b = b, .target = target, .optimize = optimize, .test_filter = b.option([]const u8, "test-filter", "Run matching headless tests only") };
-    r.mods.put(b.allocator, "raylib", raylib.module("raylib")) catch @panic("OOM");
+    if (raylib) |dep| {
+        r.mods.put(b.allocator, "raylib", dep.module("raylib")) catch @panic("OOM");
+    } else {
+        r.addData("replay_data", "tests/simulation_replay_data.zig");
+        r.bind("raylib", "replay_data");
+    }
 
     const data_modules = [_][2][]const u8{
         .{ "campaign_policies_data", "assets/campaign_policies.zig" },
@@ -123,6 +129,10 @@ pub fn build(b: *std.Build) !void {
         .{ "battle_sin_cos_data", "assets/battle_sin_cos.zig" },
     };
     for (data_modules) |pair| r.addData(pair[0], pair[1]);
+    if (public_replay) {
+        for ([_][]const u8{ "field_events_data", "duel_data", "war_scenarios_data", "final_assets" }) |name|
+            r.bind(name, "replay_data");
+    }
 
     const core_modules = [_]ModSpec{
         .{ "validation", "src/validation.zig", &.{} },
@@ -200,7 +210,11 @@ pub fn build(b: *std.Build) !void {
         .{ "duel", "src/duel.zig", &.{"duel_data"} },
         .{ "optional_game_contracts", "src/optional_game_contracts.zig", &.{"battle_rules"} },
     };
-    for (core_modules) |spec| r.add(spec[0], spec[1], spec[2]);
+    for (core_modules) |spec| {
+        if (public_replay and std.mem.eql(u8, spec[0], "inn_zon")) {
+            r.bind("inn_zon", "replay_data");
+        } else r.add(spec[0], spec[1], spec[2]);
+    }
     r.bind("owner_state_hq", "hq_state");
     r.bind("palace_fade", "fade");
 
@@ -233,11 +247,24 @@ pub fn build(b: *std.Build) !void {
     for (top_modules) |spec| r.add(spec[0], spec[1], spec[2]);
     r.get("pause_menu").addImport("hq", r.get("hq"));
 
+    const replay = b.addExecutable(.{
+        .name = "simulation-replay",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/simulation_replay.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = r.imports(&.{ "engine", "journey", "battle", "field", "field_events" }),
+        }),
+    });
+    replay.stack_size = 64 * 1024 * 1024;
+    b.step("simulation-replay", "Build the headless simulation replay runner").dependOn(&b.addInstallArtifact(replay, .{}).step);
+    if (public_replay) return;
+
     const campaign_test = b.step("test-campaign", "Run consolidated campaign and domain integration tests");
     const test_step = b.step("test", "Run headless behavior tests");
 
     // Primary native executable (headless diagnostics, opening export, journey runtime, war mode).
-    const journey_exe = r.addRayExe("suikoden-journey", "src/journey_main.zig", raylib, &.{ "journey_boot", "journey_frame", "opening_export", "journey_content", "journey_persistence", "war_mode", "raylib" });
+    const journey_exe = r.addRayExe("suikoden-journey", "src/journey_main.zig", raylib.?, &.{ "journey_boot", "journey_frame", "opening_export", "journey_content", "journey_persistence", "war_mode", "raylib" });
     const install_journey = b.addInstallArtifact(journey_exe, .{});
     b.getInstallStep().dependOn(&install_journey.step);
     b.step("build-journey", "Build only the connected game without launching a window").dependOn(&install_journey.step);

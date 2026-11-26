@@ -20,6 +20,7 @@ help:
 	@echo "make test-world  Source and headless world/field/battle/session checks; no windows"
 	@echo "make test-world-pixels  Export candidates, build and verify CPU pixels; no windows"
 	@echo "make test-world-replay  Check supplied-checkpoint native replay without windows"
+	@echo "make test-simulation-replay  Check public Journey input traces without disc assets"
 	@echo "make test-journey  Check the connected forest episode without opening windows"
 	@echo "make run-journey   Export and launch the canonical palace package"
 	@echo "make check         Export canonical package and run campaign/doc gates without windows"
@@ -218,7 +219,14 @@ check: canonical-assets
 	$(PYTHON) kit/tests/test_startup_diagnostics.py
 	$(PYTHON) kit/tools/check_journey_package.py kit/work/build/canonical --canonical
 
-test-game: fmt-check
+.PHONY: test-simulation-replay
+REPLAY_PREFIX ?= game/zig-out
+test-simulation-replay:
+	$(MAKE) build ZIG_BUILD_ARGS='simulation-replay -Dpublic-replay=true --prefix "$(abspath $(REPLAY_PREFIX))"'
+	$(PYTHON) kit/tests/test_simulation_replay.py
+	$(PYTHON) kit/tools/check_simulation_replay.py verify --runner "$(REPLAY_PREFIX)/bin/simulation-replay"
+
+test-game: fmt-check test-simulation-replay
 	cd game && $(ZIG) build --cache-dir "$(ZIG_LOCAL_CACHE_DIR)" test --summary all
 
 test-kit: prepare

@@ -1,0 +1,17 @@
+{
+  "schema": "suikoden-simulation-replay/1",
+  "id": "field",
+  "steps": [
+    {"input": {"menu": {"field": {"direction": "up"}}}, "checkpoint": "blocked_step"},
+    {"input": {"menu": {"field": {"direction": "down"}}}, "checkpoint": "movement_started"},
+    {"input": {"menu": {"menu": true}}, "checkpoint": "pause_requested_in_motion"},
+    {"ticks": 3, "checkpoint": "marker_arrival"},
+    {"input": {"menu": {"field": {"action": true}}}, "checkpoint": "first_page_revealed"},
+    {"input": {"menu": {"field": {"action": true}}}, "checkpoint": "second_page"},
+    {"input": {"menu": {"field": {"action": true}}}, "checkpoint": "second_page_revealed"},
+    {"input": {"menu": {"field": {"action": true}}}, "checkpoint": "dialogue_closed"},
+    {"input": {"menu": {"menu": true}}, "checkpoint": "pause_open"},
+    {"ticks": 6, "input": {"menu": {"field": {"direction": "right"}}}, "checkpoint": "pause_blocks_movement"},
+    {"input": {"menu": {"field": {"cancel": true}}}, "checkpoint": "pause_closed"}
+  ]
+}

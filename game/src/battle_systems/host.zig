@@ -88,6 +88,10 @@ pub const Host = struct {
 
     pub fn characterId(self: *const Host, name: []const u8) ?u8 {
         _ = self;
+        return characterIdByName(name);
+    }
+
+    pub fn characterIdByName(name: []const u8) ?u8 {
         var buffer: [64]u8 = undefined;
         if (name.len > buffer.len) return null;
         var length: usize = 0;
