@@ -80,19 +80,8 @@ pub fn resolveTick(state: *State) void {
     }
     if (state.coordinator) |clock| {
         if (clock.stage == .round_ready and state.active == null) {
-            if (state.hasPendingRevival()) return;
-            const outcome = state.combatOutcome(.enemy);
-            if (outcome == .victory) {
-                if (state.hasUniteReturns()) return;
-                state.coordinator.?.stage = .victory_wait;
-                state.coordinator.?.remaining = 30;
-                state.coordinator.?.elapsed += 1;
-                state.action_ticks = state.coordinator.?.elapsed;
-            } else if (outcome == .defeat) {
-                state.action_ticks = clock.elapsed + 1;
-                state.phase = .defeat;
-                state.coordinator = null;
-            } else if (state.sourceRounds()) {
+            if (state.advanceBattleCompletion(.round_ready) != .resolving) return;
+            if (state.sourceRounds()) {
                 // Settled source tracks are still required; integrated statuses use the shared boundary.
                 if (state.round == std.math.maxInt(u32) or (state.content.world_art != null and state.content.world_art.?.c_tracks == null and state.roc_idle_at == null) or state.content.round_start == null or state.partyTargetDown()) {
                     state.replay_unsupported = .coordinator_action;
@@ -311,14 +300,6 @@ pub fn resolveTick(state: *State) void {
             if (clock.current_actor == previous.actor) clock.completed = true;
             return;
         }
-        if (state.hasPendingRevival()) return;
-        switch (state.combatOutcome(.party)) {
-            .defeat => state.phase = .defeat,
-            .victory => if (!state.hasUniteReturns()) {
-                state.commitRewards();
-                state.phase = .victory;
-            },
-            .ongoing => {},
-        }
+        _ = state.advanceBattleCompletion(.after_action);
     }
 }

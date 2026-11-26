@@ -10,6 +10,57 @@ const priority = damage_rules.priority;
 const PartyAttackTiming = types_mod.PartyAttackTiming;
 const Coordinator = types_mod.Coordinator;
 
+const CompletionCheckpoint = enum { before_dispatch, after_action, round_ready };
+const ordinary_victory_wait_ticks = 31;
+
+/// The source round gate gives victory precedence in a simultaneous knockout and starts its
+/// countdown after revival and playback settle. Legacy checkpoints give defeat precedence.
+/// Before legacy dispatch, either terminal result waits for playback. At action end and the
+/// source round gate, only victory waits for playback. Any terminal result waits for revival.
+pub fn advanceBattleCompletion(self: *State, checkpoint: CompletionCheckpoint) types_mod.BattleCompletion {
+    const outcome = self.combatOutcome(if (checkpoint == .round_ready) .victory else .defeat);
+    if ((outcome != .ongoing or checkpoint != .before_dispatch) and self.hasPendingRevival()) return .waiting_for_revival;
+    if (outcome == .ongoing) return .resolving;
+    if ((outcome == .victory or checkpoint == .before_dispatch) and self.hasUniteReturns()) return .waiting_for_animation;
+
+    if (checkpoint == .round_ready) {
+        const clock = &self.coordinator.?;
+        self.action_ticks = clock.elapsed + 1;
+        if (outcome == .victory) {
+            clock.elapsed = self.action_ticks;
+            clock.stage = .victory_wait;
+            clock.remaining = ordinary_victory_wait_ticks - 1;
+            return .rewards_pending;
+        }
+    }
+    finishBattle(self, outcome);
+    return .complete;
+}
+
+fn finishBattle(self: *State, outcome: types_mod.BattleOutcome) void {
+    switch (outcome) {
+        .ongoing => unreachable,
+        .victory => {
+            self.commitRewards();
+            self.phase = .victory;
+        },
+        .defeat => self.phase = .defeat,
+    }
+    self.coordinator = null;
+}
+
+pub fn openAfterRound(self: *State) void {
+    if (self.content.encounters[self.encounter].scripted_finish) |finish| {
+        if (self.firstLiving(true)) |actor| {
+            if (self.round == @as(u32, finish.after_round) + 1) {
+                self.coordinator = .{ .stage = .victory_wait, .remaining = finish.wait_ticks - 1, .current_actor = actor };
+                return;
+            }
+        }
+    }
+    self.enterRoundMenu();
+}
+
 pub fn coordinatorLocked(self: *const State, actor: usize) bool {
     for (self.unite_vm.counter_actions) |maybe| if (maybe) |playback| {
         if (playback.action == null and (actor == playback.attacker or actor == playback.defender or (playback.guard != null and playback.guard.? == actor))) return true;
@@ -336,11 +387,7 @@ pub fn advanceCoordinator(self: *State) void {
         },
         .victory_wait => {
             clock.remaining -%= 1;
-            if (clock.remaining < 0) {
-                self.commitRewards();
-                self.phase = .victory;
-                self.coordinator = null;
-            }
+            if (clock.remaining < 0) finishBattle(self, .victory);
         },
         .round_boundary => {
             clock.remaining = @max(0, clock.remaining -| 1);

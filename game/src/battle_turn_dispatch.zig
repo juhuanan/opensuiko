@@ -293,13 +293,7 @@ pub fn startRuneAttack(self: *State, actor: usize, requested: usize) ActionStart
 }
 
 pub fn nextAction(self: *State) void {
-    const outcome = self.combatOutcome(.party);
-    if (outcome != .ongoing) {
-        if (self.hasUniteReturns() or self.hasPendingRevival()) return;
-        if (outcome == .victory) self.commitRewards();
-        self.phase = if (outcome == .victory) .victory else .defeat;
-        return;
-    }
+    if (self.advanceBattleCompletion(.before_dispatch) != .resolving) return;
     var selected = self.pending_party_actor;
     if (selected) |actor| {
         if (!self.participates(actor) or self.acted[actor]) {

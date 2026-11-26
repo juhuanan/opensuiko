@@ -145,17 +145,6 @@ pub fn enterRoundMenu(self: *State) void {
     } else self.phase = .defeat;
 }
 
-pub fn openAfterRound(self: *State) void {
-    if (self.content.encounters[self.encounter].scripted_finish) |finish| {
-        if (self.firstLiving(true)) |actor| {
-            if (self.round == @as(u32, finish.after_round) + 1) {
-                self.coordinator = .{ .stage = .victory_wait, .remaining = finish.wait_ticks - 1, .current_actor = actor };
-                return;
-            }
-        }
-    }
-    self.enterRoundMenu();
-}
 pub fn stats(self: *const State, index: usize) Stats {
     if (index >= self.partyCount()) return withTemporaryStats(self, index, self.enemy(index - self.partyCount()).stats);
     const result = equippedStats(self.content, self.ownedMember(index), self.progress.party[index].weapon_augment);
@@ -249,11 +238,10 @@ pub fn enemyRow(self: *const State, target: usize) Row {
 pub fn weaponRange(self: *const State, member: usize) WeaponRange {
     return self.partyProfile(member).weapon_range orelse .short;
 }
-// The source round boundary and legacy resolution give simultaneous defeats different precedence.
-pub fn combatOutcome(self: *const State, first: enum { party, enemy }) enum { ongoing, victory, defeat } {
-    if (first == .party and self.firstLiving(true) == null) return .defeat;
+pub fn combatOutcome(self: *const State, simultaneous_knockout: enum { victory, defeat }) types_mod.BattleOutcome {
+    if (simultaneous_knockout == .defeat and self.firstLiving(true) == null) return .defeat;
     if (self.firstLiving(false) == null) return .victory;
-    if (first == .enemy and self.firstLiving(true) == null) return .defeat;
+    if (simultaneous_knockout == .victory and self.firstLiving(true) == null) return .defeat;
     return .ongoing;
 }
 

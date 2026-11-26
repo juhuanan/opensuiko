@@ -3137,7 +3137,7 @@ test "battle schema seventeen requires Unite return clocks and source pose ident
     try std.testing.expectError(error.MissingUnitePose, content.validate());
 }
 
-test "deferred action settlement keeps defeat ahead of victory when both sides are down" {
+test "legacy battle completion waits for playback before dispatch and allows defeat after an action" {
     const parsed = try battle.load(allocator, @embedFile("fixtures/battle_canonical.json"));
     defer parsed.deinit();
     const items = try field.items.load(allocator, field.items.json);
@@ -3148,8 +3148,64 @@ test "deferred action settlement keeps defeat ahead of victory when both sides a
     @memset(state.enemy_hp[0..state.enemyCount()], 0);
     state.phase = .resolving;
     state.active = null;
+    state.unite_returns[0] = .{ .owner = 0, .target = state.partyCount(), .ticks = 0, .target_released = false, .handoff_at = state.camera_ticks +% 1 };
+    state.nextAction();
+    try std.testing.expectEqual(battle.Phase.resolving, state.phase);
+
+    state.active = .{ .actor = 0, .target = 0, .kind = .defend };
+    state.action_ticks = state.actionDuration() - 1;
+    state.tick(.{});
+    try std.testing.expect(state.active == null and state.hasUniteReturns());
+    try std.testing.expectEqual(battle.Phase.defeat, state.phase);
+    try std.testing.expect(!state.rewards_committed);
+
+    state.unite_returns[0] = null;
+    state.phase = .resolving;
     state.nextAction();
     try std.testing.expectEqual(battle.Phase.defeat, state.phase);
+    try std.testing.expect(!state.rewards_committed);
+}
+
+test "coordinated battle completion waits for revival and playback before the 31-tick victory delay" {
+    const parsed = try battle.load(allocator, @embedFile("fixtures/battle_canonical.json"));
+    defer parsed.deinit();
+    const items = try field.items.load(allocator, field.items.json);
+    defer items.deinit();
+    var members: [6]battle.Member = undefined;
+    var state = try battle.State.init(parsed.value, items.value, &members, 17);
+    for (state.progress.party) |*member| member.hp = 0;
+    @memset(state.enemy_hp[0..state.enemyCount()], 0);
+    state.phase = .resolving;
+    state.coordinator = .{ .stage = .round_ready, .current_actor = 0, .elapsed = 7 };
+    state.action_ticks = 7;
+    state.party_knockouts[0].revival = .{ .started_at = state.camera_ticks, .origin = .{ .x = 0, .y = 0, .z = 0 }, .screen_offset = .{ 0, 0 }, .original_status = .healthy };
+
+    state.tick(.{});
+    try std.testing.expectEqual(.round_ready, state.coordinator.?.stage);
+    try std.testing.expectEqual(@as(u16, 7), state.action_ticks);
+    state.party_knockouts[0].revival = null;
+    state.unite_returns[0] = .{ .owner = 0, .target = state.partyCount(), .ticks = 0, .target_released = false, .handoff_at = state.camera_ticks +% 1 };
+    state.tick(.{});
+    try std.testing.expectEqual(.round_ready, state.coordinator.?.stage);
+    try std.testing.expectEqual(@as(u16, 7), state.action_ticks);
+
+    state.unite_returns[0] = null;
+    state.tick(.{});
+    try std.testing.expectEqual(.victory_wait, state.coordinator.?.stage);
+    try std.testing.expectEqual(@as(u16, 8), state.action_ticks);
+    const balance = state.progress.money;
+    const random = state.random;
+    for (0..30) |_| {
+        state.tick(.{});
+        try std.testing.expectEqual(battle.Phase.resolving, state.phase);
+        try std.testing.expect(!state.rewards_committed);
+    }
+    try std.testing.expectEqual(balance, state.progress.money);
+    try std.testing.expectEqualDeep(random, state.random);
+    state.tick(.{});
+    try std.testing.expectEqual(battle.Phase.victory, state.phase);
+    try std.testing.expectEqual(balance + state.enemy(0).money, state.progress.money);
+    try std.testing.expect(state.rewards_committed and state.coordinator == null);
 }
 
 test "Unite recipient recoil preserves Q12 residue fixed-white poses and home restoration" {

@@ -563,6 +563,9 @@ pub const UniteGraphic = struct {
 };
 
 pub const Phase = enum { intro, battle_menu, command, target, rune_target, item, item_target, spell, spell_target, unite_target, escaped, run_refused, bribe_refused, confirm_round, resolving, victory, loot, loot_replace, confirm_loot_replace, confirm_leave_loot, defeat, complete, confirm_quit };
+pub const BattleOutcome = enum { ongoing, victory, defeat };
+/// Result of advancing settlement at a turn checkpoint. Completion hands off to the result UI.
+pub const BattleCompletion = enum { resolving, waiting_for_revival, waiting_for_animation, rewards_pending, complete };
 pub const TemporaryStats = struct { skill_bonus: i16 = 0, defense_bonus: i16 = 0 };
 pub const SpellSelection = struct { index: usize, target: usize };
 pub const Action = union(enum) { attack: usize, rune_attack: usize, defend, item: struct { slot: usize, target: usize, id: field.items.Id = .medicine }, spell: SpellSelection, unite: usize, assist: usize };
