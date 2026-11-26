@@ -7,6 +7,7 @@
 const std = @import("std");
 const validation = @import("validation");
 const event_runtime = @import("event_runtime");
+const route_coordinates = @import("route_coordinates");
 
 pub const schema = "suikoden-campaign-route-edges/1";
 pub const max_json_bytes = 1024 * 1024;
@@ -22,14 +23,10 @@ pub const Source = struct {
     size: u32,
     sha256: []const u8,
 };
-pub const CoordinateContracts = struct {
-    half_cell: []const u8,
-    field_pixel: []const u8,
-    world_cell: []const u8,
-};
-pub const CoordinateDomain = enum { half_cell, field_pixel, world_cell };
-pub const Coordinate = struct { domain: CoordinateDomain, x: i32, y: i32 };
-pub const Rectangle = struct { domain: CoordinateDomain, x: i32, y: i32, w: i32, h: i32 };
+pub const CoordinateContracts = route_coordinates.Contracts;
+pub const CoordinateDomain = route_coordinates.Domain;
+pub const Coordinate = route_coordinates.Coordinate;
+pub const Rectangle = route_coordinates.Rectangle;
 pub const Direction = enum { up, down, left, right };
 pub const PixelSize = struct { x: u16, y: u16 };
 pub const Location = struct {
