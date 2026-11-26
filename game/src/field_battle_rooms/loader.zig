@@ -638,14 +638,16 @@ fn validateProgram(content: runtime.Content, program: runtime.Program, dialogue:
                         for (package.world_entries) |entry| {
                             if (!std.mem.eql(u8, entry.area, (motion_room orelse return error.UnsupportedBattleFieldCommand).source_area orelse "")) continue;
                             const room = package.roomIndex(entry.world_room) orelse return error.UnknownEventRoom;
-                            if (!package.rooms[room].contains(@as(i32, cell.x) * 8, @as(i32, cell.y) * 8)) return error.InvalidFieldEventTransition;
+                            const spawn = (field.HalfCell{ .x = cell.x, .y = cell.y }).toPixels();
+                            if (!package.rooms[room].contains(spawn.x, spawn.y)) return error.InvalidFieldEventTransition;
                             matched = true;
                         }
                         if (!matched) return error.MissingWorldEntry;
                     },
                     .destination => |target| {
                         const room = package.roomIndex(target.room) orelse return error.UnknownEventRoom;
-                        if (!package.rooms[room].contains(@as(i32, target.cell.x) * 8, @as(i32, target.cell.y) * 8)) return error.InvalidFieldEventTransition;
+                        const spawn = (field.HalfCell{ .x = target.cell.x, .y = target.cell.y }).toPixels();
+                        if (!package.rooms[room].contains(spawn.x, spawn.y)) return error.InvalidFieldEventTransition;
                     },
                 }
             },

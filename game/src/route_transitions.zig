@@ -2,6 +2,7 @@ const std = @import("std");
 const validation = @import("validation");
 const event_runtime = @import("event_runtime");
 const route_coordinates = @import("route_coordinates");
+const coordinates = @import("field_coordinates");
 
 pub const schema = "suikoden-route-transitions/1";
 pub const max_json_bytes = 1024 * 1024;
@@ -293,7 +294,11 @@ pub fn validate(packet: Packet) !void {
         if (destination.spawn.domain != expected_domain or destination.source_spawn.domain != source_domain) return error.InvalidRouteCoordinateDomain;
         try validCoordinate(destination.spawn);
         try validCoordinate(destination.source_spawn);
-        if (source_domain == .half_cell and (destination.spawn.x != destination.source_spawn.x * 8 or destination.spawn.y != destination.source_spawn.y * 8)) return error.RouteCoordinateMismatch;
+        if (source_domain == .half_cell) {
+            const source: coordinates.HalfCell = .{ .x = destination.source_spawn.x, .y = destination.source_spawn.y };
+            const pixels = source.toPixels();
+            if (destination.spawn.x != pixels.x or destination.spawn.y != pixels.y) return error.RouteCoordinateMismatch;
+        }
         if (source_domain == .world_cell and (destination.spawn.x != destination.source_spawn.x or destination.spawn.y != destination.source_spawn.y)) return error.RouteCoordinateMismatch;
         for (route.conditions) |condition| try validateCondition(packet, condition);
         for (route.effects) |effect| try validateEffect(packet, effect);

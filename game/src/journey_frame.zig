@@ -12,9 +12,9 @@ const journey = @import("journey");
 const atlas_checks = @import("journey_frame/atlas_checks.zig");
 const resources_mod = @import("journey_frame/resources.zig");
 const audio_sync = @import("journey_frame/audio_sync.zig");
+const clocks = @import("journey_clock");
 const input_mod = @import("journey_frame/input.zig");
 const render_mod = @import("journey_frame/render.zig");
-const tick_seconds = 1.0 / 60.0;
 
 pub const checkCrossingAtlas = atlas_checks.checkCrossingAtlas;
 pub const checkFieldAtlas = atlas_checks.checkFieldAtlas;
@@ -60,8 +60,8 @@ const App = struct {
     resources: resources_mod.Resources,
     input: input_mod.InputState = .{},
     title: pause.title.State,
-    simulation_seconds: f64 = 0,
-    title_seconds: f64 = 0,
+    simulation_clock: clocks.SimulationClock = .{},
+    title_clock: clocks.FixedStepClock(pause.title.ticks_per_second) = .{},
     presentation: render_mod.Presentation = .{},
 
     fn init(init_ctx: std.process.Init, boot_state: *boot.Boot, initial_state: journey.State) !App {
@@ -90,8 +90,8 @@ const App = struct {
         self.state = next;
         self.state.bind();
         self.state.menu.preferences = preferences;
-        self.simulation_seconds = 0;
-        self.title_seconds = 0;
+        self.simulation_clock = .{};
+        self.title_clock = .{};
         self.input.resetForGameplay(clear_edges);
     }
 
@@ -122,8 +122,8 @@ const App = struct {
                 self.state.menu.save_slot = self.title.slot;
                 if (persistence.apply(self.init_ctx, save, &self.state, .load)) |_| {
                     self.title.phase = .playing;
-                    self.simulation_seconds = 0;
-                    self.title_seconds = 0;
+                    self.simulation_clock = .{};
+                    self.title_clock = .{};
                     self.input.resetForGameplay(false);
                 } else |_| self.title.message = "Load failed. Choose another slot or return.";
             } else {
@@ -135,8 +135,8 @@ const App = struct {
             self.resources.movie_player.stop();
             self.resources.title_media.syncAudio(false, 0);
         } else {
-            self.title_seconds += @min(frame_seconds, 0.1);
-            while (self.title_seconds >= tick_seconds) : (self.title_seconds -= tick_seconds) {
+            self.title_clock.addFrame(frame_seconds);
+            while (self.title_clock.takeTick()) {
                 _ = self.title.advanceFrame(.{});
             }
             const vol = self.state.menu.preferences.musicVolume();
@@ -196,8 +196,8 @@ const App = struct {
             inspectTitleSaves(self.init_ctx, self.boot_state.save_path, &self.state, &self.title);
             try self.resources.audio_player.update(package.rooms[self.state.field_state.room].id, self.state.audioScene(), null);
             _ = self.input.recovery.begin(.title);
-            self.simulation_seconds = 0;
-            self.title_seconds = 0;
+            self.simulation_clock = .{};
+            self.title_clock = .{};
             self.input.clearStepEdges(null);
             return false;
         }
@@ -218,15 +218,16 @@ const App = struct {
                 if (!try self.stepTitle(frame_input, frame_seconds)) return .{ .running = false, .gameplay_ticks = gameplay_ticks };
             } else {
                 self.input.accumulateGameplay(frame_input.safe);
-                self.simulation_seconds += @min(frame_seconds, 0.1);
-                while (self.simulation_seconds >= tick_seconds) : (self.simulation_seconds -= tick_seconds) {
+                self.simulation_clock.addFrame(frame_seconds);
+                // A session reset inside the update precedes the clock debit.
+                while (self.simulation_clock.tickReady()) : (self.simulation_clock.finishTick()) {
                     gameplay_ticks += 1;
                     if (!try self.stepSimulationTick(frame_input.safe.direction)) break;
                 }
             }
         } else {
-            self.simulation_seconds = 0;
-            self.title_seconds = 0;
+            self.simulation_clock = .{};
+            self.title_clock = .{};
             self.input.clearUnfocused();
         }
         return .{ .running = true, .gameplay_ticks = gameplay_ticks };

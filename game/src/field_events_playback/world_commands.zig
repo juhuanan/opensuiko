@@ -122,11 +122,12 @@ fn applyWorldTransition(self: *Session, binding: Binding, transition: runtime.Wo
     const target: struct { room: []const u8, spawn: field.Point } = switch (transition) {
         .destination => |destination| .{
             .room = destination.room,
-            .spawn = .{ .x = @as(i32, destination.cell.x) * 8, .y = @as(i32, destination.cell.y) * 8 },
+            .spawn = (field.HalfCell{ .x = destination.cell.x, .y = destination.cell.y }).toPixels(),
         },
         .retained_region => |cell| blk: {
             const context = state.world_context orelse return error.MissingWorldRegion;
-            break :blk .{ .room = package.rooms[context.room].id, .spawn = .{ .x = @as(i32, cell.x) * 8, .y = @as(i32, cell.y) * 8 } };
+            const spawn = (field.HalfCell{ .x = cell.x, .y = cell.y }).toPixels();
+            break :blk .{ .room = package.rooms[context.room].id, .spawn = spawn };
         },
         .return_to_entry => blk: {
             state.reconcileWorldEntry(package, null);

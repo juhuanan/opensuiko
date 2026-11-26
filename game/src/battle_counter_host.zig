@@ -6,9 +6,6 @@ const layout = @import("battle_layout.zig");
 const passive = @import("battle_systems").techniques.passive;
 const State = battle.State;
 
-fn q12(position: battle.Position) [3]i32 {
-    return .{ @intFromFloat(@round(position.x * 4096)), @intFromFloat(@round(position.y * 4096)), @intFromFloat(@round(position.z * 4096)) };
-}
 pub fn counterAvailable(self: *State, attacker: usize, defender: usize) !bool {
     if (attacker <= self.partyCount() or defender >= self.partyCount()) return false;
     const packet = (self.unite_actors orelse return false).counterPacket() orelse return false;
@@ -199,7 +196,7 @@ pub fn prepareCounter(self: *State, leader: usize, runtime: *host.Runtime) !void
     const ids = [3]?u8{ playback.attacker, playback.defender, playback.guard };
     var positions: [3][3]i32 = undefined;
     for (ids, 0..) |maybe, index| if (maybe) |actor| {
-        positions[index] = q12(layout.worldPosition(self, actor));
+        positions[index] = layout.worldPosition(self, actor).toQ12Rounded();
     };
     for (ids, 0..) |maybe, ordinal| {
         const actor = maybe orelse continue;
@@ -312,7 +309,7 @@ pub fn advanceStrongArmActor(self: *State, actor: usize, runtime: *host.Runtime)
                     try packet.validateProgram(program, resource);
                     if (self.content.presentation_ready) try art.checkProgramArt(self.*, packet.library(), resource, program, 0, 0, false);
                 }
-                const position = q12(layout.worldPosition(self, other));
+                const position = layout.worldPosition(self, other).toQ12Rounded();
                 const resource_index = for (self.unite_actors.?.animations.resources, 0..) |value, index| {
                     if (std.mem.eql(u8, value.id, id)) break index;
                 } else return error.MissingActorResource;
@@ -360,11 +357,8 @@ pub fn retainPosition(self: *State, actor: usize) void {
     const current = self.unite_vm.actors[actor];
     const home = self.uniteVmHome(actor);
     const transform = &self.actor_transforms[actor];
-    transform.world_offset = .{
-        .x = @as(f32, @floatFromInt(current.position_q12[0])) / 4096 - home.x,
-        .y = @as(f32, @floatFromInt(current.position_q12[1])) / 4096 - home.y,
-        .z = @as(f32, @floatFromInt(current.position_q12[2])) / 4096 - home.z,
-    };
+    const position = battle.Position.fromQ12(current.position_q12);
+    transform.world_offset = .{ .x = position.x - home.x, .y = position.y - home.y, .z = position.z - home.z };
     if (self.content.world_art == null) transform.screen_offset = current.screen_offset;
     transform.node_angles = .{ 0, 0, 0 };
 }
@@ -388,7 +382,7 @@ pub fn repeatCounter(self: *State, leader: usize, runtime: *host.Runtime) !bool 
     if (self.replay_exhausted) return error.RandomInputExhausted;
     if (self.replay_unsupported != null) return error.UnsupportedCounterFollowup;
     if (self.active != null and !self.active.?.counter_attack) {
-        self.active.?.motion_origin = .{ .x = @as(f32, @floatFromInt(origin[0])) / 4096, .y = @as(f32, @floatFromInt(origin[1])) / 4096, .z = @as(f32, @floatFromInt(origin[2])) / 4096 };
+        self.active.?.motion_origin = battle.Position.fromQ12(origin);
         self.actor_transforms[playback.attacker].world_offset = .{ .x = 0, .y = 0, .z = 0 };
     }
     if (self.coordinator != null) self.active.?.started_at = self.action_ticks else self.action_ticks = 0;

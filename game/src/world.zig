@@ -4,8 +4,26 @@ const rules = @import("battle_rules");
 pub const json = @import("world_data").json;
 pub const json_c = @import("world_data").json_c;
 pub const Direction = enum { north, east, south, west };
-pub const Point = struct { x: i32, y: i32 };
-const deltas = [_]Point{ .{ .x = 0, .y = -1 }, .{ .x = 1, .y = 0 }, .{ .x = 0, .y = 1 }, .{ .x = -1, .y = 0 } };
+pub const pixels_per_cell = 16;
+pub const Cell = struct {
+    x: i32,
+    y: i32,
+
+    pub fn toPixels(self: Cell) PixelPoint {
+        return .{ .x = self.x * pixels_per_cell, .y = self.y * pixels_per_cell };
+    }
+};
+pub const PixelPoint = struct {
+    x: i32,
+    y: i32,
+
+    pub fn containingCell(self: PixelPoint) Cell {
+        return .{ .x = @divFloor(self.x, pixels_per_cell), .y = @divFloor(self.y, pixels_per_cell) };
+    }
+};
+// Existing callers use Point for world cells.
+pub const Point = Cell;
+const deltas = [_]Cell{ .{ .x = 0, .y = -1 }, .{ .x = 1, .y = 0 }, .{ .x = 0, .y = 1 }, .{ .x = -1, .y = 0 } };
 pub const Entrance = struct { id: []const u8, x: i32, y: i32, destination: ?[]const u8, spawn_x: i32, spawn_y: i32 };
 pub const Enemy = struct { id: []const u8, name: []const u8, level: u8 };
 pub const Encounter = struct { id: []const u8, enemies: [6]?[]const u8, enemy_level_sum: u16 };
@@ -16,7 +34,7 @@ pub const Content = struct {
     height: u16,
     walkable: []const u8,
     points: []const Entrance,
-    return_camera: Point,
+    return_camera: Cell,
     field_exit: field.Rect,
     enemies: []const Enemy,
     encounters: []const Encounter,
@@ -60,7 +78,7 @@ pub const Content = struct {
             }
         }
     }
-    pub fn passable(self: Content, camera: Point, direction: Direction) bool {
+    pub fn passable(self: Content, camera: Cell, direction: Direction) bool {
         const delta = deltas[@backingInt(direction)];
         const x = camera.x + 10 + delta.x;
         const y = camera.y + 8 + delta.y;
@@ -88,7 +106,7 @@ pub fn resolve(requested: Direction, heading: Direction, passable: [4]bool) Deci
     }
     return .{ .heading = @fromBackingInt(@as(u2, @intCast((raw + 1) % 4))), .accepted = false };
 }
-pub fn requestedAxisAllowed(camera: Point, direction: Direction) bool {
+pub fn requestedAxisAllowed(camera: Cell, direction: Direction) bool {
     return switch (direction) {
         .north => camera.y > 0,
         .east => camera.x < 140,
@@ -129,10 +147,17 @@ pub const Party = struct {
 pub const Input = struct { direction: ?Direction = null, encounter_arm_suppressed: bool = false };
 pub const Event = union(enum) { none, entrance_requested: Entrance, entrance: Entrance, unsupported_entrance: []const u8, battle_requested: Encounter, battle: Encounter };
 pub const Outcome = enum { victory, fled, released, defeated };
-pub const FootSpeed = enum(u2) { normal = 1, stallion = 2 };
+pub const FootSpeed = enum(u2) {
+    normal = 1,
+    stallion = 2,
+
+    pub fn ticksPerCell(self: FootSpeed) u8 {
+        return pixels_per_cell / @as(u8, @backingInt(self));
+    }
+};
 pub const State = struct {
     schema: []const u8 = "suikoden-world-state/2",
-    camera: Point,
+    camera: Cell,
     heading: Direction,
     speed: FootSpeed = .normal,
     remaining: u8 = 0,
@@ -147,10 +172,11 @@ pub const State = struct {
     pub fn ready(self: State) bool {
         return self.remaining == 0;
     }
-    pub fn originPixels(self: State) Point {
+    pub fn originPixels(self: State) PixelPoint {
         const delta = deltas[@backingInt(self.heading)];
-        const pixels: i32 = @as(i32, self.remaining) * @as(i32, @backingInt(self.speed));
-        return .{ .x = self.camera.x * 16 - delta.x * pixels, .y = self.camera.y * 16 - delta.y * pixels };
+        const destination_px = self.camera.toPixels();
+        const remaining_px = @as(i32, self.remaining) * @as(i32, @backingInt(self.speed));
+        return .{ .x = destination_px.x - delta.x * remaining_px, .y = destination_px.y - delta.y * remaining_px };
     }
     pub fn checkEncounter(self: *State, content: Content, draws: *Draws, party_level_sum: u16, suppression_rune: bool) !?Encounter {
         if (content.encounters.len == 0 or !self.encounters_enabled or self.scripted or self.boat or !self.ready() or !self.encounter_pending or self.travel_counter < 5) return null;
@@ -196,7 +222,7 @@ pub const State = struct {
                 const delta = deltas[@backingInt(self.heading)];
                 self.camera.x += delta.x;
                 self.camera.y += delta.y;
-                self.remaining = 16 / @as(u8, @backingInt(self.speed));
+                self.remaining = self.speed.ticksPerCell();
             }
         };
         if (self.remaining > 0) {
@@ -242,7 +268,7 @@ pub const State = struct {
     }
     pub fn validate(self: State, content: Content) !void {
         if (!std.mem.eql(u8, self.schema, "suikoden-world-state/2")) return error.UnsupportedWorldState;
-        if (self.camera.x < 0 or self.camera.y < 0 or self.camera.x >= content.width or self.camera.y >= content.height or self.remaining >= 16 / @as(u8, @backingInt(self.speed))) return error.InvalidWorldState;
+        if (self.camera.x < 0 or self.camera.y < 0 or self.camera.x >= content.width or self.camera.y >= content.height or self.remaining >= self.speed.ticksPerCell()) return error.InvalidWorldState;
         if (self.selected) |id| if (content.encounter(id) == null) return error.UnknownWorldEncounter;
         if (self.mode == .field or self.mode == .field_pending) {
             const id = self.pending_entrance orelse return error.InvalidWorldState;

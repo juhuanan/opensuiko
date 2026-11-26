@@ -274,7 +274,7 @@ fn drawFallback(state: title.State, episode_name: []const u8, context: *const ui
     switch (state.phase) {
         .movie => {
             const spec = state.currentMovie();
-            const frame = @min(state.movie_tick / 4 + 1, spec.frames);
+            const frame = @min(spec.frameAtTick(state.movie_tick) + 1, spec.frames);
             context.text(spec.disc_path, 152, 210, 22, .gold);
             context.numberText("Frame {d} / {d} ({d} fps)", .{ frame, spec.frames, spec.fps }, 152, 250, 18, .ray_white);
             context.text("Video playback metadata (media review open)", 118, 290, 15, .light_gray);

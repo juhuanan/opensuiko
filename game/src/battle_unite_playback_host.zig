@@ -117,7 +117,7 @@ pub fn issueUniteCameraRequests(self: *State, elapsed: u16) void {
                 self.replay_unsupported = .coordinator_action;
                 return;
             };
-            self.actor_camera.?.request(request, .{ @intFromFloat(@round(anchor.x * 4096)), @intFromFloat(@round(anchor.y * 4096)), @intFromFloat(@round(anchor.z * 4096)) }) catch {
+            self.actor_camera.?.request(request, anchor.toQ12Rounded()) catch {
                 self.replay_unsupported = .coordinator_action;
                 return;
             };
@@ -366,13 +366,13 @@ pub fn beginUniteActors(self: *State, record: u8, leader: usize, target: usize) 
     const count = self.partyCount() + self.enemyCount();
     for (0..count) |actor| {
         const home = self.uniteVmHome(actor);
-        homes[actor] = .{ @intFromFloat(@round(home.x * 4096)), @intFromFloat(@round(home.y * 4096)), @intFromFloat(@round(home.z * 4096)) };
+        homes[actor] = home.toQ12Rounded();
     }
     try self.unite_vm.begin(bundle, record, @intCast(leader), @intCast(target), party_ids[0..self.partyCount()], homes[0..count], self.camera_ticks);
     for (0..self.partyCount()) |actor| if (self.unite_vm.members[actor]) |member| {
         if (member.leader != leader) continue;
         const position = layout.worldPosition(self, actor);
-        self.unite_vm.actors[actor].position_q12 = .{ @intFromFloat(@round(position.x * 4096)), @intFromFloat(@round(position.y * 4096)), @intFromFloat(@round(position.z * 4096)) };
+        self.unite_vm.actors[actor].position_q12 = position.toQ12Rounded();
         self.unite_vm.actors[actor].screen_offset = self.actor_transforms[actor].screen_offset;
         self.unite_vm.actors[actor].baseline_offset = self.partyProfile(actor).effect_offset orelse .{ 0, 0 };
         self.unite_vm.actors[actor].signals = self.unite_flags[actor];
@@ -384,9 +384,7 @@ pub fn prepareUniteImpactEffect(self: *State, leader: usize) !void {
     const boundary = self.uniteBoundaryFor(leader) orelse return error.InvalidUniteSceneBinding;
     const id = self.unite_actors.?.find(boundary.record_index).?.impact_effect orelse return error.InvalidUniteSceneBinding;
     const position = layout.worldPosition(self, effect.target);
-    effect.unite_impact_effect = .{ .clip = id, .origin_q12 = .{
-        @intFromFloat(@round(position.x * 4096)), @intFromFloat(@round(position.y * 4096)), @intFromFloat(@round(position.z * 4096)),
-    } };
+    effect.unite_impact_effect = .{ .clip = id, .origin_q12 = position.toQ12Rounded() };
 }
 fn checkChildClip(self: *const State, resource: actor_host.Resource, animation: u16, secondary: bool, record: u8) !void {
     const clip = resource.find(animation).?;
@@ -434,7 +432,7 @@ pub fn advanceUniteActors(self: *State) void {
         const position = layout.worldPosition(self, actor);
         const home = self.uniteVmHome(actor);
         const attachment: ?[2]i16 = if (self.uniteReactionPose(actor)) |pose| .{ pose.impact_offset.?[0], pose.impact_offset.?[1] } else null;
-        self.unite_vm.actors[actor] = actor_host.Actor.anchor(.{ @intFromFloat(@round(position.x * 4096)), @intFromFloat(@round(position.y * 4096)), @intFromFloat(@round(position.z * 4096)) }, .{ @intFromFloat(@round(home.x * 4096)), @intFromFloat(@round(home.y * 4096)), @intFromFloat(@round(home.z * 4096)) }, attachment);
+        self.unite_vm.actors[actor] = actor_host.Actor.anchor(position.toQ12Rounded(), home.toQ12Rounded(), attachment);
         self.unite_vm.actors[actor].signals = self.unite_flags[actor];
         const profile = if (actor < self.partyCount()) self.partyProfile(actor) else self.enemy(actor - self.partyCount());
         self.unite_vm.actors[actor].baseline_offset = profile.effect_offset orelse .{ 0, 0 };

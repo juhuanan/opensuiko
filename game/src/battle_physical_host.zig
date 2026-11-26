@@ -5,9 +5,6 @@ const host = @import("battle_actor_host.zig");
 const layout = @import("battle_layout.zig");
 const State = battle.State;
 
-fn q12(position: battle.Position) [3]i32 {
-    return .{ @intFromFloat(@round(position.x * 4096)), @intFromFloat(@round(position.y * 4096)), @intFromFloat(@round(position.z * 4096)) };
-}
 pub fn sourcePhysicalRuneOwner(self: *const State, owner: usize) bool {
     return owner < self.unite_vm.physical_actions.len and self.unite_vm.physical_actions[owner] != null;
 }
@@ -41,7 +38,7 @@ pub fn preparePhysicalRune(self: *State, owner: usize, runtime: *host.Runtime) !
     const playback = &self.unite_vm.physical_actions[owner].?;
     const ids = [2]usize{ owner, playback.recipient };
     var positions: [2][3]i32 = undefined;
-    for (ids, 0..) |actor, ordinal| positions[ordinal] = q12(layout.worldPosition(self, actor));
+    for (ids, 0..) |actor, ordinal| positions[ordinal] = layout.worldPosition(self, actor).toQ12Rounded();
     for (ids, positions) |actor, position| {
         const id = if (actor < self.partyCount()) self.progress.party[actor].id else self.enemy(actor - self.partyCount()).id;
         const index = for (bundle.animations.resources, 0..) |resource, index| {
@@ -101,7 +98,8 @@ pub fn finishPhysicalRuneActors(self: *State) void {
                 if (self.camera_ticks - playback.knockout_at.? < ko.duration) continue;
             }
             const home = self.uniteVmHome(actor);
-            self.actor_transforms[actor].world_offset = .{ .x = @as(f32, @floatFromInt(current.position_q12[0])) / 4096 - home.x, .y = @as(f32, @floatFromInt(current.position_q12[1])) / 4096 - home.y, .z = @as(f32, @floatFromInt(current.position_q12[2])) / 4096 - home.z };
+            const position = battle.Position.fromQ12(current.position_q12);
+            self.actor_transforms[actor].world_offset = .{ .x = position.x - home.x, .y = position.y - home.y, .z = position.z - home.z };
             if (self.content.world_art == null) self.actor_transforms[actor].screen_offset = current.screen_offset;
             self.unite_vm.scripted_actors[actor] = null;
             self.actor_transforms[actor].node_angles = .{ 0, 0, 0 };

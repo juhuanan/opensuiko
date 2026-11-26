@@ -7,6 +7,7 @@
 
 const std = @import("std");
 const model = @import("model.zig");
+const q12 = @import("fixed_q12");
 
 pub const Vec2f = struct { x: f32, y: f32 };
 pub const ScreenPoint = struct { x: f32, y: f32, depth: f32 };
@@ -57,11 +58,15 @@ pub fn rawFromBlock(block: model.Block) [12]i32 {
 
 pub fn blockFromRaw(raw: [12]i32) model.Block {
     return .{
-        .position = .{ .x = raw[0] >> 12, .y = raw[1] >> 12, .z = raw[2] >> 12 },
-        .angles = .{ .x = raw[3] >> 12, .y = raw[4] >> 12, .z = raw[5] >> 12 },
-        .translation = .{ .x = raw[6] >> 12, .y = raw[7] >> 12, .z = raw[8] >> 12 },
-        .scale = .{ .x = raw[9] >> 12, .y = raw[10] >> 12, .z = raw[11] >> 12 },
+        .position = floorQ12Vector(raw[0..3].*),
+        .angles = floorQ12Vector(raw[3..6].*),
+        .translation = floorQ12Vector(raw[6..9].*),
+        .scale = floorQ12Vector(raw[9..12].*),
     };
+}
+
+fn floorQ12Vector(raw: [3]i32) model.Vec3 {
+    return .{ .x = q12.floorToInt(raw[0]), .y = q12.floorToInt(raw[1]), .z = q12.floorToInt(raw[2]) };
 }
 
 pub fn blockFromDef(def: model.BlockDef) model.Block {
@@ -127,18 +132,18 @@ fn projectCentered(block: model.Block, world_units: model.Vec3, focal_length_px:
     const matrix = scaleMatrix(rotationMatrix(block.angles), block.scale);
     const translation = [3]i32{ block.translation.x, block.translation.y, block.translation.z };
     const world = [3]i32{ world_units.x, world_units.y, world_units.z };
-    var view: [3]i64 = undefined;
+    var camera_space: [3]i64 = undefined;
     for (0..3) |i| {
-        var acc: i64 = @as(i64, translation[i]) << 12;
+        var acc: i64 = @as(i64, translation[i]) << q12.fraction_bits;
         for (0..3) |j| acc += @as(i64, matrix[i * 3 + j]) * world[j];
-        view[i] = acc >> 12;
+        camera_space[i] = q12.floorToInt(acc);
     }
-    if (view[2] < 2) return error.NonPositiveDepth;
-    const depth: f32 = @floatFromInt(view[2]);
+    if (camera_space[2] < 2) return error.NonPositiveDepth;
+    const depth: f32 = @floatFromInt(camera_space[2]);
     return .{
         .point = .{
-            .x = @as(f32, @floatFromInt(focal_length_px)) * @as(f32, @floatFromInt(view[0])) / depth,
-            .y = @as(f32, @floatFromInt(focal_length_px)) * @as(f32, @floatFromInt(view[1])) / depth,
+            .x = @as(f32, @floatFromInt(focal_length_px)) * @as(f32, @floatFromInt(camera_space[0])) / depth,
+            .y = @as(f32, @floatFromInt(focal_length_px)) * @as(f32, @floatFromInt(camera_space[1])) / depth,
         },
         .depth = depth,
     };
@@ -157,11 +162,7 @@ pub fn project(
     scroll: Vec2f,
     world_q12: model.Vec3,
 ) !ScreenPoint {
-    const world = model.Vec3{
-        .x = world_q12.x >> 12,
-        .y = world_q12.y >> 12,
-        .z = world_q12.z >> 12,
-    };
+    const world = floorQ12Vector(.{ world_q12.x, world_q12.y, world_q12.z });
     const centred = try projectCentered(block, world, projection.focal_length_px);
     return .{
         .x = @as(f32, @floatFromInt(projection.center_x_px)) + centred.point.x + scroll.x,

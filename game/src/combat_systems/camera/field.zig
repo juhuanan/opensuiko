@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const model = @import("model.zig");
+const q12 = @import("fixed_q12");
 
 pub const Vec2 = struct { x: i32, y: i32 };
 pub const ScreenPoint = @import("battle.zig").ScreenPoint;
@@ -72,8 +73,8 @@ pub fn stepFocus(field: *Field, delta: Vec2) void {
 }
 
 pub fn project(field: Field, world_q12: model.Vec3) ScreenPoint {
-    const world_x: f32 = @floatFromInt(world_q12.x >> 12);
-    const world_y: f32 = @floatFromInt(world_q12.y >> 12);
+    const world_x: f32 = @floatFromInt(q12.floorToInt(world_q12.x));
+    const world_y: f32 = @floatFromInt(q12.floorToInt(world_q12.y));
     return .{
         .x = world_x - @as(f32, @floatFromInt(field.scroll_px.x)),
         .y = world_y - @as(f32, @floatFromInt(field.scroll_px.y)),

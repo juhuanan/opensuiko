@@ -83,7 +83,7 @@ pub const MoviePlayer = struct {
             rl.updateMusicStream(m);
         }
         if (self.entries.len == 0 or self.file == null) return;
-        var frame_index: usize = @intCast(movie_tick / 4);
+        var frame_index: usize = title_mod.movieSpec(stage).frameAtTick(movie_tick);
         if (self.music) |m| {
             if (rl.isMusicStreamPlaying(m)) {
                 const played = rl.getMusicTimePlayed(m);

@@ -1,4 +1,5 @@
 const std = @import("std");
+const coordinates = @import("field_coordinates");
 const validation = @import("validation");
 const movement = @import("field_movement.zig");
 const services = @import("field_services.zig");
@@ -33,7 +34,9 @@ pub fn editAuxiliaryParty(list: *[6]u8, add: bool, character: u8) void {
         }
     }
 }
-pub const Point = struct { x: i32, y: i32 };
+pub const Point = coordinates.FieldPixel;
+pub const HalfCell = coordinates.HalfCell;
+pub const halfCellsToPixels = coordinates.halfCellsToPixels;
 pub const Rect = struct { x: i32, y: i32, w: i32, h: i32 };
 pub const ShadowDraw = struct { rect: Rect, points: [4]wheel.MapPoint };
 pub const Frame = struct { rect: Rect, anchor_x: i32, anchor_y: i32, ticks: u16 };
@@ -298,19 +301,24 @@ pub const Room = struct {
     }
 
     pub fn contains(self: Room, x: i32, y: i32) bool {
-        return x >= 0 and y >= 0 and x < self.width and y < self.height and @mod(x, 8) == 0 and @mod(y, 8) == 0;
+        return x >= 0 and y >= 0 and x < self.width and y < self.height and
+            @mod(x, coordinates.half_cell_pixels) == 0 and @mod(y, coordinates.half_cell_pixels) == 0;
+    }
+
+    fn cellIndex(self: Room, x: i32, y: i32) usize {
+        const columns = coordinates.pixelsToHalfCells(self.width);
+        return @intCast(coordinates.pixelsToHalfCells(y) * columns + coordinates.pixelsToHalfCells(x));
     }
 
     pub fn canStand(self: Room, x: i32, y: i32) bool {
         if (!self.contains(x, y)) return false;
-        const index: usize = @intCast(@divTrunc(y, 8) * @divTrunc(self.width, 8) + @divTrunc(x, 8));
-        return self.walkable[index] == '1';
+        return self.walkable[self.cellIndex(x, y)] == '1';
     }
 
     pub fn canMoveInMode(self: Room, x: i32, y: i32, world_mode: u8) bool {
         if (!self.contains(x, y)) return false;
         if (world_mode == 2) return true;
-        const index: usize = @intCast(@divTrunc(y, 8) * @divTrunc(self.width, 8) + @divTrunc(x, 8));
+        const index = self.cellIndex(x, y);
         if (world_mode == 1) {
             return if (self.boat_walkable) |boat| boat[index] == '1' else false;
         }
@@ -320,7 +328,7 @@ pub const Room = struct {
     pub fn boatPassage(self: Room, x: i32, y: i32, story: *const game_state.event_runtime.StoryState) enum { blocked, open, rapids } {
         if (!self.contains(x, y)) return .blocked;
         const water = self.boat_walkable orelse return .blocked;
-        const index: usize = @intCast(@divTrunc(y, 8) * @divTrunc(self.width, 8) + @divTrunc(x, 8));
+        const index = self.cellIndex(x, y);
         if (water[index] == '1') return .open;
         const rapids = self.boat_rapids orelse return .blocked;
         if (water[index] != '2') return .blocked;
@@ -435,7 +443,7 @@ pub const Package = struct {
     pub fn validate(self: Package) !void {
         const legacy = std.mem.eql(u8, self.schema, "suikoden-room/2");
         if (!legacy and !std.mem.eql(u8, self.schema, "suikoden-room/4") and !std.mem.eql(u8, self.schema, "suikoden-room/5") and !std.mem.eql(u8, self.schema, "suikoden-room/6") and !std.mem.eql(u8, self.schema, "suikoden-room/7") and !self.supportsStoryExits()) return error.UnsupportedSchema;
-        if (!std.mem.eql(u8, self.atlas, "atlas.png") or self.cell_size != 8 or self.step_ticks == 0 or self.step_ticks > 60) return error.InvalidPackage;
+        if (!std.mem.eql(u8, self.atlas, "atlas.png") or self.cell_size != coordinates.half_cell_pixels or self.step_ticks == 0 or self.step_ticks > 60) return error.InvalidPackage;
         if (self.rooms.len == 0 or self.rooms.len > max_rooms or self.player_clips.len != 4) return error.InvalidPackage;
         const with_world_entries = self.supportsWorldEntries();
         if ((!with_world_entries and (self.world_entries.len != 0 or self.initial_world_entry != null)) or self.world_entries.len > max_rooms) return error.InvalidWorldEntry;
@@ -443,7 +451,7 @@ pub const Package = struct {
             try validText(entry.id, 96);
             try validText(entry.area, 64);
             const world = self.roomIndex(entry.world_room) orelse return error.InvalidWorldEntry;
-            if (!self.rooms[world].contains(entry.return_x, entry.return_y) or @mod(entry.return_x, 8) != 0 or @mod(entry.return_y, 8) != 0) return error.InvalidWorldEntry;
+            if (!self.rooms[world].contains(entry.return_x, entry.return_y)) return error.InvalidWorldEntry;
             for (self.world_entries[0..index]) |other| if (std.mem.eql(u8, entry.id, other.id) or
                 (entry.point == other.point and std.mem.eql(u8, entry.world_room, other.world_room))) return error.InvalidWorldEntry;
         }
@@ -466,13 +474,14 @@ pub const Package = struct {
             if (room.scenery_atlas) |path| {
                 if (!self.supportsSceneryAtlases() or !validSceneryPath(path)) return error.InvalidSceneryAtlas;
             }
-            if (room.width < 16 or room.height < 16 or room.width > 2048 or room.height > 2048 or @mod(room.width, 8) != 0 or @mod(room.height, 8) != 0) return error.InvalidRoom;
+            if (room.width < 16 or room.height < 16 or room.width > 2048 or room.height > 2048 or
+                @mod(room.width, coordinates.half_cell_pixels) != 0 or @mod(room.height, coordinates.half_cell_pixels) != 0) return error.InvalidRoom;
             if (room.scenery_model) |model| {
                 if (!self.supportsSceneryModels()) return error.InvalidFieldScenery;
                 try model.validate();
-                if (@as(i32, model.columns) * 8 != room.width or @as(i32, model.rows) * 8 != room.height) return error.InvalidFieldScenery;
+                if (halfCellsToPixels(model.columns) != room.width or halfCellsToPixels(model.rows) != room.height) return error.InvalidFieldScenery;
             }
-            const count: usize = @intCast(@divTrunc(room.width, 8) * @divTrunc(room.height, 8));
+            const count: usize = @intCast(coordinates.pixelsToHalfCells(room.width) * coordinates.pixelsToHalfCells(room.height));
             if (room.walkable.len != count or room.draws.len > 4096 or room.npcs.len > 128 or room.exits.len > 128) return error.InvalidRoom;
             for (room.walkable) |cell| if (cell != '0' and cell != '1') return error.InvalidRoom;
             if (room.boat_walkable) |boat| {
@@ -534,15 +543,16 @@ pub const Package = struct {
                 try validText(event.id, 64);
                 try validText(event.name, 64);
                 try validRect(.{ .x = event.x, .y = event.y, .w = event.w, .h = event.h }, room.width, room.height);
-                if (@mod(event.x, 8) != 0 or @mod(event.y, 8) != 0 or @mod(event.w, 8) != 0 or @mod(event.h, 8) != 0) return error.InvalidEvent;
+                const cell_size = coordinates.half_cell_pixels;
+                if (@mod(event.x, cell_size) != 0 or @mod(event.y, cell_size) != 0 or @mod(event.w, cell_size) != 0 or @mod(event.h, cell_size) != 0) return error.InvalidEvent;
                 if (event.pages.len == 0 or event.pages.len > 64) return error.InvalidEvent;
                 for (event.pages) |page| try validText(page, 4096);
                 for (room.events[0..j]) |other| if (std.mem.eql(u8, event.id, other.id) or event.flag == other.flag) return error.DuplicateEvent;
                 var reachable_origin = false;
                 var y = event.y;
-                while (y < event.y + event.h) : (y += 8) {
+                while (y < event.y + event.h) : (y += cell_size) {
                     var x = event.x;
-                    while (x < event.x + event.w) : (x += 8) {
+                    while (x < event.x + event.w) : (x += cell_size) {
                         reachable_origin = reachable_origin or room.canStand(x, y);
                     }
                 }
@@ -781,12 +791,13 @@ pub const State = struct {
             return .{};
         };
         self.facing = direction;
-        const delta: Point = switch (direction) {
-            .down => .{ .x = 0, .y = 8 },
-            .up => .{ .x = 0, .y = -8 },
-            .left => .{ .x = -8, .y = 0 },
-            .right => .{ .x = 8, .y = 0 },
+        const step: HalfCell = switch (direction) {
+            .down => .{ .x = 0, .y = 1 },
+            .up => .{ .x = 0, .y = -1 },
+            .left => .{ .x = -1, .y = 0 },
+            .right => .{ .x = 1, .y = 0 },
         };
+        const delta = step.toPixels();
         const next = Point{ .x = self.x + delta.x, .y = self.y + delta.y };
         const world_mode: u8 = if (self.progress.story.scenario) |s| s.world_mode else 0;
         const scenery_state = if (self.room_scenery) |*visit| visit else null;

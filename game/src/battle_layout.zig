@@ -51,11 +51,11 @@ pub fn departurePosition(state: *const battle.State, index: usize) ?battle.Posit
     if (index >= state.partyCount() or !state.departed[index]) return null;
     const flight = state.departures[index] orelse return null;
     const age = @min(state.camera_ticks -% flight.started_at, departure.offsets.len - 1);
-    const offset = departure.offsets[age];
+    const offset = battle.Position.fromQ12(departure.offsets[age]);
     return .{
-        .x = flight.origin.x + @as(f32, @floatFromInt(offset[0])) / 4096,
-        .y = flight.origin.y + @as(f32, @floatFromInt(offset[1])) / 4096,
-        .z = flight.origin.z + @as(f32, @floatFromInt(offset[2])) / 4096,
+        .x = flight.origin.x + offset.x,
+        .y = flight.origin.y + offset.y,
+        .z = flight.origin.z + offset.z,
     };
 }
 pub fn ambientWorldPosition(state: *const battle.State, index: usize) battle.Position {
@@ -576,7 +576,7 @@ pub fn uniteAuxiliaryPiece(state: battle.State, index: usize, piece: usize) ?Aux
     return quad;
 }
 pub fn auxiliaryPoint(state: battle.State, actor: battle.actor_host.Actor) presentation.ScreenPoint {
-    var point = worldPoint(state, .{ .x = @floatFromInt(actor.position_q12[0] >> 12), .y = @floatFromInt(actor.position_q12[1] >> 12), .z = @floatFromInt(actor.position_q12[2] >> 12) });
+    var point = worldPoint(state, battle.Position.fromQ12Floor(actor.position_q12));
     const scale = camera.scaleBlock(currentCamera(state)) * 2;
     point.x += @as(f32, @floatFromInt(actor.screen_offset[0])) * scale;
     point.y += @as(f32, @floatFromInt(actor.screen_offset[1])) * scale;
@@ -612,7 +612,7 @@ fn mirageCopy(state: battle.State, index: usize) ?AuxiliaryQuad {
     const spread_slot = @as(i32, @intCast(copy_index)) - @as(i32, visual.copies / 2);
     center[1] +%= spread_slot * visual.spread_step_q12 * worker.timer;
     const tint: u8 = @intCast(@as(u32, visual.modulation) * (worker.phase_updates - worker.timer) / worker.phase_updates);
-    const point = worldPoint(state, .{ .x = @floatFromInt(center[0] >> 12), .y = @floatFromInt(center[1] >> 12), .z = @floatFromInt(center[2] >> 12) });
+    const point = worldPoint(state, battle.Position.fromQ12Floor(center));
     var sprite = (state.content.uniteGraphicPose(binding.id, visual.pose, null) orelse return null).sprite;
     const x, const y, const width, const height = visual.crop;
     sprite.rect.x += x;

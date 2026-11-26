@@ -301,10 +301,9 @@ pub fn uniteReactionPose(self: State, index: usize) ?spell_scene.HurtPose {
 pub fn uniteActorPosition(self: *const State, index: usize) ?Position {
     if (self.unite_reactions[index]) |instance| if (instance.knockout_ticks != 0) {
         if (!self.uniteRecipientLocked(index)) return null;
-        const position = instance.origin_q12;
-        return .{ .x = @floatFromInt(position[0] >> 12), .y = @floatFromInt(position[1] >> 12), .z = @floatFromInt(position[2] >> 12) };
+        return Position.fromQ12Floor(instance.origin_q12);
     };
-    const fallback: ?Position = if (self.unite_vm.position(index)) |position_q12| .{ .x = @floatFromInt(position_q12[0] >> 12), .y = @floatFromInt(position_q12[1] >> 12), .z = @floatFromInt(position_q12[2] >> 12) } else null;
+    const fallback: ?Position = if (self.unite_vm.position(index)) |position_q12| Position.fromQ12Floor(position_q12) else null;
     if (fallback != null and self.unite_vm.ownsActor(index)) return fallback;
     const reaction = self.uniteReactionProgram(index) orelse return fallback;
     const instance = self.unite_reactions[index].?;
@@ -313,7 +312,7 @@ pub fn uniteActorPosition(self: *const State, index: usize) ?Position {
     const absolute_tail = reaction.motions.len != 0 and reaction.motions[reaction.motions.len - 1].absolute;
     if (self.hp(index) == 0 or (age >= reaction.duration and !absolute_tail and !reaction.retain_lock)) return fallback;
     const position = spell_scene.unitePosition(reaction, instance.origin_q12, instance.home_q12, age);
-    return .{ .x = @floatFromInt(position[0] >> 12), .y = @floatFromInt(position[1] >> 12), .z = @floatFromInt(position[2] >> 12) };
+    return Position.fromQ12Floor(position);
 }
 pub fn hasUniteReactionEffects(self: State) bool {
     for (0..self.partyCount() + self.enemyCount()) |index| {
@@ -399,7 +398,7 @@ pub fn spellActorPosition(self: *const State, index: usize) ?Position {
     if (age >= motion.start + motion.updates and age < motion.returning or age >= motion.returning + motion.updates) return null;
     for (instance.targets[0..instance.target_count]) |target| if (target.actor == index) {
         const sample = (spell_scene.actorTransform(program, target, self.effectTicks()) catch return null) orelse return null;
-        return .{ .x = @floatFromInt(sample.position[0] >> 12), .y = @floatFromInt(sample.position[1] >> 12), .z = @floatFromInt(sample.position[2] >> 12) };
+        return Position.fromQ12Floor(sample.position);
     };
     return null;
 }
@@ -657,7 +656,7 @@ fn impactEntry(packet: *const spell_scene.Packet, animation: u8, elapsed: u32) ?
 }
 fn appendImpact(self: *const State, result: *spell_scene.Frame, id: u16, position: [3]i32, center: [2]i8) void {
     const packet = self.spell_scenes.?;
-    const point = layout.worldPoint(self.*, .{ .x = @floatFromInt(position[0] >> 12), .y = @floatFromInt(position[1] >> 12), .z = @floatFromInt(position[2] >> 12) });
+    const point = layout.worldPoint(self.*, Position.fromQ12Floor(position));
     const scale = @import("battle_camera").scaleBlock(layout.currentCamera(self.*));
     const entry = packet.entries[id];
     const x = point.x / 2 + @as(f32, @floatFromInt(@as(i32, center[0]) + entry.dx)) * scale;
@@ -720,11 +719,11 @@ pub fn advanceSpellScene(self: *State, action_update: u16) void {
             if (!target.movable or target.actor == null) continue;
             if (instance.elapsed < motion.start and update >= motion.start) {
                 const position = layout.ambientWorldPosition(self, target.actor.?);
-                target.motion_origin = .{ @intFromFloat(@floor(position.x * 4096)), @intFromFloat(@floor(position.y * 4096)), @intFromFloat(@floor(position.z * 4096)) };
+                target.motion_origin = position.toQ12Floor();
             }
             if (instance.elapsed < motion.returning and update >= motion.returning) {
                 const position = layout.ambientWorldPosition(self, target.actor.?);
-                target.return_origin = .{ @intFromFloat(@floor(position.x * 4096)), @intFromFloat(@floor(position.y * 4096)), @intFromFloat(@floor(position.z * 4096)) };
+                target.return_origin = position.toQ12Floor();
             }
         }
     }

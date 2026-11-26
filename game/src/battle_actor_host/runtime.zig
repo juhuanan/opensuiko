@@ -117,7 +117,7 @@ pub const Runtime = struct {
         const owner_id = if (child.owner == .self) parent_id else parent.owner orelse return error.MissingActorOwner;
         _ = try self.actor(owner_id);
         var position: [3]i32 = undefined;
-        for (0..3) |axis| position[axis] = parent.position_q12[axis] +% (@as(i32, child.offset[axis]) * 4096);
+        for (0..3) |axis| position[axis] = parent.position_q12[axis] +% camera.FixedQ12.fromInt(child.offset[axis]).raw;
         const home = if (child.home == .spawn) position else (try self.owner(parent_id)).position_q12;
         var index = self.auxiliary.len;
         while (index != 0) {
@@ -221,7 +221,7 @@ pub const Runtime = struct {
                 const denominator = @divTrunc(duration * (duration - 1), 2);
                 for (0..3) |axis| {
                     // Jumps anchor XY; linear moves anchor all three axes.
-                    move.destination[axis] = (@as(i32, motion.offset[axis]) * 4096) +% (if (axis < 2 or motion.kind != .jump) anchor[axis] else 0);
+                    move.destination[axis] = camera.FixedQ12.fromInt(motion.offset[axis]).raw +% (if (axis < 2 or motion.kind != .jump) anchor[axis] else 0);
                     if (motion.kind != .jump) {
                         current.velocity_q12[axis] = if (motion.kind == .snap) 0 else @divTrunc(move.destination[axis] -% current.position_q12[axis], duration);
                         current.acceleration_q12[axis] = 0;

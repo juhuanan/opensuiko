@@ -3,6 +3,7 @@ const std = @import("std");
 const field = @import("field");
 const battle = @import("battle");
 const journey = @import("journey");
+const SimulationClock = @import("journey_clock").SimulationClock;
 const party_session = @import("party_session");
 const pause = @import("pause_menu");
 const allocator = std.testing.allocator;
@@ -1604,6 +1605,74 @@ fn finishBattle(state: *journey.State) !void {
         } else if (state.combat.phase == .victory or state.combat.phase == .escaped) confirm(state) else _ = state.tick(.{}, .{});
     }
     try equal(.field, state.mode);
+}
+
+test "host frame cadence preserves journey movement battle animation and RNG" {
+    const fixtures = try Fixtures.init();
+    defer fixtures.deinit();
+
+    const Schedule = struct { frames: usize, deltas: []const f32 };
+    const schedules = [_]Schedule{
+        .{ .frames = 8 * 60, .deltas = &.{1.0 / 60.0} },
+        .{ .frames = 8 * 30, .deltas = &.{1.0 / 30.0} },
+        .{ .frames = 8 * 144, .deltas = &.{1.0 / 144.0} },
+        .{ .frames = 8 * 120, .deltas = &.{ 1.0 / 240.0, 3.0 / 240.0 } },
+    };
+    const Sample = struct {
+        phase: battle.Phase,
+        camera_ticks: u32,
+        animation_tick: u16,
+        field_x: f32,
+        field_y: f32,
+        field_animation_ticks: u32,
+        random: std.Random.DefaultPrng,
+        hero_hp: u16,
+    };
+    var baseline: [480]Sample = undefined;
+    for (schedules, 0..) |schedule, index| {
+        var members: [6]battle.Member = undefined;
+        var state = try fixtures.session(&members);
+        const initial_random = state.combat.random;
+        const room = state.package.rooms[state.field_state.room];
+        const direction: field.Direction = if (room.canStand(state.field_state.x + field.halfCellsToPixels(1), state.field_state.y)) .right else .left;
+        const step_ticks = state.package.step_ticks;
+        var simulation: SimulationClock = .{};
+        var ticks: usize = 0;
+        var menu_steps: usize = 0;
+        for (0..schedule.frames) |frame| {
+            simulation.addFrame(schedule.deltas[frame % schedule.deltas.len]);
+            while (simulation.tickReady()) : (simulation.finishTick()) {
+                if (ticks == step_ticks) {
+                    try equal(@as(u64, step_ticks), state.field_state.movement_updates);
+                    try state.beginEncounter(0);
+                }
+                const combat: battle.Input = if (state.combat.phase != .battle_menu or menu_steps >= 4)
+                    .{}
+                else input: {
+                    menu_steps += 1;
+                    break :input if (menu_steps == 4) .{ .confirm = true } else .{ .down = true };
+                };
+                const input: field.Input = .{ .direction = if (ticks < step_ticks) direction else null };
+                _ = try state.advanceSimulation(.{ .menu = .{ .field = input }, .battle = combat });
+                const position = state.field_state.position(state.package);
+                const sample: Sample = .{
+                    .phase = state.combat.phase,
+                    .camera_ticks = state.combat.camera_ticks,
+                    .animation_tick = state.combat.animationTick(0),
+                    .field_x = position.x,
+                    .field_y = position.y,
+                    .field_animation_ticks = state.field_state.animation_ticks,
+                    .random = state.combat.random,
+                    .hero_hp = state.combat.hp(0),
+                };
+                try expect(ticks < baseline.len);
+                if (index == 0) baseline[ticks] = sample else try std.testing.expectEqualDeep(baseline[ticks], sample);
+                ticks += 1;
+            }
+        }
+        try equal(baseline.len, ticks);
+        try expect(!std.meta.eql(initial_random, state.combat.random));
+    }
 }
 
 test "connected encounter returns to the same origin with persistent HP, items, money, XP and one reward" {

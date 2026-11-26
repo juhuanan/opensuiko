@@ -116,7 +116,7 @@ pub const State = struct {
         if (before.remaining != 0 or after.remaining != 0) self.advance(data);
         self.animateWater(after.camera);
     }
-    fn animateWater(self: *State, camera: world.Point) void {
+    fn animateWater(self: *State, camera: world.Cell) void {
         if (@rem(self.counter, 30) == 0) {
             self.water_tile = if (self.water_tile == 10) 20 else 10;
             for (0..15) |y| for (0..20) |x| {
@@ -142,16 +142,19 @@ pub fn compose(data: Data, travel: world.State, state: *const State, list: *List
     const crossing = data.isCrossing();
     if ((if (crossing) !travel.boat else (travel.boat or travel.scripted)) or state.clip >= 4 or state.frame >= data.clips[state.clip].len or (state.water_tile != 10 and state.water_tile != 20)) return error.InvalidWorldView;
     list.length = 0;
-    const origin = travel.originPixels();
-    const offset_x = @mod(origin.x, 16);
-    const offset_y = @mod(origin.y, 16);
+    const origin_px = travel.originPixels();
+    const origin_cell = origin_px.containingCell();
+    const offset_x = @mod(origin_px.x, world.pixels_per_cell);
+    const offset_y = @mod(origin_px.y, world.pixels_per_cell);
     const columns: usize = if (offset_x == 0) 20 else 21;
     const rows: usize = if (offset_y == 0) 15 else 16;
     for (0..2) |layer| for (0..rows) |y| for (0..columns) |x| {
-        const column = @mod(@divFloor(origin.x, 16) + @as(i32, @intCast(x)), 160);
-        const row = @mod(@divFloor(origin.y, 16) + @as(i32, @intCast(y)), 120);
+        const viewport_cell: world.Cell = .{ .x = @intCast(x), .y = @intCast(y) };
+        const column = @mod(origin_cell.x + viewport_cell.x, 160);
+        const row = @mod(origin_cell.y + viewport_cell.y, 120);
         const tile = if (layer == 0) state.water_tile else state.cells[@intCast(row * 160 + column)];
-        list.add(data.tiles[tile], @as(i32, @intCast(x)) * 16 - offset_x, @as(i32, @intCast(y)) * 16 - offset_y);
+        const viewport_px = viewport_cell.toPixels();
+        list.add(data.tiles[tile], viewport_px.x - offset_x, viewport_px.y - offset_y);
     };
     const pose = data.clips[state.clip][state.frame].pose;
     const anchor = if (crossing) data.anchors[pose] else field.Point{ .x = 0, .y = 0 };

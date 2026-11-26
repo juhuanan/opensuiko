@@ -1,4 +1,5 @@
 const std = @import("std");
+const field = @import("field");
 const ordinary = @import("field_actors");
 const events = @import("../field_events.zig");
 const runtime = @import("event_runtime");
@@ -57,7 +58,7 @@ pub fn applyActorAxis(self: *Session, binding: Binding, movement: runtime.ActorA
     const avatar = actors.actor(packet, movement.actor) catch return false;
     if (avatar.support != null or avatar.motion.moving() or access.ground_fn(access.context, avatar.id, avatar.motion) != true) return false;
     var next_motion = avatar.motion;
-    const pixels = @as(i32, movement.cell) * 8;
+    const pixels = field.halfCellsToPixels(movement.cell);
     switch (movement.axis) {
         .x => next_motion.x = pixels,
         .y => next_motion.y = pixels,
@@ -278,8 +279,8 @@ pub fn applyDescriptorDisplay(self: *Session, binding: Binding, command: runtime
             if (command.value.? != 0) return false;
             avatar.auto_animate = false;
         },
-        1 => avatar.motion.x = @as(i32, command.value.?) * 8,
-        2 => avatar.motion.y = @as(i32, command.value.?) * 8,
+        1 => avatar.motion.x = field.halfCellsToPixels(command.value.?),
+        2 => avatar.motion.y = field.halfCellsToPixels(command.value.?),
         else => return false,
     }
     avatar.pose = null;

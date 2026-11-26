@@ -1,28 +1,13 @@
 //! Battle camera poses and integer GTE projection.
 //! Angles are 12-bit turns; scale scales the rotation matrix, not translation.
 const std = @import("std");
+pub const q12 = @import("fixed_q12");
 pub const sin_cos = @import("battle_sin_cos_data");
 
 pub const Screen = struct { x: f32, y: f32, depth: f32 };
 pub const Vec3 = [3]i32;
 
-pub const FixedQ12 = struct {
-    raw: i32,
-
-    pub const one: i32 = 4096;
-
-    pub fn fromInt(value: i32) FixedQ12 {
-        return .{ .raw = value << 12 };
-    }
-
-    pub fn toInt(self: FixedQ12) i32 {
-        return self.raw >> 12;
-    }
-
-    pub fn toFloat(self: FixedQ12) f32 {
-        return @as(f32, @floatFromInt(self.raw)) / 4096.0;
-    }
-};
+pub const FixedQ12 = q12.Value;
 
 const WireBlock = struct {
     position: Vec3,
@@ -122,7 +107,7 @@ pub const ActorController = struct {
         inline for (.{ "focus", "angles", "translation", "scale" }, 0..) |field, channel| {
             for (@field(initial, field), 0..) |value, axis| {
                 if (value < -32768 or value > 32767) return error.InvalidActorCamera;
-                vectors[channel][axis] = value * FixedQ12.one;
+                vectors[channel][axis] = FixedQ12.fromInt(value).raw;
             }
         }
         return .{ .current = vectors, .target = vectors };
@@ -173,7 +158,7 @@ pub const ActorController = struct {
     pub fn sample(self: ActorController) Block {
         var result: Block = undefined;
         inline for (.{ "focus", "angles", "translation", "scale" }, 0..) |field, channel| {
-            for (0..3) |axis| @field(result, field)[axis] = self.current[channel][axis] >> 12;
+            for (0..3) |axis| @field(result, field)[axis] = q12.floorToInt(self.current[channel][axis]);
         }
         return result;
     }
@@ -295,13 +280,13 @@ pub fn projectWithScroll(state: usize, position: Vec3, scroll: Scroll) ?Screen {
     return projectBlock(block(state), position, scroll);
 }
 
-pub fn projectBlock(b: Block, position: Vec3, scroll: Scroll) ?Screen {
+pub fn projectBlock(b: Block, world_units: Vec3, scroll: Scroll) ?Screen {
     const m = scaledRot(b);
     var view: Vec3 = undefined;
     for (0..3) |i| {
-        var sum: i64 = @as(i64, b.translation[i]) << 12;
-        for (0..3) |j| sum += @as(i64, m[i * 3 + j]) * position[j];
-        view[i] = @intCast(sum >> 12);
+        var sum: i64 = @as(i64, b.translation[i]) << q12.fraction_bits;
+        for (0..3) |j| sum += @as(i64, m[i * 3 + j]) * world_units[j];
+        view[i] = @intCast(q12.floorToInt(sum));
     }
     if (view[2] <= 1) return null;
     return .{
@@ -318,9 +303,9 @@ pub fn rawProject(b: Block, p: Vec3) Vec3 {
 pub fn rawProjectMatrix(r: [9]i32, translation: Vec3, p: Vec3) Vec3 {
     var view: Vec3 = undefined;
     for (0..3) |i| {
-        var sum: i64 = @as(i64, translation[i]) << 12;
+        var sum: i64 = @as(i64, translation[i]) << q12.fraction_bits;
         for (0..3) |j| sum += @as(i64, r[3 * i + j]) * p[j];
-        view[i] = @intCast(sum >> 12);
+        view[i] = @intCast(q12.floorToInt(sum));
     }
     const divisor: i64 = @max(512, view[2]);
     return .{
@@ -492,10 +477,10 @@ pub const Channels = struct {
             .scale = .{ 4096, 4096, 4096 },
         };
         for (0..3) |i| {
-            result.focus[i] = @divTrunc(self.focus.current[i], 4096);
-            result.angles[i] = @divTrunc(self.angles.current[i], 4096);
-            result.translation[i] = @divTrunc(self.translation.current[i], 4096);
-            result.scale[i] = @divTrunc(self.scale.current[i], 4096);
+            result.focus[i] = q12.truncateToInt(self.focus.current[i]);
+            result.angles[i] = q12.truncateToInt(self.angles.current[i]);
+            result.translation[i] = q12.truncateToInt(self.translation.current[i]);
+            result.scale[i] = q12.truncateToInt(self.scale.current[i]);
         }
         return result;
     }

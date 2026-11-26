@@ -1,5 +1,45 @@
 const std = @import("std");
-pub const Vec3 = struct { x: f32, y: f32, z: f32 };
+const q12 = @import("battle_camera").q12;
+
+pub const Vec3 = struct {
+    x: f32,
+    y: f32,
+    z: f32,
+
+    const q12_scale: f32 = @floatFromInt(q12.Value.one);
+
+    pub fn fromQ12(raw: [3]i32) Vec3 {
+        return .{
+            .x = (q12.Value{ .raw = raw[0] }).toFloat(),
+            .y = (q12.Value{ .raw = raw[1] }).toFloat(),
+            .z = (q12.Value{ .raw = raw[2] }).toFloat(),
+        };
+    }
+
+    pub fn fromQ12Floor(raw: [3]i32) Vec3 {
+        return .{
+            .x = @floatFromInt(q12.floorToInt(raw[0])),
+            .y = @floatFromInt(q12.floorToInt(raw[1])),
+            .z = @floatFromInt(q12.floorToInt(raw[2])),
+        };
+    }
+
+    pub fn toQ12Rounded(self: Vec3) [3]i32 {
+        return .{
+            @intFromFloat(@round(self.x * q12_scale)),
+            @intFromFloat(@round(self.y * q12_scale)),
+            @intFromFloat(@round(self.z * q12_scale)),
+        };
+    }
+
+    pub fn toQ12Floor(self: Vec3) [3]i32 {
+        return .{
+            @intFromFloat(@floor(self.x * q12_scale)),
+            @intFromFloat(@floor(self.y * q12_scale)),
+            @intFromFloat(@floor(self.z * q12_scale)),
+        };
+    }
+};
 pub const ScreenPoint = struct { x: f32, y: f32, depth: f32 };
 pub const Camera = struct { transform: [3][4]f32, focal_length: f32, center_x: f32, center_y: f32 };
 pub const Leap = struct { ticks: u16, offset: Vec3, velocity: Vec3, acceleration_step: f32 = 0 };

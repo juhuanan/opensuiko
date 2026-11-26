@@ -169,8 +169,8 @@ pub fn descriptorInitializerPositions(self: *const Session, binding: Binding, st
     };
     if (pc > 11) return error.InvalidDescriptorInitialization;
     for (program.commands[0..pc]) |command| if (command.kind == .descriptor_display) {
-        if (command.parameter.? == 1) storage[command.selector.?].x = @as(i32, command.value.?) * 8;
-        if (command.parameter.? == 2) storage[command.selector.?].y = @as(i32, command.value.?) * 8;
+        if (command.parameter.? == 1) storage[command.selector.?].x = field.halfCellsToPixels(command.value.?);
+        if (command.parameter.? == 2) storage[command.selector.?].y = field.halfCellsToPixels(command.value.?);
     };
     return storage;
 }

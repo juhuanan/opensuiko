@@ -1,20 +1,27 @@
 const slots = @import("save_slots.zig");
 pub const start_label = "Start authored episode";
 pub const confirmation_label = "Start this authored episode?";
+pub const ticks_per_second = 60;
+const movie_fps = 15;
+const ticks_per_movie_frame = ticks_per_second / movie_fps;
 pub const MovieStage = enum { logo, opening, attract };
 pub const MovieSpec = struct {
     stage: MovieStage,
     id: []const u8,
     disc_path: []const u8,
     frames: u32,
-    fps: u8 = 15,
+    fps: u8 = movie_fps,
     ticks_60hz: u32,
     next: ?MovieStage,
+
+    pub fn frameAtTick(self: MovieSpec, tick: u32) u32 {
+        return tick / (ticks_per_second / @as(u32, self.fps));
+    }
 };
 pub const movie_specs = [_]MovieSpec{
-    .{ .stage = .logo, .id = "logo", .disc_path = "DEMO/573LOGO.STR", .frames = 114, .ticks_60hz = 114 * 4, .next = .opening },
-    .{ .stage = .opening, .id = "opening", .disc_path = "DEMO/SUIKODEN.STR", .frames = 1647, .ticks_60hz = 1647 * 4, .next = null },
-    .{ .stage = .attract, .id = "attract", .disc_path = "OPEN15MX.STR", .frames = 1688, .ticks_60hz = 1688 * 4, .next = null },
+    .{ .stage = .logo, .id = "logo", .disc_path = "DEMO/573LOGO.STR", .frames = 114, .ticks_60hz = 114 * ticks_per_movie_frame, .next = .opening },
+    .{ .stage = .opening, .id = "opening", .disc_path = "DEMO/SUIKODEN.STR", .frames = 1647, .ticks_60hz = 1647 * ticks_per_movie_frame, .next = null },
+    .{ .stage = .attract, .id = "attract", .disc_path = "OPEN15MX.STR", .frames = 1688, .ticks_60hz = 1688 * ticks_per_movie_frame, .next = null },
 };
 pub fn movieSpec(stage: MovieStage) MovieSpec {
     return movie_specs[@backingInt(stage)];

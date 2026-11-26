@@ -1119,7 +1119,7 @@ test "world viewport, idle and start-step double clock, visible water sweep and 
     defer art.deinit();
     const map = try content();
     defer map.deinit();
-    const Step = struct { key: u16, camera: world.Point, origin: world.Point, heading: u2, remaining: u8, travel_counter: u16, clip: u8, frame: u8, ticks: u16, counter: u32, water: u16, cells_sha256: ?[]const u8, pixels_sha256: ?[]const u8 };
+    const Step = struct { key: u16, camera: world.Point, origin: world.PixelPoint, heading: u2, remaining: u8, travel_counter: u16, clip: u8, frame: u8, ticks: u16, counter: u32, water: u16, cells_sha256: ?[]const u8, pixels_sha256: ?[]const u8 };
     const Case = struct { name: []const u8, x: i32, y: i32, counter: u32, speed: u8, steps: []const Step };
     const cases = try std.json.parseFromSlice([]const Case, allocator, @embedFile("fixtures/world_visual_steps.json"), .{});
     defer cases.deinit();

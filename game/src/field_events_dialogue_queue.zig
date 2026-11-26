@@ -197,7 +197,7 @@ pub const QueueData = struct {
                 for (track.commands) |command| switch (command.kind) {
                     .move => {
                         if (command.cells.? > 3) return error.InvalidFieldPartyQueue;
-                        const distance = @as(i32, command.cells.?) * 8;
+                        const distance = field.halfCellsToPixels(command.cells.?);
                         switch (command.direction.?) {
                             .left => x -= distance,
                             .right => x += distance,

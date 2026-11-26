@@ -148,17 +148,20 @@ pub fn build(b: *std.Build) !void {
         .{ "area_host", "src/area_host/root.zig", &.{ "field_effect_data", "wheel_data", "event_runtime" } },
         .{ "fade", "src/opening/fade.zig", &.{} },
         .{ "opening_save_policy", "src/opening/save_policy.zig", &.{} },
-        .{ "battle_camera", "src/battle_camera.zig", &.{"battle_sin_cos_data"} },
+        .{ "fixed_q12", "src/fixed_q12.zig", &.{} },
+        .{ "field_coordinates", "src/field_coordinates.zig", &.{} },
+        .{ "journey_clock", "src/journey_frame/clock.zig", &.{} },
+        .{ "battle_camera", "src/battle_camera.zig", &.{ "battle_sin_cos_data", "fixed_q12" } },
         .{ "hq_state", "src/hq_state.zig", &.{} },
         .{ "campaign_state", "src/campaign_state.zig", &.{} },
         .{ "war", "src/war.zig", &.{} },
         .{ "field_dialogue", "src/field_dialogue.zig", &.{} },
         .{ "raylib_app", "src/raylib_app.zig", &.{"raylib"} },
-        .{ "combat_systems", "src/combat_systems/root.zig", &.{ "validation", "combat_systems_data" } },
+        .{ "combat_systems", "src/combat_systems/root.zig", &.{ "fixed_q12", "validation", "combat_systems_data" } },
         .{ "game", "src/battle_menu.zig", &.{"combat_systems"} },
         .{ "campaign_policies", "src/campaign_policies/root.zig", &.{ "battle_rules", "campaign_policies_data" } },
         .{ "battle_systems", "src/battle_systems/root.zig", &.{ "battle_rules", "validation", "campaign_policies", "battle_systems_data" } },
-        .{ "field", "src/field.zig", &.{ "field_dialogue", "inn_data", "inn_zon", "item_data", "validation", "event_runtime", "area_host", "battle_rules" } },
+        .{ "field", "src/field.zig", &.{ "field_coordinates", "field_dialogue", "inn_data", "inn_zon", "item_data", "validation", "event_runtime", "area_host", "battle_rules" } },
         .{ "ui_font", "src/ui_font.zig", &.{"field"} },
         .{ "ui", "src/ui.zig", &.{ "raylib", "ui_font", "field" } },
         .{ "world", "src/world.zig", &.{ "battle_rules", "world_data", "field" } },
@@ -198,7 +201,7 @@ pub fn build(b: *std.Build) !void {
         .{ "opening_party", "src/opening/party/root.zig", &.{ "party_session", "battle", "opening_records" } },
         .{ "item_ledger", "src/item_ledger/root.zig", &.{ "battle", "field", "party_session" } },
         .{ "route_coordinates", "src/route_coordinates.zig", &.{} },
-        .{ "route_transitions", "src/route_transitions.zig", &.{ "event_runtime", "validation", "route_coordinates" } },
+        .{ "route_transitions", "src/route_transitions.zig", &.{ "field_coordinates", "event_runtime", "validation", "route_coordinates" } },
         .{ "travel_modes", "src/travel_modes/controller.zig", &.{ "route_transitions", "event_runtime", "travel_data" } },
         .{ "travel_checkpoint", "src/travel_modes/checkpoint.zig", &.{ "travel_modes", "route_transitions", "event_runtime" } },
         .{ "travel", "src/travel/root.zig", &.{ "validation", "event_runtime", "world", "campaign_policies", "field_actors", "opening_audience", "scene_dispatch", "scene_population", "travel_data", "route_coordinates" } },
@@ -238,7 +241,7 @@ pub fn build(b: *std.Build) !void {
         .{ "engine", "src/engine.zig", &.{"journey"} },
         .{ "journey_boot", "src/journey_boot.zig", &.{ "field", "battle", "engine", "journey", "journey_content", "opening", "opening_data", "party_content", "package_host", "save_file" } },
         .{ "journey_persistence", "src/journey_persistence.zig", &.{ "engine", "pause_menu" } },
-        .{ "journey_frame", "src/journey_frame.zig", &.{ "journey_content", "field", "battle", "pause_menu", "raylib", "raylib_app", "platform_recovery", "journey_persistence", "journey", "journey_boot", "game", "audio_route", "ui", "menu_layout", "battle_camera", "world_view", "world", "war_content", "war_view", "war_view_platform", "war_manifest_data", "chapters" } },
+        .{ "journey_frame", "src/journey_frame.zig", &.{ "journey_clock", "journey_content", "field", "battle", "pause_menu", "raylib", "raylib_app", "platform_recovery", "journey_persistence", "journey", "journey_boot", "game", "audio_route", "ui", "menu_layout", "battle_camera", "world_view", "world", "war_content", "war_view", "war_view_platform", "war_manifest_data", "chapters" } },
         .{ "opening_launch", "src/campaign/opening_launch.zig", &.{ "opening_start", "opening_assets", "opening", "opening_events", "opening_audience", "field", "field_events", "opening_destination", "opening_save_policy", "opening_dungeon", "opening_battle", "opening_party" } },
         .{ "opening_package", "src/campaign/opening_package.zig", &.{ "opening_launch", "field" } },
         .{ "opening_export", "src/campaign/opening_export.zig", &.{ "field", "opening_package" } },
@@ -274,6 +277,8 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(&journey_exe.step);
 
     // Core, world, and domain test suites.
+    _ = r.addTest(test_step, "src/journey_frame/clock.zig", &.{}, false);
+    _ = r.addTest(test_step, "src/fixed_q12.zig", &.{}, false);
     const world_filter = b.option([]const u8, "world-test-filter", "Run matching world tests only");
     const world_tests = b.addTest(.{
         .root_module = b.createModule(.{
@@ -293,7 +298,7 @@ pub fn build(b: *std.Build) !void {
     _ = r.addTest(test_step, "tests/duel.zig", &.{"duel"}, false);
     _ = r.addTest(test_step, "tests/room_package.zig", &.{ "field", "save_file", "pause_menu" }, false);
     _ = r.addTest(test_step, "tests/journey_content.zig", &.{ "journey_content", "journey", "battle", "field", "party_content", "party_session", "party_data", "journey_boot", "journey_frame", "audio_route", "event_runtime", "field_events", "ui_font", "pause_menu" }, false);
-    _ = r.addTest(test_step, "tests/root.zig", &.{ "game", "field", "battle", "save_file", "pause_menu", "journey", "party_session", "party_data", "opening", "opening_events", "opening_audience", "demo_batch", "audio_route", "ui_font", "battle_camera", "dice_presentation", "campaign", "campaign_policies_data" }, false);
+    _ = r.addTest(test_step, "tests/root.zig", &.{ "journey_clock", "game", "field", "battle", "save_file", "pause_menu", "journey", "party_session", "party_data", "opening", "opening_events", "opening_audience", "demo_batch", "audio_route", "ui_font", "battle_camera", "dice_presentation", "campaign", "campaign_policies_data" }, false);
     _ = r.addTest(test_step, "tests/route_transitions.zig", &.{ "route_transitions", "event_runtime" }, true);
     _ = r.addTest(test_step, "tests/scene_dispatch.zig", &.{ "scene_dispatch", "scene_population", "event_runtime" }, true);
     _ = r.addTest(test_step, "tests/war.zig", &.{"war"}, true);
