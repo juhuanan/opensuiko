@@ -138,6 +138,67 @@ pub const Character = struct {
 
 pub const Member = Character;
 
+pub const OwnedMemberRecord = struct {
+    member: CharacterRecord,
+    level: u8,
+    experience: u32,
+    stats: Stats,
+    weapon_level: u8,
+    loadout: character_rules.Loadout,
+    rune: ?usize,
+
+    pub fn fromCharacter(value: Member) OwnedMemberRecord {
+        return .{
+            .member = value.record(),
+            .level = value.level,
+            .experience = value.experience,
+            .stats = value.base_stats,
+            .weapon_level = value.weapon_level,
+            .loadout = value.loadout,
+            .rune = value.rune,
+        };
+    }
+
+    pub fn character(self: OwnedMemberRecord) Member {
+        var value = self.member.character();
+        value.level = self.level;
+        value.experience = self.experience;
+        value.base_stats = self.stats;
+        value.weapon_level = self.weapon_level;
+        value.loadout = self.loadout;
+        value.rune = self.rune;
+        return value;
+    }
+};
+
+pub const WeaponRange = enum {
+    short,
+    medium,
+    long,
+    pub fn label(self: WeaponRange) []const u8 {
+        return switch (self) {
+            .short => "Short",
+            .medium => "Medium",
+            .long => "Long",
+        };
+    }
+    pub fn reaches(self: WeaponRange, from: Row, target: Row) bool {
+        return switch (self) {
+            .short => from == .front and target == .front,
+            .medium => target == .front,
+            .long => true,
+        };
+    }
+};
+
+pub const Row = enum {
+    front,
+    back,
+    pub fn label(self: Row) []const u8 {
+        return if (self == .front) "Front" else "Back";
+    }
+};
+
 // Member fields in the existing opening packet and save formats.
 pub const CharacterRecord = struct {
     id: []const u8,
@@ -163,6 +224,119 @@ pub const CharacterRecord = struct {
             .max_rune_charges = self.max_rune_charges,
             .inventory = self.inventory,
         };
+    }
+};
+
+pub const CharacterProfile = struct {
+    id: []const u8,
+    name: []const u8,
+    growth: [6]u4,
+    weapon: ?character_rules.Weapon,
+    weapon_range: ?WeaponRange,
+    rune: ?[]const u8,
+    rune_locked: bool,
+};
+
+/// Borrows immutable profiles from the validated content package.
+pub const CharacterRules = struct {
+    tables: ?character_rules.Systems,
+    profiles: ?*const anyopaque,
+    profile_count: usize,
+    lookup: *const fn (*const anyopaque, usize, []const u8) ?CharacterProfile,
+
+    pub fn profile(self: CharacterRules, id: []const u8) ?CharacterProfile {
+        return self.lookup(self.profiles orelse return null, self.profile_count, id);
+    }
+
+    pub fn validate(self: CharacterRules, owned: Character) !void {
+        var members = [_]Member{owned};
+        try (Progress{ .money = 0, .party = &members }).validate();
+        const member = owned;
+        const template = self.profile(member.id) orelse return error.InvalidMember;
+        if (member.max_hp > 9999 or (member.hp == 0) != (member.status == .unconscious) or !std.mem.eql(u8, member.name, template.name) or owned.level == 0 or owned.level > 99 or owned.experience >= 1000) return error.InvalidMember;
+        for ([_]u16{ owned.base_stats.attack, owned.base_stats.defense, owned.base_stats.skill, owned.base_stats.speed, owned.base_stats.magic, owned.base_stats.luck }) |value| if (value > 9999) return error.InvalidMember;
+        if (owned.weapon_level == 0 or owned.weapon_level > 16) return error.InvalidWeapon;
+        const rules = self.tables orelse return error.SystemsUnavailable;
+        for (std.enums.values(character_rules.EquipmentSlot)) |slot| {
+            self.checkEquipment(owned, slot, owned.loadout.get(slot)) catch return error.InvalidEquipment;
+        }
+        if (owned.rune) |id| {
+            if (id >= rules.runes.len) return error.InvalidRune;
+            const definition = rules.runes[id];
+            const original = template.rune != null and std.mem.eql(u8, template.rune.?, definition.id);
+            if (template.rune_locked and !original) return error.InvalidRune;
+            if (!original and !definition.allows(template.id)) return error.InvalidRune;
+        } else if (template.rune_locked) return error.RuneLocked;
+        const capacity = owned.runeCapacity(rules);
+        if (!std.mem.eql(u16, &capacity, &member.max_rune_charges)) return error.InvalidMagicCapacity;
+    }
+
+    pub fn checkEquipment(self: CharacterRules, member: Character, slot: character_rules.EquipmentSlot, item: ?usize) !void {
+        const tables = self.tables orelse return error.InvalidEquipment;
+        const index = item orelse return;
+        if (index >= tables.equipment.len or !tables.equipment[index].allows(member.id, slot)) return error.InvalidEquipment;
+        var needed: usize = 1;
+        for (std.enums.values(character_rules.EquipmentSlot)) |other| {
+            if (other != slot and member.loadout.get(other) == item) needed += 1;
+        }
+        if (self.gearCount(member, index) < needed) return error.ItemUnavailable;
+    }
+
+    pub fn gearCount(self: CharacterRules, member: Character, index: usize) usize {
+        const id = std.meta.stringToEnum(items.Id, self.tables.?.equipment[index].id) orelse return 0;
+        var count: usize = 0;
+        for (member.inventory.slots) |entry| {
+            if (entry != null and entry.?.id == id) count += 1;
+        }
+        return count;
+    }
+
+    pub fn itemEquipped(self: CharacterRules, member: Character, slot: usize) bool {
+        const stack = member.inventory.slots[slot] orelse return false;
+        const tables = self.tables orelse return false;
+        var worn: usize = 0;
+        for (std.enums.values(character_rules.EquipmentSlot)) |place| if (member.loadout.get(place)) |gear| {
+            if (gear < tables.equipment.len and std.mem.eql(u8, @tagName(stack.id), tables.equipment[gear].id)) worn += 1;
+        };
+        for (member.inventory.slots[0..slot]) |other| {
+            if (other != null and other.?.id == stack.id) worn -|= 1;
+        }
+        return worn > 0;
+    }
+
+    pub fn equipOwned(self: CharacterRules, member: *Character, slot: character_rules.EquipmentSlot, item: ?usize) !void {
+        try self.checkEquipment(member.*, slot, item);
+        member.loadout.set(slot, item);
+        member.refreshRuneCapacity(self.tables.?);
+    }
+
+    pub fn checkRuneTarget(self: CharacterRules, member: Character) !void {
+        if (self.tables == null) return error.InvalidRune;
+        if ((self.profile(member.id) orelse return error.InvalidRune).rune_locked) return error.RuneLocked;
+    }
+
+    pub fn attachmentRune(self: CharacterRules, member: []const u8, inventory: items.Inventory, slot: usize) !usize {
+        const tables = self.tables orelse return error.InvalidRune;
+        if (slot >= inventory.count()) return error.InvalidItem;
+        const id = @tagName(inventory.slots[slot].?.id);
+        for (tables.runes, 0..) |definition, index| {
+            if (definition.crystal == null or !std.mem.eql(u8, definition.crystal.?, id)) continue;
+            if (!definition.allows(member)) return error.IncompatibleRune;
+            return index;
+        }
+        return error.InvalidItem;
+    }
+
+    pub fn detachRune(self: CharacterRules, member: *Character) !void {
+        const tables = self.tables orelse return error.InvalidRune;
+        const index = member.rune orelse return error.InvalidRune;
+        if (index >= tables.runes.len) return error.InvalidRune;
+        const definition = tables.runes[index];
+        const id = std.meta.stringToEnum(items.Id, definition.crystal orelse return error.RuneLocked) orelse return error.InvalidRune;
+        const count = member.inventory.count();
+        if (count == member.inventory.slots.len) return error.InventoryFull;
+        member.inventory.slots[count] = .{ .id = id, .uses = 0 };
+        member.rune = null;
     }
 };
 

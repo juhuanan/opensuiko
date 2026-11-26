@@ -34,32 +34,8 @@ pub const spell_scene = @import("battle_spell_scene.zig");
 pub const presentation = @import("battle_presentation.zig");
 pub const Position = presentation.Vec3;
 pub const Scenery = struct { sprite: Pose, position: Position };
-pub const Row = enum {
-    front,
-    back,
-    pub fn label(self: Row) []const u8 {
-        return if (self == .front) "Front" else "Back";
-    }
-};
-pub const WeaponRange = enum {
-    short,
-    medium,
-    long,
-    pub fn label(self: WeaponRange) []const u8 {
-        return switch (self) {
-            .short => "Short",
-            .medium => "Medium",
-            .long => "Long",
-        };
-    }
-    pub fn reaches(self: WeaponRange, from: Row, target: Row) bool {
-        return switch (self) {
-            .short => from == .front and target == .front,
-            .medium => target == .front,
-            .long => true,
-        };
-    }
-};
+pub const Row = field.game_state.Row;
+pub const WeaponRange = field.game_state.WeaponRange;
 pub const Drop = struct { item: ?field.items.Id, uses: u16, rate: u8, identified: bool = true };
 pub const OrdinaryTiming = struct { impact_tick: u16, return_tick: u16, duration: u16, target_release_delay: ?u16 = null };
 pub const DodgeTiming = struct { id: []const u8, target_release_tick: u16 };
@@ -295,38 +271,7 @@ pub const Encounter = struct {
     }
 };
 // The existing reserve-save and recruitment-seed layout.
-pub const OwnedMemberRecord = struct {
-    member: field.game_state.CharacterRecord,
-    level: u8,
-    experience: u32,
-    stats: Stats,
-    weapon_level: u8,
-    loadout: systems.Loadout,
-    rune: ?usize,
-
-    pub fn fromCharacter(value: Member) OwnedMemberRecord {
-        return .{
-            .member = value.record(),
-            .level = value.level,
-            .experience = value.experience,
-            .stats = value.base_stats,
-            .weapon_level = value.weapon_level,
-            .loadout = value.loadout,
-            .rune = value.rune,
-        };
-    }
-
-    pub fn character(self: OwnedMemberRecord) Member {
-        var value = self.member.character();
-        value.level = self.level;
-        value.experience = self.experience;
-        value.base_stats = self.stats;
-        value.weapon_level = self.weapon_level;
-        value.loadout = self.loadout;
-        value.rune = self.rune;
-        return value;
-    }
-};
+pub const OwnedMemberRecord = field.game_state.OwnedMemberRecord;
 pub const Protection = struct {
     hurt_duration: u16,
     ward_return_duration: u16,

@@ -18,7 +18,7 @@ fn operation(asset: party.Asset, id: []const u8) !party.Operation {
 }
 
 fn bootOwner(context: creation.Context) !creation.Owner {
-    const hero = try party_session.catalogue.materialize(context.combat, context.catalogue, "hero");
+    const hero = try party_session.catalogue.materialize(context.combat.content.characterRules(), context.catalogue, "hero");
     var roster: party_session.Snapshot = .{
         .entry_id = "boot",
         .content_id = "source",

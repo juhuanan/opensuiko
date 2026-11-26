@@ -4,7 +4,8 @@ const State = @import("journey.zig").State;
 const StoryState = @import("field").game_state.event_runtime.StoryState;
 const battle = @import("battle");
 const party_session = @import("party_session");
-const save = @import("journey_save.zig");
+const game_state = @import("field").game_state;
+const Reserves = @import("journey.zig").Reserves;
 
 pub fn recruitFlags(story: StoryState) [108]u8 {
     var flags = story.recruit_flags;
@@ -18,10 +19,74 @@ pub fn recordPahnDuel(story: *StoryState, outcome: u8) void {
     if (outcome == 2) story.recruit_flags = recruitFlags(story.*);
 }
 
-pub fn retainReserve(state: *State, owned: battle.OwnedMember) !void {
+fn emptyExtra(extra: party_session.CharacterExtra) bool {
+    if (extra.member_id.len != 0 or extra.weapon_element != .none) return false;
+    for (extra.weapon_fragments) |count| if (count != 0) return false;
+    for (extra.locked_equipment) |locked| if (locked) return false;
+    return true;
+}
+
+pub fn extraMatches(extra: party_session.CharacterExtra, member_id: []const u8) bool {
+    return if (extra.member_id.len == 0) emptyExtra(extra) else std.mem.eql(u8, extra.member_id, member_id);
+}
+
+pub fn validate(
+    rules: game_state.CharacterRules,
+    progress: game_state.Progress,
+    formation: [6]u8,
+    extras: [6]party_session.CharacterExtra,
+    reserves: *const Reserves,
+    reserve_extras: [72]?party_session.CharacterExtra,
+    require_reserve_extras: bool,
+) !void {
+    const active = progress.party;
+    if (active.len == 0 or active.len > extras.len) return error.InvalidParty;
+    if (progress.money > game_state.max_money) return error.InvalidMoney;
+    for (active, extras[0..active.len]) |member, extra| {
+        if (!extraMatches(extra, member.id)) return error.InvalidExtras;
+    }
+    for (extras[active.len..]) |extra| if (!emptyExtra(extra)) return error.InvalidExtras;
+    try progress.validate();
+    var seen: [6]bool = @splat(false);
+    for (formation, 0..) |member, slot| {
+        if (member >= seen.len or seen[member] or (slot < active.len and member >= active.len)) return error.InvalidFormation;
+        seen[member] = true;
+    }
+    for (active) |member| try rules.validate(member);
+
+    var has_maas = false;
+    for (active) |member| has_maas = has_maas or std.mem.eql(u8, member.id, "maas");
+    for (reserves) |entry| if (entry) |member| {
+        has_maas = has_maas or std.mem.eql(u8, member.id, "maas");
+    };
+    if (progress.story.maas_recruited and !progress.story.maas_recruitment_blocked and !has_maas) return error.MissingRecruitedMember;
+
+    var ended = false;
+    for (reserves, 0..) |entry, index| {
+        if (entry) |member| {
+            if (ended) return error.InvalidReserves;
+            try rules.validate(member);
+            for (active) |other| if (std.mem.eql(u8, member.id, other.id)) return error.DuplicateMember;
+            for (reserves[0..index]) |other| if (std.mem.eql(u8, member.id, other.?.id)) return error.DuplicateMember;
+        } else ended = true;
+    }
+    for (reserves, reserve_extras) |entry, extra| {
+        if (extra) |value| {
+            const member = entry orelse return error.InvalidExtras;
+            if (!extraMatches(value, member.id)) return error.InvalidExtras;
+        } else if (entry != null and require_reserve_extras) return error.InvalidExtras;
+    }
+}
+
+fn validateChange(state: *const State) !void {
     if (state.menu.phase != .closed or state.field_state.action_pending) return error.GameBusy;
-    const snapshot = try save.Snapshot.capture(state.*);
-    try snapshot.validate(state.*);
+    try state.requireIdleField();
+    _ = try state.bindSharedItems(state.shared_items);
+    try validate(state.combat.content.characterRules(), state.combat.progress, state.combat.formation, state.extras, &state.reserves, state.reserve_extras, true);
+}
+
+pub fn retainReserve(state: *State, owned: battle.OwnedMember) !void {
+    try validateChange(state);
     try state.combat.validateOwnedMember(owned);
     for (state.combat.progress.party) |member| if (std.mem.eql(u8, member.id, owned.id)) return error.DuplicateMember;
     for (&state.reserves, 0..) |*entry, index| {
@@ -40,9 +105,7 @@ pub fn retainReserve(state: *State, owned: battle.OwnedMember) !void {
 }
 
 pub fn swapReserve(state: *State, member_id: []const u8, reserve_id: []const u8) !void {
-    if (state.menu.phase != .closed or state.field_state.action_pending) return error.GameBusy;
-    const snapshot = try save.Snapshot.capture(state.*);
-    try snapshot.validate(state.*);
+    try validateChange(state);
     for (state.combat.progress.party, 0..) |member, active_index| {
         if (!std.mem.eql(u8, member.id, member_id)) continue;
         for (&state.reserves, 0..) |*entry, index| if (entry.*) |owned| {
@@ -84,7 +147,7 @@ pub fn buildPartySnapshot(state: *const State) party_session.Snapshot {
 
 pub fn useWeaponPiece(state: *State, owner: usize, slot: usize, target: usize, replace: bool) !void {
     if (owner >= state.combat.partyCount() or target >= state.combat.partyCount()) return error.InvalidMember;
-    var session = try party_session.Session.init(state.combat.*, buildPartySnapshot(state), .{});
+    var session = try party_session.Session.init(state.combat.content.characterRules(), buildPartySnapshot(state), .{});
     try session.execute(.{ .weapon_piece = .{
         .owner = state.combat.progress.party[owner].id,
         .slot = slot,
@@ -126,7 +189,7 @@ pub fn prepareGrowth(state: *const State, id: []const u8, advances: u8) !Growth 
             if (entry == null) break index;
         } else return error.RosterFull;
         const catalog = state.party_catalog orelse return error.MissingPartyCatalogue;
-        const materialized = try party_session.catalogue.materializeBound(state.combat.*, catalog, id, state.party_bindings);
+        const materialized = try party_session.catalogue.materializeBound(state.combat.content.characterRules(), catalog, id, state.party_bindings);
         extra = materialized.extra;
         break :reserve_member materialized.owned;
     };
@@ -168,7 +231,7 @@ pub fn preparePartyJoin(state: *const State, backing: []battle.Member, catalog: 
     for (state.reserves, state.reserve_extras, 0..) |maybe, extra, index| if (maybe) |owned| {
         if (std.mem.eql(u8, owned.id, id)) return .{ .member = .{ .owned = owned, .extra = extra orelse .{ .member_id = "" } }, .reserve = index };
     } else break;
-    return .{ .member = try party_session.catalogue.materializeBound(state.combat.*, catalog, id, bindings) };
+    return .{ .member = try party_session.catalogue.materializeBound(state.combat.content.characterRules(), catalog, id, bindings) };
 }
 
 pub fn commitPartyJoin(state: *State, backing: []battle.Member, join: PartyJoin) void {

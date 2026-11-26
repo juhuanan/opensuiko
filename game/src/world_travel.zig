@@ -588,7 +588,7 @@ pub const State = struct {
     }
     pub fn attachPartySnapshot(self: *State, snapshot: *const party.Snapshot) !void {
         if (self.link.travel.mode == .battle or self.adapter.transaction != null or self.adapter.original != null) return error.WorldBattleNotReady;
-        _ = try party.weaponAugments(self.combat.*, snapshot.*);
+        _ = try party.weaponAugments(self.combat.content.characterRules(), self.combat.progress.party, snapshot.*);
         self.party_snapshot = snapshot;
     }
     fn supportedRoom(id: []const u8) bool {
@@ -653,7 +653,7 @@ pub const State = struct {
                     .battle => block: {
                         if (std.mem.eql(u8, self.link.content.id, "region_c") and (self.region_c == null or self.region_c.?.battles == null)) return error.UnimplementedRegionCCombat;
                         if (self.party_snapshot) |snapshot| {
-                            const augments = try party.weaponAugments(self.combat.*, snapshot.*);
+                            const augments = try party.weaponAugments(self.combat.content.characterRules(), self.combat.progress.party, snapshot.*);
                             for (self.combat.progress.party, 0..) |*member, i| member.weapon_augment = augments[i];
                         } else if (self.party_transactions) return error.UnsupportedCombatSidecar;
                         if (self.party_transactions) {

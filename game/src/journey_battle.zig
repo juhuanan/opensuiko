@@ -5,13 +5,36 @@ const battle = @import("battle");
 const field = @import("field");
 const encounter_policy = @import("campaign_policies").encounter;
 const party = @import("party_session");
-const save = @import("journey_save.zig");
+const roster = @import("journey_roster.zig");
 const events = field.game_state.event_runtime;
 
 pub const FieldEncounterClock = struct {
     updates: u16 = 0,
     ready: bool = false,
     enabled: bool = true,
+};
+
+/// Battle mutates the shared party backing, so retain the encounter's
+/// original members separately from the other progress fields.
+pub const Checkpoint = struct {
+    progress: field.game_state.Progress,
+    members: [6]field.game_state.Character,
+    formation: [6]u8,
+    random: std.Random.DefaultPrng,
+    elapsed_ticks: u64,
+
+    fn capture(state: *const State) Checkpoint {
+        const party_members = state.combat.progress.party;
+        var members: [6]field.game_state.Character = @splat(party_members[0]);
+        @memcpy(members[0..party_members.len], party_members);
+        return .{
+            .progress = state.combat.progress,
+            .members = members,
+            .formation = state.combat.formation,
+            .random = state.combat.random,
+            .elapsed_ticks = state.elapsed_ticks,
+        };
+    }
 };
 
 pub fn encounterIndex(content: battle.Content, id: []const u8) ?usize {
@@ -116,43 +139,25 @@ pub fn beginEncounter(state: *State, index: usize) !void {
 pub fn beginCombat(state: *State, encounter: usize) !void {
     if (state.mode != .field or state.scripted_battle != null or state.menu.phase != .closed or state.field_state.dialogue != null or state.field_state.remaining != 0) return error.GameBusy;
     if (encounter >= state.combat.content.encounters.len) return error.UnknownEncounter;
-    if (state.field_state.progress.party.len > state.extras.len) return error.InvalidExtras;
-    for (state.field_state.progress.party, 0..) |member, slot| {
-        const extra = state.extras[slot];
-        if (extra.member_id.len != 0 and !std.mem.eql(u8, extra.member_id, member.id)) return error.InvalidExtras;
-        if (extra.member_id.len == 0) {
-            if (extra.weapon_element != .none) return error.InvalidExtras;
-            for (extra.weapon_fragments) |count| if (count != 0) return error.InvalidExtras;
-        }
+    try state.requireIdleField();
+    const members = state.combat.progress.party;
+    if (members.len == 0 or members.len > state.extras.len) return error.InvalidParty;
+    for (members, state.extras[0..members.len]) |member, extra| {
+        if (!roster.extraMatches(extra, member.id)) return error.InvalidExtras;
     }
-    state.checkpoint = try save.Snapshot.capture(state.*);
+    state.checkpoint = .capture(state);
     startCombat(state, encounter);
 }
 
 pub fn retryCombat(state: *State) !void {
     const checkpoint = state.checkpoint orelse return error.MissingBattleCheckpoint;
     const encounter = state.combat.encounter;
-    const trigger = state.encounter_trigger;
-    const field_event = state.field_event;
-    const scripted = state.scripted_battle;
-    const suppressed_trigger = state.suppressed_trigger;
-    const encounters_enabled = state.field_encounter_clock.enabled;
-    const field_visit = state.field_state;
-    const initialized_room_visit = state.initialized_room_visit;
-    const checked_arrival_visit = state.checked_arrival_visit;
-    try checkpoint.apply(state);
-    // A combat retry rolls back progress within the current field visit.
-    state.field_state.scene_ticks = field_visit.scene_ticks;
-    state.field_state.movement_updates = field_visit.movement_updates;
-    state.field_state.room_entries = field_visit.room_entries;
-    state.initialized_room_visit = initialized_room_visit;
-    state.checked_arrival_visit = checked_arrival_visit;
-    state.field_encounter_clock.enabled = encounters_enabled;
+    @memcpy(checkpoint.progress.party, checkpoint.members[0..checkpoint.progress.party.len]);
+    state.combat.progress = checkpoint.progress;
+    state.combat.formation = checkpoint.formation;
+    state.combat.random = checkpoint.random;
+    state.elapsed_ticks = checkpoint.elapsed_ticks;
     startCombat(state, encounter);
-    state.encounter_trigger = trigger;
-    state.field_event = field_event;
-    state.scripted_battle = scripted;
-    if (scripted != null) state.suppressed_trigger = suppressed_trigger;
 }
 
 fn startCombat(state: *State, encounter: usize) void {

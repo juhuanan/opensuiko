@@ -92,6 +92,29 @@ pub const Content = struct {
         return null;
     }
 
+    pub fn characterRules(self: Content) field.game_state.CharacterRules {
+        return .{
+            .tables = self.systems,
+            .profiles = if (self.party.len == 0) null else self.party.ptr,
+            .profile_count = self.party.len,
+            .lookup = characterProfile,
+        };
+    }
+
+    fn characterProfile(context: *const anyopaque, count: usize, id: []const u8) ?field.game_state.CharacterProfile {
+        const profiles: [*]const Profile = @ptrCast(@alignCast(context));
+        for (profiles[0..count]) |profile| if (std.mem.eql(u8, profile.id, id)) return .{
+            .id = profile.id,
+            .name = profile.name,
+            .growth = profile.growth,
+            .weapon = profile.weapon,
+            .weapon_range = profile.weapon_range,
+            .rune = profile.rune,
+            .rune_locked = profile.rune_locked,
+        };
+        return null;
+    }
+
     pub fn initialPartyCount(self: Content) usize {
         return if (self.initial_party) |ids| ids.len else self.party.len;
     }

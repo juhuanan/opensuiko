@@ -234,7 +234,7 @@ pub fn validateScenePartyChanges(state: *const journey.State) !void {
             if (host.characterId(id) == null or ((command.kind == .party_load or command.kind == .advance_character) and host.characterId(id).? >= 108) or state.combat.content.partyProfile(id) == null) return error.UnknownFieldEventPartyMember;
             if (command.kind == .party_join or command.kind == .party_load or command.kind == .advance_character) {
                 const catalog = state.party_catalog orelse return error.MissingPartyCatalogue;
-                _ = try party_session.catalogue.materializeBound(state.combat.*, catalog, id, state.party_bindings);
+                _ = try party_session.catalogue.materializeBound(state.combat.content.characterRules(), catalog, id, state.party_bindings);
             }
         }
     };

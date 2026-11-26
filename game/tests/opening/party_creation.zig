@@ -105,7 +105,7 @@ test "party owner replays source additions and rejects forged or stale proposals
     defer template.deinit();
     var participants: [6]battle.Member = undefined;
     const combat = try battle.State.init(content.value, rules.value, &participants, 17);
-    const hero = try party.catalogue.materialize(combat, catalogue.value, "hero");
+    const hero = try party.catalogue.materialize(combat.content.characterRules(), catalogue.value, "hero");
     var roster: party.Snapshot = .{ .entry_id = "boot", .content_id = "source", .receipt = "boot", .baseline_revision = 0 };
     roster.members[0] = hero.owned;
     roster.extras[0] = hero.extra;
@@ -184,7 +184,7 @@ test "party owner replays source additions and rejects forged or stale proposals
     try std.testing.expectError(error.InvalidProposal, owner.commit(context, forged));
     forged = proposal;
     forged.after.roster.members[0].?.hp -= 1;
-    _ = try party.Session.init(combat, forged.after.roster, .{});
+    _ = try party.Session.init(combat.content.characterRules(), forged.after.roster, .{});
     try std.testing.expectError(error.InvalidProposal, owner.commit(context, forged));
     try owner.commit(context, proposal);
     try owner.commit(context, try owner.propose(context, .{ .event_add = 6 }, 5));

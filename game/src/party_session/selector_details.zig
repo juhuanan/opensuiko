@@ -1,6 +1,7 @@
 //! Persistent character values for the headquarters details window.
 const std = @import("std");
-const battle = @import("battle");
+const character_state = @import("field").game_state;
+const types = @import("battle_rules");
 const party = @import("session.zig");
 
 pub const Details = struct {
@@ -15,14 +16,14 @@ pub const Details = struct {
     attack: u16 = 0,
     armour: u16 = 0,
     charges: [4]u16,
-    range: battle.WeaponRange,
+    range: character_state.WeaponRange,
     rune: ?[]const u8,
 
-    pub fn derive(combat: battle.State, owned: battle.OwnedMember, extra: party.CharacterExtra) !Details {
-        const rules = combat.content.systems orelse return error.MissingSelectorSystems;
-        try combat.validateOwnedMember(owned);
+    pub fn derive(rules: character_state.CharacterRules, owned: character_state.Character, extra: party.CharacterExtra) !Details {
+        const tables = rules.tables orelse return error.MissingSelectorSystems;
+        try rules.validate(owned);
         if (extra.member_id.len != 0 and !std.mem.eql(u8, extra.member_id, owned.id)) return error.InvalidSelectorExtra;
-        const profile = combat.content.partyProfile(owned.id) orelse return error.MissingSelectorProfile;
+        const profile = rules.profile(owned.id) orelse return error.MissingSelectorProfile;
         const weapon = profile.weapon orelse return error.MissingSelectorWeapon;
         // Native base attack retains the initial weapon power; menu PWR excludes it.
         const power = std.math.sub(u16, owned.base_stats.attack, weapon.powers[weapon.initial_level - 1]) catch return error.InvalidSelectorPower;
@@ -37,16 +38,16 @@ pub const Details = struct {
             .luck = owned.base_stats.luck,
             .charges = owned.rune_charges,
             .range = profile.weapon_range orelse return error.MissingSelectorWeaponRange,
-            .rune = if (owned.rune) |index| rules.runes[index].name else null,
+            .rune = if (owned.rune) |index| tables.runes[index].name else null,
         };
-        if (owned.rune) |index| if (std.mem.eql(u8, rules.runes[index].id, "gale")) {
+        if (owned.rune) |index| if (std.mem.eql(u8, tables.runes[index].id, "gale")) {
             result.speed *%= 2;
         };
         const augment = party.weaponAugment(extra);
         if (augment.rune == .wind) result.defense +%= @as(u16, augment.fragments) * 3;
         if (augment.rune == .earth) result.skill +%= @as(u16, augment.fragments) * 2;
-        for (std.enums.values(battle.systems.EquipmentSlot)) |slot| if (owned.loadout.get(slot)) |index| {
-            const bonuses = rules.equipment[index].bonuses;
+        for (std.enums.values(types.EquipmentSlot)) |slot| if (owned.loadout.get(slot)) |index| {
+            const bonuses = tables.equipment[index].bonuses;
             inline for (.{ &result.power, &result.skill, &result.defense, &result.speed, &result.magic, &result.luck, &result.attack, &result.armour }, 0..) |value, column| {
                 value.* +%= @as(u16, @bitCast(@as(i16, bonuses[column])));
             }

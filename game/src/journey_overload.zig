@@ -48,17 +48,12 @@ pub fn canDrop(state: *const State, member: usize, slot: usize) !bool {
 
 pub fn prepareReplacement(state: *const State, member: usize, slot: usize, incoming: field.items.Id) !battle.OwnedMember {
     if (!try canDrop(state, member, slot)) return error.ItemCannotBeDiscarded;
-    var members: [6]battle.Member = undefined;
-    const count = state.combat.partyCount();
-    @memcpy(members[0..count], state.combat.progress.party);
-    var staged = state.combat.*;
-    staged.progress.party = members[0..count];
-    if (try wornSlot(state, member, slot)) |place| try staged.equipSlotOwned(member, place, null);
-    const bag = &members[member].inventory;
-    bag.remove(slot);
-    if (!try bag.receive(incoming)) return error.InventoryFull;
-    const owned = staged.ownedMember(member);
-    try staged.validateOwnedMember(owned);
+    const rules = state.combat.content.characterRules();
+    var owned = state.combat.ownedMember(member);
+    if (try wornSlot(state, member, slot)) |place| try rules.equipOwned(&owned, place, null);
+    owned.inventory.remove(slot);
+    if (!try owned.inventory.receive(incoming)) return error.InventoryFull;
+    try rules.validate(owned);
     return owned;
 }
 

@@ -1,5 +1,6 @@
 //! Journey checkpoint shape and migration rules.
 const std = @import("std");
+const roster = @import("journey_roster.zig");
 const journey = @import("journey.zig");
 const State = journey.State;
 const field = @import("field");
@@ -14,13 +15,6 @@ const ordinary = @import("field_actors");
 
 const ReserveRecords = [72]?battle.OwnedMemberRecord;
 const SharedItems = journey.SharedItems;
-
-fn emptyExtra(extra: party_session.CharacterExtra) bool {
-    if (extra.member_id.len != 0 or extra.weapon_element != .none) return false;
-    for (extra.weapon_fragments) |count| if (count != 0) return false;
-    for (extra.locked_equipment) |locked| if (locked) return false;
-    return true;
-}
 
 const current_save_version = 43;
 const save_prefix = "suikoden-journey-save/";
@@ -106,7 +100,7 @@ pub const Snapshot = struct {
 
     pub fn capture(state: State) !Snapshot {
         const world = &state.field_state;
-        if (state.mode != .field or state.dice_game != null or state.side_game != null or state.teleport_session != null or state.party_selection != null or state.item_overload != null or state.auto_travel != null or world.auto_route_id != null or world.remaining != 0 or world.dialogue != null or world.rest_ticks != 0) return error.GameBusy;
+        try state.requireIdleField();
         const combat = state.combat;
         if (state.boat_travel) |boat| try boat.validate((state.boat_data orelse return error.MissingBoatOwner).*, state.package.rooms[world.room].id, world.x, world.y, world.facing, combat.progress.story.scenario orelse return error.MissingSourceStoryState);
         const count: u8 = @intCast(combat.partyCount());
@@ -265,56 +259,29 @@ pub const Snapshot = struct {
         } else false;
         if (!destination.contains(self.x, self.y) or (!walkable and !source_arrival and !source_push and self.boat_travel == null) or self.money > 999999) return error.InvalidSave;
         if (self.party_count == 0 or self.party_count > 6) return error.InvalidSave;
-        for (self.extras[0..self.party_count], 0..) |extra, i| {
-            if (extra.member_id.len != 0 and !std.mem.eql(u8, extra.member_id, self.party[i].id)) return error.InvalidExtras;
-            if (extra.member_id.len == 0 and !emptyExtra(extra)) return error.InvalidExtras;
-        }
-        for (self.extras[self.party_count..]) |extra| if (!emptyExtra(extra)) return error.InvalidExtras;
         var members: [6]battle.Member = undefined;
         const active = members[0..self.party_count];
         for (active, 0..) |*member, i| member.* = try self.ownedMember(i, state.combat.content);
-        try (field.game_state.Progress{ .money = self.money, .party = active, .story = self.story }).validate();
-        var seen: [6]bool = @splat(false);
-        for (self.formation, 0..) |member, slot| {
-            if (member >= seen.len or seen[member] or (slot < self.party_count and member >= self.party_count)) return error.InvalidFormation;
-            seen[member] = true;
-        }
         if (version > 1 and (self.loadouts == null or self.weapon_levels == null)) return error.InvalidEquipment;
         const loadouts = self.loadouts orelse battle.systems.legacyLoadouts(self.equipment);
-        for (active, 0..) |member, i| {
+        for (active, 0..) |_, i| {
             if (self.equipment[i] != loadouts[i].head) return error.InvalidEquipment;
-            try state.combat.validateOwnedMember(member);
         }
-        if (self.story.maas_recruited and !self.story.maas_recruitment_blocked) {
-            var owned = false;
-            for (active) |member| owned = owned or std.mem.eql(u8, member.id, "maas");
-            for (self.reserves orelse @as(ReserveRecords, @splat(null))) |entry| if (entry) |member| {
-                owned = owned or std.mem.eql(u8, member.member.id, "maas");
-            };
-            if (!owned) return error.MissingRecruitedMember;
-        }
-        if (self.reserves) |reserves| {
-            var ended = false;
-            for (reserves, 0..) |entry, i| {
-                if (entry) |owned| {
-                    if (ended) return error.InvalidReserves;
-                    try state.combat.validateOwnedMember(owned.character());
-                    for (active) |member| if (std.mem.eql(u8, member.id, owned.member.id)) return error.DuplicateMember;
-                    for (reserves[0..i]) |other| if (std.mem.eql(u8, other.?.member.id, owned.member.id)) return error.DuplicateMember;
-                } else ended = true;
+        var reserves: @import("journey.zig").Reserves = @splat(null);
+        if (self.reserves) |saved| {
+            for (saved, &reserves) |entry, *member| {
+                if (entry) |record| member.* = record.character();
             }
         }
-        if (self.reserve_extras) |extras| {
-            const reserves = self.reserves orelse @as(ReserveRecords, @splat(null));
-            for (extras, reserves) |extra, owned| {
-                if (extra) |value| {
-                    if (owned == null) return error.InvalidExtras;
-                    if (value.member_id.len == 0) {
-                        if (!emptyExtra(value)) return error.InvalidExtras;
-                    } else if (!std.mem.eql(u8, value.member_id, owned.?.member.id)) return error.InvalidExtras;
-                } else if (owned != null and version >= 21) return error.InvalidExtras;
-            }
-        }
+        try roster.validate(
+            state.combat.content.characterRules(),
+            .{ .money = self.money, .party = active, .story = self.story, .storage = self.storage orelse .{} },
+            self.formation,
+            self.extras,
+            &reserves,
+            self.reserve_extras orelse @splat(null),
+            version >= 21,
+        );
     }
     fn riverBoat(self: *const Snapshot, destination: field.Room) bool {
         if (destination.boat_rapids == null) return false;

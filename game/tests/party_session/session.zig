@@ -186,7 +186,7 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     try std.testing.expectEqual(@as(usize, 78), facts.value.characters.len);
     var members: [6]battle.Member = undefined;
     const combat = try battle.State.init(content.value, rules.value, &members, 17);
-    try std.testing.expectError(error.WeaponUnavailable, party.catalogue.materialize(combat, facts.value, "hero"));
+    try std.testing.expectError(error.WeaponUnavailable, party.catalogue.materialize(combat.content.characterRules(), facts.value, "hero"));
     // Construct a named source-matching host profile to exercise materialization;
     // the synthetic zero-bonus equipment is only a local fixture.
     var profiles = try allocator.dupe(battle.Profile, combat.content.party);
@@ -206,7 +206,7 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     var source_combat = combat;
     source_combat.content.party = profiles;
     source_combat.content.systems = systems;
-    const hero = try party.catalogue.materialize(source_combat, facts.value, "hero");
+    const hero = try party.catalogue.materialize(source_combat.content.characterRules(), facts.value, "hero");
     try std.testing.expectEqual(@as(u16, 17), hero.owned.hp);
     try std.testing.expectEqual(@as(usize, 5), hero.owned.inventory.count());
     try std.testing.expectEqualStrings("hero", hero.extra.member_id);
@@ -240,8 +240,8 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     var ted_combat = combat;
     ted_combat.content.party = ted_profiles;
     ted_combat.content.systems = ted_systems;
-    try std.testing.expectError(error.UnsupportedSeed, party.catalogue.materialize(ted_combat, facts.value, "ted"));
-    const ted_owned = try party.catalogue.materializeBound(ted_combat, facts.value, "ted", bindings.value);
+    try std.testing.expectError(error.UnsupportedSeed, party.catalogue.materialize(ted_combat.content.characterRules(), facts.value, "ted"));
+    const ted_owned = try party.catalogue.materializeBound(ted_combat.content.characterRules(), facts.value, "ted", bindings.value);
     try std.testing.expectEqual(@as(?usize, systems.runes.len), ted_owned.owned.rune);
     try std.testing.expectEqualStrings("ted", ted_owned.extra.member_id);
     var hero_entry = party.Snapshot{ .entry_id = "hero-entry", .content_id = "source-fixture", .receipt = "hero-receipt", .baseline_revision = 1 };
@@ -249,7 +249,7 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     hero_entry.extras[0] = hero.extra;
     hero_entry.eligible[0] = true;
     hero_entry.active[0] = "hero";
-    var hero_session = try party.Session.init(source_combat, hero_entry, .{});
+    var hero_session = try party.Session.init(source_combat.content.characterRules(), hero_entry, .{});
     try hero_session.execute(.{ .equip = .{ .member = "hero", .slot = .head, .equipment = null } });
     try std.testing.expectEqual(@as(?usize, null), hero_session.current.members[0].?.loadout.head);
     try hero_session.execute(.{ .equip = .{ .member = "hero", .slot = .head, .equipment = 0 } });
@@ -269,7 +269,7 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     const operations = [_]party.SharedOperation{.{ .id = "event-grant", .source = "event-50/0", .item = "named-key", .kind = .acquire, .unique = true }};
     const scenes = [_]party.SceneOperation{ party.story.vb6_arrival, .{ .id = "test-scene", .source = "fixture-scene", .scope = .area_transient, .active = .{ members[1].id, members[0].id, null, null, null, null }, .followers = .{ "scene-follower", null, null, null, null, null } } };
     const sources = party.Sources{ .shared = &operations, .scenes = &scenes };
-    var s = try party.Session.init(combat, initial, sources);
+    var s = try party.Session.init(combat.content.characterRules(), initial, sources);
     try s.execute(.{ .scene = "vb6_r06_first_arrival_prefix" });
     try std.testing.expectEqualStrings("kirkis", s.current.scene_order[2].?);
     try std.testing.expectEqualStrings(members[0].id, s.current.active[0].?);
@@ -303,7 +303,7 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     defer allocator.free(bytes);
     const saved = try party.decodeResult(allocator, bytes);
     defer saved.deinit();
-    const restored = try party.replay(combat, initial, sources, saved.value);
+    const restored = try party.replay(combat.content.characterRules(), initial, sources, saved.value);
     try std.testing.expectEqualStrings("scene-follower", restored.current.followers[0].?);
     try std.testing.expectEqual(@as(u8, 1), restored.current.extras[1].?.weapon_fragments[1]);
     try std.testing.expectEqualStrings("named-key", restored.current.shared[0].?);
@@ -313,13 +313,13 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     for ([_]usize{ 1, 3, 6 }) |count| {
         var baseline = initial;
         for (count..6) |i| baseline.active[i] = null;
-        var small = try party.Session.init(combat, baseline, sources);
+        var small = try party.Session.init(combat.content.characterRules(), baseline, sources);
         try small.execute(.{ .select = baseline.active });
         const encoded = try std.json.Stringify.valueAlloc(allocator, small.result(), .{});
         defer allocator.free(encoded);
         const document = try party.decodeResult(allocator, encoded);
         defer document.deinit();
-        const resumed = try party.replay(combat, baseline, sources, document.value);
+        const resumed = try party.replay(combat.content.characterRules(), baseline, sources, document.value);
         for (0..count) |i| try std.testing.expectEqualStrings(members[i].id, resumed.current.active[i].?);
         try std.testing.expectEqualStrings(members[5].id, resumed.current.members[5].?.id);
         try std.testing.expectEqualStrings(members[0].id, resumed.current.forced[0].?);
@@ -337,7 +337,7 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     rune_rules.runes = runes;
     var rune_combat = combat;
     rune_combat.content.systems = rune_rules;
-    var rune_state = try party.Session.init(rune_combat, initial, sources);
+    var rune_state = try party.Session.init(rune_combat.content.characterRules(), initial, sources);
     const source_charges = rune_state.current.members[2].?.rune_charges;
     const target_charges = rune_state.current.members[0].?.rune_charges;
     try rune_state.execute(.{ .transfer_rune = .{ .from = members[2].id, .to = members[0].id } });
@@ -347,13 +347,13 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     try std.testing.expectEqual(target_charges, rune_state.current.members[0].?.rune_charges);
     var occupied = initial;
     occupied.members[0].?.rune = boar;
-    var blocked = try party.Session.init(rune_combat, occupied, sources);
+    var blocked = try party.Session.init(rune_combat.content.characterRules(), occupied, sources);
     try std.testing.expectError(error.RuneOccupied, blocked.execute(.{ .transfer_rune = .{ .from = members[2].id, .to = members[0].id } }));
     try std.testing.expectEqual(boar, blocked.current.members[2].?.rune);
     try std.testing.expect(blocked.commands[0] == null);
     var full = initial;
     for (&full.members[1].?.inventory.slots) |*slot| slot.* = .{ .id = .medicine, .uses = 6 };
-    var rejected = try party.Session.init(combat, full, sources);
+    var rejected = try party.Session.init(combat.content.characterRules(), full, sources);
     try std.testing.expectError(error.InventoryFull, rejected.execute(.{ .give = .{ .from = members[0].id, .slot = 0, .to = members[1].id } }));
     try std.testing.expectEqual(@as(usize, 3), rejected.current.members[0].?.inventory.count());
     try std.testing.expect(rejected.commands[0] == null);
@@ -366,7 +366,7 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     unavailable.input(&rejected, .finish);
     try std.testing.expectEqual(party.view.Outcome.accepted, unavailable.outcome);
     var selectable = party.view.View{ .allow_party_selection = true };
-    var selection_state = try party.Session.init(combat, initial, sources);
+    var selection_state = try party.Session.init(combat.content.characterRules(), initial, sources);
     selectable.input(&selection_state, .down);
     selectable.input(&selection_state, .confirm);
     try std.testing.expectEqualStrings(members[2].id, selection_state.current.active[1].?);
@@ -394,7 +394,7 @@ test "journal replay validates selection, storage, restart and stale baseline" {
     try std.testing.expectEqual(@as(usize, 9), rejected.current.members[1].?.inventory.count());
     var stale = initial;
     stale.baseline_revision += 1;
-    try std.testing.expectError(error.StaleTransaction, party.replay(combat, stale, sources, saved.value));
+    try std.testing.expectError(error.StaleTransaction, party.replay(combat.content.characterRules(), stale, sources, saved.value));
 }
 
 test "canonical Cleo and Ted profiles materialize with selector details and source rune binding" {
@@ -409,17 +409,17 @@ test "canonical Cleo and Ted profiles materialize with selector details and sour
     defer bindings.deinit();
     var members: [6]battle.Member = undefined;
     const combat = try battle.State.init(content.value, rules.value, &members, 17);
-    const cleo = try party.catalogue.materialize(combat, facts.value, "cleo");
+    const cleo = try party.catalogue.materialize(combat.content.characterRules(), facts.value, "cleo");
     try std.testing.expectEqual(@as(u16, 20), cleo.owned.max_hp);
     try std.testing.expect(combat.content.partyProfile("cleo").?.attack.len > 0);
     try std.testing.expect(combat.content.partyProfile("ted").?.attack.len > 0);
-    const ted = try party.catalogue.materializeBound(combat, facts.value, "ted", bindings.value);
+    const ted = try party.catalogue.materializeBound(combat.content.characterRules(), facts.value, "ted", bindings.value);
     try std.testing.expectEqual(@as(u16, 18), ted.owned.max_hp);
     try std.testing.expect(ted.owned.rune != null);
-    const equipped = try party.selector.Details.derive(combat, cleo.owned, cleo.extra);
+    const equipped = try party.selector.Details.derive(combat.content.characterRules(), cleo.owned, cleo.extra);
     try std.testing.expectEqual(@as(u16, 15), equipped.defense);
     try std.testing.expectEqual(@as(u16, 20), equipped.armour);
-    var preview = try party.catalogue.materialize(combat, facts.value, "hero");
+    var preview = try party.catalogue.materialize(combat.content.characterRules(), facts.value, "hero");
     const weapon = combat.content.partyProfile("hero").?.weapon.?;
     preview.owned.base_stats = .{ .attack = 11 + weapon.powers[weapon.initial_level - 1], .skill = 12, .defense = 13, .speed = 14, .magic = 15, .luck = 16 };
     preview.owned.loadout = .{};
@@ -427,13 +427,13 @@ test "canonical Cleo and Ted profiles materialize with selector details and sour
     preview.owned.weapon_level = 2;
     preview.owned.rune_charges = @splat(0);
     preview.owned.max_rune_charges = combat.content.systems.?.magicCapacity(15);
-    const plain = try party.selector.Details.derive(combat, preview.owned, preview.extra);
+    const plain = try party.selector.Details.derive(combat.content.characterRules(), preview.owned, preview.extra);
     try std.testing.expectEqual(@as(u16, 11), plain.power);
     try std.testing.expectEqual(@as(u16, 11 + weapon.powers[1]), plain.attack);
     preview.owned.rune = combat.content.systems.?.runeIndex("gale") orelse return error.MissingFixtureRune;
     preview.extra.weapon_element = .wind;
     preview.extra.weapon_fragments[2] = 3;
-    const augmented = try party.selector.Details.derive(combat, preview.owned, preview.extra);
+    const augmented = try party.selector.Details.derive(combat.content.characterRules(), preview.owned, preview.extra);
     try std.testing.expectEqual(@as(u16, 28), augmented.speed);
     try std.testing.expectEqual(@as(u16, 22), augmented.defense);
     try std.testing.expectEqual(@as(u16, 22), augmented.armour);

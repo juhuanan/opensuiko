@@ -88,7 +88,7 @@ pub fn baseline(combat: battle.State, reserves: journey.Reserves, ledger: Ledger
         };
         if (matches != 1) return error.InvalidCharacterExtra;
     };
-    _ = try party.Session.init(combat, result, .{});
+    _ = try party.Session.init(combat.content.characterRules(), result, .{});
     return result;
 }
 
@@ -118,6 +118,6 @@ pub fn replayPause(combat: battle.State, reserves: journey.Reserves, ledger: Led
     if (!std.mem.eql(u8, canonical, receipt) or number != (std.math.add(u64, ledger.revision, 1) catch return error.InvalidPartyRevision) or (ledger.last_receipt != null and number <= ledger.last_receipt.?)) return error.InvalidPartyReceipt;
     const current = try baseline(combat, reserves, ledger, "world_pause_preparation", content, receipt);
     try authorizePause(journal);
-    const preview = try party.replay(combat, current, .{}, journal);
+    const preview = try party.replay(combat.content.characterRules(), current, .{}, journal);
     return .{ .snapshot = preview.current, .revision = number, .receipt = number };
 }

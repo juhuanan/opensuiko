@@ -155,12 +155,15 @@ test "journey encounter carries rune pieces into battle and retry" {
     state.extras[0].member_id = "";
     try std.testing.expectError(error.InvalidExtras, state.beginEncounter(0));
     state.extras[0] = .{ .member_id = state.combat.progress.party[0].id, .weapon_element = .wind, .weapon_fragments = .{ 0, 0, 3, 0, 0 } };
+    state.save_name = .{};
     try state.beginEncounter(0);
     try expect(state.combat.progress.party[0].weapon_augment.rune == .wind);
     try equal(@as(u8, 3), state.combat.progress.party[0].weapon_augment.fragments);
     state.combat.phase = .defeat;
     state.mode = .defeat;
     _ = state.tick(.{}, .{ .confirm = true });
+    try equal(.battle, state.mode);
+    try equal(@as(u8, 0), state.save_name.len);
     try expect(state.combat.progress.party[0].weapon_augment.rune == .wind);
     try equal(@as(u8, 3), state.combat.progress.party[0].weapon_augment.fragments);
 }
@@ -294,7 +297,7 @@ test "reserve rune pieces follow their owner through swaps saves and battle" {
     const roster = state.buildPartySnapshot();
     try std.testing.expectEqualStrings("hero", roster.members[6].?.id);
     try expect(roster.extras[6].?.weapon_element == .fire);
-    _ = try party_session.Session.init(state.combat.*, roster, .{});
+    _ = try party_session.Session.init(state.combat.content.characterRules(), roster, .{});
     var directory = std.testing.tmpDir(.{});
     defer directory.cleanup();
     try journey.save(std.testing.io, allocator, directory.dir, state);
@@ -350,7 +353,7 @@ test "Maas join growth matches original event consumer including raw STR and lev
     for (vectors.value) |vector| {
         var definition = state.data.recruitment.?;
         definition.seed.level = vector.level;
-        const joined = try journey.recruitment.prepare(definition, state.combat.*, vector.draws);
+        const joined = try journey.recruitment.prepare(definition, state.combat.content.characterRules(), vector.draws);
         const weapon = state.combat.content.partyProfile("maas").?.weapon.?;
         try equal(vector.expected.level, joined.level);
         try equal(vector.expected.experience, joined.experience);
@@ -363,7 +366,7 @@ test "Maas join growth matches original event consumer including raw STR and lev
         try equal(@as(?usize, null), joined.rune);
         var bad = definition;
         bad.seed.level = 100;
-        try std.testing.expectError(error.InvalidMember, journey.recruitment.prepare(bad, state.combat.*, vector.draws));
+        try std.testing.expectError(error.InvalidMember, journey.recruitment.prepare(bad, state.combat.content.characterRules(), vector.draws));
     }
     try std.testing.expectEqualDeep(before, try journey.Snapshot.capture(state));
 }
@@ -391,7 +394,7 @@ test "Maas recruitment gates and commits membership ownership and RNG atomically
     var expected_random = state.combat.random;
     var draws: [119]u15 = undefined;
     for (&draws) |*draw| draw.* = expected_random.random().int(u15);
-    const expected = try journey.recruitment.prepare(state.data.recruitment.?, state.combat.*, &draws);
+    const expected = try journey.recruitment.prepare(state.data.recruitment.?, state.combat.content.characterRules(), &draws);
     try state.recruitMaas();
     try std.testing.expectEqualDeep(expected, state.reserves[0].?);
     try std.testing.expectEqualDeep(expected_random, state.combat.random);
@@ -737,7 +740,10 @@ test "reserve swaps preserve every owned field, formation and inactive progressi
     owned.inventory.slots[0].?.uses = 3;
     owned.inventory.slots[3] = .{ .id = .octopus_urn, .uses = 0, .identified = false };
     owned.rune_charges[0] -= 1;
+    const save_label = state.save_name;
+    state.save_name = .{};
     try state.retainReserve(owned);
+    state.save_name = save_label;
     const baseline = try journey.Snapshot.capture(state);
     for (0..6) |i| {
         const before = state.combat.ownedMember(i);
@@ -3984,7 +3990,7 @@ test "journey party snapshot preserves all six owned members" {
     var members: [6]battle.Member = undefined;
     var state = try fixtures.session(&members);
     const snapshot = state.buildPartySnapshot();
-    var session = try party_session.Session.init(state.combat.*, snapshot, .{});
+    var session = try party_session.Session.init(state.combat.content.characterRules(), snapshot, .{});
     try session.validate();
     try std.testing.expectEqualStrings("hero", snapshot.active[0].?);
     try std.testing.expectEqualStrings("gremio", snapshot.active[1].?);

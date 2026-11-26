@@ -1,7 +1,7 @@
 //! Platform-independent preparation view. A host draws `title`, `row` and
 //! `last_error`, and forwards ordinary directional/confirm/cancel inputs.
 const std = @import("std");
-const battle = @import("battle");
+const types = @import("battle_rules");
 const combat_menu = @import("combat_systems").menu;
 const session = @import("session.zig");
 const roster = @import("controller.zig");
@@ -313,7 +313,7 @@ pub const View = struct {
                         if (self.issue(s, .{ .weapon_piece = .{ .owner = self.memberId(s.*), .slot = self.item, .target = recipient, .replace = true } })) self.choose(s.*, .bag);
                     },
                     .equipment_slot => {
-                        const slots = [_]battle.systems.EquipmentSlot{ .head, .body, .shield, .accessory_one, .accessory_two };
+                        const slots = [_]types.EquipmentSlot{ .head, .body, .shield, .accessory_one, .accessory_two };
                         var found: ?usize = null;
                         if (!self.unequip) {
                             const bag = s.current.members[self.member].?.inventory;
@@ -322,7 +322,7 @@ pub const View = struct {
                                 return;
                             }
                             const item_id = @tagName(bag.slots[self.item].?.id);
-                            const systems = s.combat.content.systems orelse {
+                            const systems = s.rules.tables orelse {
                                 self.last_error = "EquipmentUnavailable";
                                 return;
                             };

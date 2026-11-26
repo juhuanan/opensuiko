@@ -42,19 +42,12 @@ pub fn rune(self: *const State, member: usize) ?systems.Rune {
     return result;
 }
 pub fn checkRuneAttachment(self: State, member: usize, owner: usize, slot: usize) !usize {
-    if (member >= self.partyCount() or owner >= self.partyCount() or self.content.systems == null) return error.InvalidRune;
-    if (self.partyProfile(member).rune_locked) return error.RuneLocked;
+    if (member >= self.partyCount() or owner >= self.partyCount()) return error.InvalidRune;
+    const rules = self.content.characterRules();
+    try rules.checkRuneTarget(self.progress.party[member]);
     if (self.progress.party[member].rune != null) return error.RuneOccupied;
     try self.progress.validate();
-    const inventory = self.progress.party[owner].inventory;
-    if (slot >= inventory.count()) return error.InvalidItem;
-    const id = @tagName(inventory.slots[slot].?.id);
-    for (self.content.systems.?.runes, 0..) |definition, index| {
-        if (definition.crystal == null or !std.mem.eql(u8, definition.crystal.?, id)) continue;
-        if (!definition.allows(self.partyProfile(member).id)) return error.IncompatibleRune;
-        return index;
-    }
-    return error.InvalidItem;
+    return rules.attachmentRune(self.progress.party[member].id, self.progress.party[owner].inventory, slot);
 }
 pub fn attachRune(self: *State, member: usize, owner: usize, slot: usize) !void {
     const index = try self.checkRuneAttachment(member, owner, slot);
@@ -62,16 +55,11 @@ pub fn attachRune(self: *State, member: usize, owner: usize, slot: usize) !void 
     self.progress.party[owner].inventory.remove(slot);
 }
 pub fn detachRune(self: *State, member: usize) !void {
-    if (member >= self.partyCount() or self.content.systems == null) return error.InvalidRune;
-    if (self.partyProfile(member).rune_locked) return error.RuneLocked;
+    if (member >= self.partyCount()) return error.InvalidRune;
+    const rules = self.content.characterRules();
+    try rules.checkRuneTarget(self.progress.party[member]);
     try self.progress.validate();
-    const definition = self.rune(member) orelse return error.InvalidRune;
-    const id = std.meta.stringToEnum(field.items.Id, definition.crystal orelse return error.RuneLocked) orelse return error.InvalidRune;
-    const inventory = &self.progress.party[member].inventory;
-    const count = inventory.count();
-    if (count == inventory.slots.len) return error.InventoryFull;
-    inventory.slots[count] = .{ .id = id, .uses = 0 };
-    self.progress.party[member].rune = null;
+    try rules.detachRune(&self.progress.party[member]);
 }
 pub fn hasRune(self: *const State, member: usize, id: []const u8) bool {
     const owned = self.rune(member) orelse return false;

@@ -1,7 +1,8 @@
 //! Private preparation state. All identities and catalogue indices are borrowed from
-//! the caller's validated battle content; no Progress or story state is mutated.
+//! the caller's character rules. The host publishes changes after replay.
 const std = @import("std");
-const battle = @import("battle");
+const systems = @import("battle_rules");
+const character = @import("field").game_state;
 const field = @import("field");
 const recruitment = @import("recruitment");
 const items = field.items;
@@ -27,7 +28,7 @@ pub const Snapshot = struct {
     content_id: []const u8,
     receipt: []const u8,
     baseline_revision: u64,
-    members: [max_owned]?battle.OwnedMember = @splat(null),
+    members: [max_owned]?character.Character = @splat(null),
     extras: [max_owned]?CharacterExtra = @splat(null),
     eligible: [max_owned]bool = @splat(false),
     active: [6]?[]const u8 = @splat(null),
@@ -62,7 +63,7 @@ pub const Command = union(enum) {
     weapon_piece: struct { owner: []const u8, slot: usize, target: []const u8, replace: bool = false },
     shared: []const u8,
     select: [6]?[]const u8,
-    equip: struct { member: []const u8, slot: battle.systems.EquipmentSlot, equipment: ?usize },
+    equip: struct { member: []const u8, slot: systems.EquipmentSlot, equipment: ?usize },
     give: struct { from: []const u8, slot: usize, to: []const u8 },
     swap: struct { first: []const u8, first_slot: usize, second: []const u8, second_slot: usize },
     discard: struct { member: []const u8, slot: usize },
@@ -84,21 +85,21 @@ pub const Result = struct {
 pub const RosterTransaction = Result;
 pub const InventoryTransaction = Result;
 
-pub fn weaponAugment(extra: CharacterExtra) battle.systems.WeaponAugment {
-    const rune: battle.systems.WeaponRune = @fromBackingInt(@intCast(@backingInt(extra.weapon_element)));
+pub fn weaponAugment(extra: CharacterExtra) systems.WeaponAugment {
+    const rune: systems.WeaponRune = @fromBackingInt(@intCast(@backingInt(extra.weapon_element)));
     return .{ .rune = rune, .fragments = if (rune == .none) 0 else extra.weapon_fragments[@backingInt(rune) - 1] };
 }
 
-pub fn weaponAugments(combat: battle.State, snapshot: Snapshot) ![6]battle.systems.WeaponAugment {
-    _ = try Session.init(combat, snapshot, .{});
-    var result: [6]battle.systems.WeaponAugment = @splat(.{});
+pub fn weaponAugments(rules: character.CharacterRules, active_members: []const character.Character, snapshot: Snapshot) ![6]systems.WeaponAugment {
+    _ = try Session.init(rules, snapshot, .{});
+    var result: [6]systems.WeaponAugment = @splat(.{});
     for (snapshot.active, 0..) |active, slot| {
-        if (slot >= combat.partyCount()) {
+        if (slot >= active_members.len) {
             if (active != null) return error.WorldPartyMismatch;
             continue;
         }
         const id = active orelse return error.WorldPartyMismatch;
-        if (!eq(id, combat.progress.party[slot].id)) return error.WorldPartyMismatch;
+        if (!eq(id, active_members[slot].id)) return error.WorldPartyMismatch;
         const index = for (snapshot.members, 0..) |member, i| {
             if (member != null and eq(member.?.id, id)) break i;
         } else return error.UnknownMember;
@@ -132,12 +133,12 @@ fn validateIds(ids: [6]?[]const u8) !usize {
 pub const Session = struct {
     before: Snapshot,
     current: Snapshot,
-    combat: battle.State,
+    rules: character.CharacterRules,
     commands: [max_commands]?Command = @splat(null),
     sources: Sources,
 
-    pub fn init(combat: battle.State, snapshot: Snapshot, sources: Sources) !Session {
-        const self = Session{ .before = snapshot, .current = snapshot, .combat = combat, .sources = sources };
+    pub fn init(rules: character.CharacterRules, snapshot: Snapshot, sources: Sources) !Session {
+        const self = Session{ .before = snapshot, .current = snapshot, .rules = rules, .sources = sources };
         try self.validate();
         return self;
     }
@@ -154,7 +155,7 @@ pub const Session = struct {
     }
     pub fn validate(self: *const Session) !void {
         const s = self.current;
-        if (self.combat.content.systems == null) return error.SystemsUnavailable;
+        if (self.rules.tables == null) return error.SystemsUnavailable;
         if (s.schema != version or s.entry_id.len == 0 or s.content_id.len == 0 or s.receipt.len == 0) return error.InvalidEntry;
         try s.storage.validate();
         var shared_ended = false;
@@ -172,10 +173,10 @@ pub const Session = struct {
         for (s.members, 0..) |maybe, i| {
             if (maybe) |member| {
                 if (ended) return error.InvalidRoster;
-                try self.combat.validateOwnedMember(member);
+                try self.rules.validate(member);
                 const extra = s.extras[i] orelse return error.MissingCharacterExtra;
                 if (!eq(extra.member_id, member.id)) return error.InvalidCharacterExtra;
-                const slots = [_]battle.systems.EquipmentSlot{ .head, .body, .shield, .accessory_one, .accessory_two };
+                const slots = [_]systems.EquipmentSlot{ .head, .body, .shield, .accessory_one, .accessory_two };
                 for (extra.locked_equipment, slots) |locked, slot| if (locked and member.loadout.get(slot) == null) return error.InvalidCharacterExtra;
                 for (s.members[0..i]) |prior| if (prior != null and eq(prior.?.id, member.id)) return error.DuplicateMember;
             } else {
@@ -204,7 +205,7 @@ pub const Session = struct {
         try next.validate();
         self.* = next;
     }
-    fn equip(self: *Session, id: []const u8, slot: battle.systems.EquipmentSlot, equipment: ?usize) !void {
+    fn equip(self: *Session, id: []const u8, slot: systems.EquipmentSlot, equipment: ?usize) !void {
         var next = self.*;
         const i = try next.activeIndex(id);
         const slot_index: usize = switch (slot) {
@@ -215,27 +216,12 @@ pub const Session = struct {
             .accessory_two => 4,
         };
         if (next.current.extras[i].?.locked_equipment[slot_index] and next.current.members[i].?.loadout.get(slot) != equipment) return error.EquipmentLocked;
-        var local = next.combat;
-        var members = [_]battle.Member{next.current.members[i].?};
-        local.progress.party = &members;
-        local.setOwnedMember(0, next.current.members[i].?);
-        local.clearTemporaryStats();
-        try local.equipSlotOwned(0, slot, equipment);
-        next.current.members[i] = local.ownedMember(0);
+        try next.rules.equipOwned(&next.current.members[i].?, slot, equipment);
         try next.validate();
         self.* = next;
     }
-    fn itemEquipped(self: Session, member: battle.OwnedMember, slot: usize) bool {
-        const item = member.inventory.slots[slot] orelse return false;
-        const systems = self.combat.content.systems orelse return false;
-        var worn: usize = 0;
-        for (std.enums.values(battle.systems.EquipmentSlot)) |place| if (member.loadout.get(place)) |gear| {
-            if (gear < systems.equipment.len and eq(@tagName(item.id), systems.equipment[gear].id)) worn += 1;
-        };
-        for (member.inventory.slots[0..slot]) |other| if (other != null and other.?.id == item.id) {
-            worn -|= 1;
-        };
-        return worn > 0;
+    fn itemEquipped(self: Session, member: character.Character, slot: usize) bool {
+        return self.rules.itemEquipped(member, slot);
     }
     fn give(self: *Session, from: []const u8, slot: usize, to: []const u8) !void {
         var next = self.*;
@@ -299,7 +285,7 @@ pub const Session = struct {
         const entry = self.sources.maas orelse return error.RecruitmentUnavailable;
         if (entry.tier < entry.definition.minimum_tier or entry.already_recruited or entry.blocked) return error.RecruitmentUnavailable;
         if (self.memberIndex("maas")) |_| return error.AlreadyOwned else |err| if (err != error.UnknownMember) return err;
-        const owned = try recruitment.prepare(entry.definition, self.combat, entry.draws);
+        const owned = try recruitment.prepare(entry.definition, self.rules, entry.draws);
         var next = self.*;
         var free: ?usize = null;
         for (next.current.members, 0..) |member, i| if (member == null) {
@@ -399,22 +385,19 @@ pub const Session = struct {
         try next.validate();
         self.* = next;
     }
-    // Run the existing rune service over a temporary battle state, then publish
-    // both owned records together only after the complete session validates.
     fn runeService(self: *Session, member: []const u8, owner: ?[]const u8, slot: usize) !void {
         var next = self.*;
-        const a = try next.activeIndex(member);
-        const b = if (owner) |id| try next.activeIndex(id) else a;
-        var local = next.combat;
-        var party_members = [_]battle.Member{ next.current.members[a].?, next.current.members[b].? };
-        const n: usize = if (a == b) 1 else 2;
-        local.progress.party = party_members[0..n];
-        local.setOwnedMember(0, next.current.members[a].?);
-        if (n == 2) local.setOwnedMember(1, next.current.members[b].?);
-        local.clearTemporaryStats();
-        if (owner != null) try local.attachRune(0, if (n == 1) 0 else 1, slot) else try local.detachRune(0);
-        next.current.members[a] = local.ownedMember(0);
-        if (n == 2) next.current.members[b] = local.ownedMember(1);
+        const target = try next.activeIndex(member);
+        const crystal_owner = if (owner) |id| try next.activeIndex(id) else target;
+        try next.rules.checkRuneTarget(next.current.members[target].?);
+        if (owner != null) {
+            if (next.current.members[target].?.rune != null) return error.RuneOccupied;
+            const inventory = &next.current.members[crystal_owner].?.inventory;
+            next.current.members[target].?.rune = try next.rules.attachmentRune(member, inventory.*, slot);
+            inventory.remove(slot);
+        } else {
+            try next.rules.detachRune(&next.current.members[target].?);
+        }
         try next.validate();
         self.* = next;
     }
@@ -463,12 +446,12 @@ pub const Session = struct {
 /// Replays a bounded command journal against caller-owned canonical state.
 /// The host must compare its revision and atomically persist the receipt and
 /// replayed state. Never accept a caller-provided after-state as authority.
-pub fn replay(combat: battle.State, baseline: Snapshot, sources: Sources, transaction: Result) !Session {
+pub fn replay(rules: character.CharacterRules, baseline: Snapshot, sources: Sources, transaction: Result) !Session {
     if (transaction.schema != version or !eq(baseline.entry_id, transaction.entry_id) or
         !eq(baseline.content_id, transaction.content_id) or
         !eq(baseline.receipt, transaction.receipt) or
         baseline.baseline_revision != transaction.baseline_revision) return error.StaleTransaction;
-    var result = try Session.init(combat, baseline, sources);
+    var result = try Session.init(rules, baseline, sources);
     var ended = false;
     var applied: usize = 0;
     for (transaction.commands) |maybe| {

@@ -23,14 +23,14 @@ pub fn takeWindowOpenCues(state: *State) u8 {
 
 pub fn inspect(state: *const State, id: []const u8) !selector.Details {
     for (state.combat.progress.party, 0..) |member, index| if (std.mem.eql(u8, member.id, id)) {
-        return selector.Details.derive(state.combat.*, state.combat.ownedMember(index), state.extras[index]);
+        return selector.Details.derive(state.combat.content.characterRules(), state.combat.ownedMember(index), state.extras[index]);
     };
     for (state.reserves, state.reserve_extras) |maybe, extra| if (maybe) |owned| {
-        if (std.mem.eql(u8, owned.id, id)) return selector.Details.derive(state.combat.*, owned, extra orelse .{ .member_id = "" });
+        if (std.mem.eql(u8, owned.id, id)) return selector.Details.derive(state.combat.content.characterRules(), owned, extra orelse .{ .member_id = "" });
     };
     const catalogue = state.party_catalog orelse return error.MissingPartyCatalogue;
-    const seed = try party.catalogue.materializeBound(state.combat.*, catalogue, id, state.party_bindings);
-    return selector.Details.derive(state.combat.*, seed.owned, seed.extra);
+    const seed = try party.catalogue.materializeBound(state.combat.content.characterRules(), catalogue, id, state.party_bindings);
+    return selector.Details.derive(state.combat.content.characterRules(), seed.owned, seed.extra);
 }
 
 pub const View = struct {

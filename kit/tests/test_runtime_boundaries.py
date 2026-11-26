@@ -131,6 +131,18 @@ def test_party_catalogue_is_separate_from_roster() -> None:
     assert '@import("catalogue.zig")' in session
 
 
+def test_party_rules_do_not_depend_on_battle_state() -> None:
+    modules = registered_modules()
+    for name in ('party_session', 'recruitment'):
+        for chain in dependency_paths(modules[name], modules):
+            assert chain[-1] != modules['battle'], show_chain(chain)
+
+
+def test_roster_changes_and_battle_retry_do_not_import_save_code() -> None:
+    for name in ('journey_roster.zig', 'journey_battle.zig'):
+        assert 'journey_save.zig' not in imports(RUNTIME / name)
+
+
 if __name__ == "__main__":
     tests = [(name, fn) for name, fn in sorted(globals().items()) if name.startswith("test_") and callable(fn)]
     failed = 0

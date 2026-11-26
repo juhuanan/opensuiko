@@ -318,36 +318,7 @@ pub const State = struct {
         self.progress.party[index].name = profile.name;
     }
     pub fn validateOwnedMember(self: *const State, owned: OwnedMember) !void {
-        var members = [_]Member{owned};
-        try (field.game_state.Progress{ .money = 0, .party = &members }).validate();
-        const member = owned;
-        const profile = self.content.partyProfile(member.id) orelse return error.InvalidMember;
-        if (member.max_hp > 9999 or (member.hp == 0) != (member.status == .unconscious) or !std.mem.eql(u8, member.name, profile.name) or owned.level == 0 or owned.level > 99 or owned.experience >= 1000) return error.InvalidMember;
-        for ([_]u16{ owned.base_stats.attack, owned.base_stats.defense, owned.base_stats.skill, owned.base_stats.speed, owned.base_stats.magic, owned.base_stats.luck }) |value| if (value > 9999) return error.InvalidMember;
-        if (owned.weapon_level == 0 or owned.weapon_level > 16) return error.InvalidWeapon;
-        const rules = self.content.systems.?;
-        for (std.enums.values(systems.EquipmentSlot)) |slot| if (owned.loadout.get(slot)) |id| {
-            if (id >= rules.equipment.len or !rules.equipment[id].allows(profile.id, slot)) return error.InvalidEquipment;
-            var needed: usize = 0;
-            for (std.enums.values(systems.EquipmentSlot)) |other| if (owned.loadout.get(other) == id) {
-                needed += 1;
-            };
-            const gear_id = std.meta.stringToEnum(field.items.Id, rules.equipment[id].id) orelse return error.InvalidEquipment;
-            var owned_count: usize = 0;
-            for (member.inventory.slots) |item| if (item != null and item.?.id == gear_id) {
-                owned_count += 1;
-            };
-            if (owned_count < needed) return error.InvalidEquipment;
-        };
-        if (owned.rune) |id| {
-            if (id >= rules.runes.len) return error.InvalidRune;
-            const definition = rules.runes[id];
-            const original = profile.rune != null and std.mem.eql(u8, profile.rune.?, definition.id);
-            if (profile.rune_locked and !original) return error.InvalidRune;
-            if (!original and !definition.allows(profile.id)) return error.InvalidRune;
-        } else if (profile.rune_locked) return error.RuneLocked;
-        const capacity = owned.runeCapacity(rules);
-        if (!std.mem.eql(u16, &capacity, &member.max_rune_charges)) return error.InvalidMagicCapacity;
+        try self.content.characterRules().validate(owned);
     }
 
     pub const enemyCount = battle_unite_playback_host_mod.enemyCount;

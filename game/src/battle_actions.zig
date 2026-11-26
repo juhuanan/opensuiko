@@ -729,39 +729,19 @@ pub fn depositToStorage(self: *State, store: *field.game_state.storage.Storage, 
     try store.deposit(&self.progress.party[owner].inventory, slot);
 }
 pub fn gearCount(self: State, member: usize, item: usize) usize {
-    const id = std.meta.stringToEnum(field.items.Id, self.content.systems.?.equipment[item].id) orelse return 0;
-    var count: usize = 0;
-    for (self.progress.party[member].inventory.slots) |slot| if (slot != null and slot.?.id == id) {
-        count += 1;
-    };
-    return count;
+    return self.content.characterRules().gearCount(self.progress.party[member], item);
 }
 pub fn itemEquipped(self: State, member: usize, slot: usize) bool {
-    const item = self.progress.party[member].inventory.slots[slot] orelse return false;
-    var worn: usize = 0;
-    for (std.enums.values(systems.EquipmentSlot)) |place| if (self.progress.party[member].loadout.get(place)) |gear| {
-        if (std.mem.eql(u8, @tagName(item.id), self.content.systems.?.equipment[gear].id)) worn += 1;
-    };
-    for (self.progress.party[member].inventory.slots[0..slot]) |other| if (other != null and other.?.id == item.id) {
-        worn -|= 1;
-    };
-    return worn > 0;
+    return self.content.characterRules().itemEquipped(self.progress.party[member], slot);
 }
 pub fn equipOwned(self: *State, member: usize, item: ?usize) !void {
     try self.equipSlotOwned(member, .head, item);
 }
 pub fn equipSlotOwned(self: *State, member: usize, slot: systems.EquipmentSlot, item: ?usize) !void {
-    try self.checkEquipment(member, slot, item);
-    try self.equipSlot(member, slot, item);
+    if (member >= self.partyCount()) return error.InvalidEquipment;
+    try self.content.characterRules().equipOwned(&self.progress.party[member], slot, item);
 }
 pub fn checkEquipment(self: State, member: usize, slot: systems.EquipmentSlot, item: ?usize) !void {
-    if (member >= self.partyCount() or self.content.systems == null) return error.InvalidEquipment;
-    if (item) |id| {
-        if (id >= self.content.systems.?.equipment.len or !self.content.systems.?.equipment[id].allows(self.partyProfile(member).id, slot)) return error.InvalidEquipment;
-        var needed: usize = 1;
-        for (std.enums.values(systems.EquipmentSlot)) |other| if (other != slot and self.progress.party[member].loadout.get(other) == item) {
-            needed += 1;
-        };
-        if (self.gearCount(member, id) < needed) return error.ItemUnavailable;
-    }
+    if (member >= self.partyCount()) return error.InvalidEquipment;
+    try self.content.characterRules().checkEquipment(self.progress.party[member], slot, item);
 }

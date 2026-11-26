@@ -1510,7 +1510,7 @@ test "real initialization opens the canonical palace start" {
     restored.route.completed = 4;
     try restored.joinOnRoomEntry(&fresh_members, catalog.value, bindings.value, "va1_room_2");
     try std.testing.expectEqual(@as(usize, 3), restored.combat.progress.party.len);
-    const reserved = try party_session.catalogue.materializeBound(state.combat.*, catalog.value, "cleo", null);
+    const reserved = try party_session.catalogue.materializeBound(state.combat.content.characterRules(), catalog.value, "cleo", null);
     state.reserves[0] = reserved.owned;
     state.reserve_extras[0] = reserved.extra;
     try state.joinPartyMember(&members, catalog.value, null, "cleo");
@@ -7381,7 +7381,7 @@ test "canonical level predicates use live roster levels and select the source fa
     }
     var members: [6]battle.Member = undefined;
     var state = try harness.newState(&members);
-    var seeded = try party_session.catalogue.materializeBound(state.combat.*, state.party_catalog.?, "kirkis", state.party_bindings);
+    var seeded = try party_session.catalogue.materializeBound(state.combat.content.characterRules(), state.party_catalog.?, "kirkis", state.party_bindings);
     seeded.owned.level = 37;
     try state.retainReserve(seeded.owned);
     const saved = try journey.Snapshot.capture(state);
@@ -7479,7 +7479,7 @@ test "canonical item predicates use active bags and equipped gear" {
         try std.testing.expect(try state.combat.progress.party[0].inventory.receive(.medicine));
         try std.testing.expect(try state.combat.progress.party[0].inventory.receive(.bandanna));
         try state.combat.equipSlot(0, .head, if (equipped) state.combat.gearIndex(.bandanna).? else null);
-        var reserve = try party_session.catalogue.materializeBound(state.combat.*, state.party_catalog.?, "kirkis", state.party_bindings);
+        var reserve = try party_session.catalogue.materializeBound(state.combat.content.characterRules(), state.party_catalog.?, "kirkis", state.party_bindings);
         reserve.owned.loadout = .{};
         reserve.owned.inventory = .{};
         try std.testing.expect(try reserve.owned.inventory.receive(.antitoxin));

@@ -39,7 +39,7 @@ pub fn initialTemplate(
             std.mem.eql(u8, candidate.resource, source.resource) and
             std.mem.eql(u8, candidate.resource_sha256, source.resource_sha256)) break candidate;
     } else return error.PersistentRecordMismatch;
-    return .{ .source = source, .materialized = try party.catalogue.materialize(combat, catalogue, character.id) };
+    return .{ .source = source, .materialized = try party.catalogue.materialize(combat.content.characterRules(), catalogue, character.id) };
 }
 
 pub const InitialParty = struct {
@@ -66,7 +66,7 @@ pub fn beginInitialParty(
     };
     for (ids, operands, 0..) |id, operand, index| {
         const materialized = if (index == 0)
-            try party.catalogue.materialize(combat, catalogue, id)
+            try party.catalogue.materialize(combat.content.characterRules(), catalogue, id)
         else
             (try initialTemplate(combat, catalogue, operand)).materialized;
         roster.members[index] = materialized.owned;
@@ -74,7 +74,7 @@ pub fn beginInitialParty(
         roster.eligible[index] = true;
         roster.active[index] = materialized.owned.id;
     }
-    _ = try party.Session.init(combat, roster, sources_for_session);
+    _ = try party.Session.init(combat.content.characterRules(), roster, sources_for_session);
     return .{ .roster = roster, .members = ids };
 }
 
@@ -111,7 +111,7 @@ pub fn addLoaded(
 
     next.eligible[member_index] = true;
     next.active[active_index] = current.members[member_index].?.id;
-    _ = try party.Session.init(combat, next, sources_for_session);
+    _ = try party.Session.init(combat.content.characterRules(), next, sources_for_session);
     return .{ .source = source, .before = current, .after = next };
 }
 
@@ -180,7 +180,7 @@ pub const Owner = struct {
     state: OwnerState,
 
     pub fn init(combat: battle.State, roster: party.Snapshot, sources_for_session: party.Sources) !Owner {
-        _ = try party.Session.init(combat, roster, sources_for_session);
+        _ = try party.Session.init(combat.content.characterRules(), roster, sources_for_session);
         if (roster.active[0] == null or !std.mem.eql(u8, roster.active[0].?, "hero")) return error.InvalidBootParty;
         for (roster.active[1..]) |id| if (id != null) return error.InvalidBootParty;
         for (roster.members[1..]) |member| if (member != null) return error.InvalidBootParty;
@@ -283,7 +283,7 @@ pub const Owner = struct {
                 maybe_id.* = (try sourceCharacter(context.catalogue, id)).id;
             };
         }
-        _ = try party.Session.init(context.combat, state.roster, context.sources);
+        _ = try party.Session.init(context.combat.content.characterRules(), state.roster, context.sources);
         return .{ .state = state };
     }
 
@@ -298,9 +298,9 @@ pub const Owner = struct {
                 };
                 if (next.initialized[operand]) return error.AlreadyInitialized;
                 const materialized = if (operand == 108)
-                    try party.catalogue.materializeBound(context.combat, context.catalogue, character.id, context.ownership_bindings)
+                    try party.catalogue.materializeBound(context.combat.content.characterRules(), context.catalogue, character.id, context.ownership_bindings)
                 else if (operand == 35)
-                    try party.catalogue.materialize(context.combat, context.catalogue, character.id)
+                    try party.catalogue.materialize(context.combat.content.characterRules(), context.catalogue, character.id)
                 else
                     (try initialTemplate(context.combat, context.catalogue, operand)).materialized;
                 const index = for (next.roster.members, 0..) |member, i| {
@@ -357,7 +357,7 @@ pub const Owner = struct {
                 next.loaded[35] = true;
             },
         }
-        _ = try party.Session.init(context.combat, next.roster, context.sources);
+        _ = try party.Session.init(context.combat.content.characterRules(), next.roster, context.sources);
         next.revision = try std.math.add(u64, next.revision, 1);
         next.receipt = try std.math.add(u64, next.receipt, 1);
         next.checkpoint = checkpoint;

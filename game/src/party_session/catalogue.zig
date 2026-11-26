@@ -1,14 +1,15 @@
 //! Maps source seed facts into existing battle ownership only when every named
 //! item, rune and profile has an explicit, compatible runtime representation.
 const std = @import("std");
-const battle = @import("battle");
+const character_state = @import("field").game_state;
+const types = @import("battle_rules");
 const field = @import("field");
 const session = @import("session.zig");
 
 pub const Item = struct {
     id: []const u8,
     uses: u16,
-    slot: ?battle.systems.EquipmentSlot,
+    slot: ?types.EquipmentSlot,
     locked: bool,
     identified: bool,
 };
@@ -56,7 +57,7 @@ pub fn decodeBindings(allocator: std.mem.Allocator, bytes: []const u8, roster_by
         !std.mem.eql(u8, parsed.value.ted.display_name, "??????") or !parsed.value.ted.locked) return error.InvalidBindings;
     return parsed;
 }
-pub const Materialized = struct { owned: battle.OwnedMember, extra: session.CharacterExtra };
+pub const Materialized = struct { owned: character_state.Character, extra: session.CharacterExtra };
 
 pub fn decode(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Parsed(Catalogue) {
     if (bytes.len > 1024 * 1024) return error.CatalogueTooLarge;
@@ -70,15 +71,15 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8) !std.json.Parsed(
     return parsed;
 }
 
-pub fn materialize(combat: battle.State, catalog: Catalogue, id: []const u8) !Materialized {
-    return materializeBound(combat, catalog, id, null);
+pub fn materialize(rules: character_state.CharacterRules, catalog: Catalogue, id: []const u8) !Materialized {
+    return materializeBound(rules, catalog, id, null);
 }
-pub fn materializeBound(combat: battle.State, catalog: Catalogue, id: []const u8, bindings: ?OwnershipBindings) !Materialized {
+pub fn materializeBound(rules: character_state.CharacterRules, catalog: Catalogue, id: []const u8, bindings: ?OwnershipBindings) !Materialized {
     const character = for (catalog.characters) |candidate| {
         if (std.mem.eql(u8, candidate.id, id)) break candidate;
     } else return error.UnknownCharacter;
-    const profile = combat.content.partyProfile(id) orelse return error.ProfileUnavailable;
-    const systems = combat.content.systems orelse return error.SystemsUnavailable;
+    const profile = rules.profile(id) orelse return error.ProfileUnavailable;
+    const systems = rules.tables orelse return error.SystemsUnavailable;
     const seed = character.seed;
     if (!std.mem.eql(u8, profile.name, character.name) or !std.mem.eql(u4, &profile.growth, &character.growth) or profile.rune_locked != seed.rune_locked) return error.ProfileMismatch;
     const weapon = profile.weapon orelse return error.WeaponUnavailable;
@@ -104,7 +105,7 @@ pub fn materializeBound(combat: battle.State, catalog: Catalogue, id: []const u8
         masked_rune = binding.ted.rune_id;
     }
     const base_attack = std.math.add(u16, seed.stats[0], weapon.powers[seed.weapon.level - 1]) catch return error.InvalidSeed;
-    var owned: battle.OwnedMember = .{
+    var owned: character_state.Character = .{
         .id = profile.id,
         .name = profile.name,
         .hp = seed.hp,
@@ -156,12 +157,7 @@ pub fn materializeBound(combat: battle.State, catalog: Catalogue, id: []const u8
         };
         if (owned.rune == null) return error.RuneUnavailable;
     }
-    var magic_bonus: i16 = 0;
-    for (std.enums.values(battle.systems.EquipmentSlot)) |slot| if (owned.loadout.get(slot)) |equip_id| {
-        magic_bonus += systems.equipment[equip_id].bonuses[4];
-    };
-    const magic: u16 = @intCast(std.math.clamp(@as(i32, owned.base_stats.magic) + magic_bonus, 0, 9999));
-    owned.max_rune_charges = systems.magicCapacity(magic);
-    try combat.validateOwnedMember(owned);
+    owned.max_rune_charges = owned.runeCapacity(systems);
+    try rules.validate(owned);
     return .{ .owned = owned, .extra = extra };
 }

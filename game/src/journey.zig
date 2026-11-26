@@ -162,7 +162,7 @@ pub const State = struct {
     active_ending: ?ActiveEnding = null,
     scripted_battle: ?struct { owner: *field_events.Session, request: field_events.BattleRequest, opening: bool = false, confirmed: ?ScriptedBattleResult = null } = null,
     suppressed_trigger: ?usize = null,
-    checkpoint: ?Snapshot = null,
+    checkpoint: ?battle_flow.Checkpoint = null,
     elapsed_ticks: u64 = 0,
     save_name: pause.save_slots.Label = pause.save_slots.defaultLabel(0),
     restored_save_arena: ?*std.heap.ArenaAllocator = null,
@@ -195,7 +195,7 @@ pub const State = struct {
         const expected = [_][]const u8{ "hero", "gremio", "pahn", "viktor", "yam_koo", "tai_ho" };
         for (expected, 0..) |id, i| if (!std.mem.eql(u8, id, content.initialProfile(i).id)) return error.InvalidEpisodeParty;
         var combat = try battle.State.init(content, rules, members, battle.trial_seed);
-        if (data.recruitment) |definition| try definition.validate(combat);
+        if (data.recruitment) |definition| try definition.validate(combat.content.characterRules());
         combat.progress.money = 1200;
         combat.progress.party[0].inventory.slots[2] = .{ .id = .bandanna, .uses = 0 };
         combat.progress.party[3].inventory.slots[2] = .{ .id = .headband, .uses = 0 };
@@ -253,6 +253,11 @@ pub const State = struct {
 
     pub fn progress(self: *const State) *const field.game_state.Progress {
         return progress_owner.current(self);
+    }
+
+    pub fn requireIdleField(self: *const State) !void {
+        const world = &self.field_state;
+        if (self.mode != .field or self.dice_game != null or self.side_game != null or self.teleport_session != null or self.party_selection != null or self.item_overload != null or self.auto_travel != null or world.auto_route_id != null or world.remaining != 0 or world.dialogue != null or world.rest_ticks != 0) return error.GameBusy;
     }
 
     pub fn stageField(self: *const State, scratch: *field.game_state.Progress, members: *[6]battle.Member) field.State {
@@ -348,7 +353,7 @@ pub const State = struct {
         if (package.roomIndex(inn.room) != null) try state.field_state.configureInn(package, inn);
         state.field_state.item_rules = rules;
         try snapshot.apply(&state);
-        if (data.recruitment) |definition| try definition.validate(state.combat.*);
+        if (data.recruitment) |definition| try definition.validate(state.combat.content.characterRules());
         state.bindValidatedStorage(combat_backing, members);
         state.world_battle_enabled = true;
         state.updateOpeningPartyMilestone();
@@ -376,10 +381,10 @@ pub const State = struct {
         // Prepare against copies: a failed join spends no RNG and changes no owned state.
         var random = self.combat.random;
         var draws: [17 * 7]u15 = undefined;
-        try definition.validate(self.combat.*);
+        try definition.validate(self.combat.content.characterRules());
         const count = definition.drawCount();
         for (draws[0..count]) |*draw| draw.* = random.random().int(u15);
-        const owned = try recruitment.prepare(definition, self.combat.*, draws[0..count]);
+        const owned = try recruitment.prepare(definition, self.combat.content.characterRules(), draws[0..count]);
         try self.retainReserve(owned);
         self.combat.random = random;
         self.completeStoryFlag(.maas_recruited);
