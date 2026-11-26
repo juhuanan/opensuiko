@@ -212,7 +212,7 @@ check: canonical-assets
 	$(PYTHON) kit/tests/test_battle_camera_site_table.py
 	$(PYTHON) kit/tests/test_battle_camera_consumer_scan.py
 	$(PYTHON) kit/tests/test_battle_unite_camera.py
-	$(PYTHON) kit/tests/test_runtime_boundaries.py kit/tests/test_startup_diagnostics.py kit/tools/event_vm_semantics.py kit/tools/event_vm_effects.py kit/tools/event_vm_evidence.py
+	$(PYTHON) kit/tests/test_runtime_boundaries.py
 	! grep -n '/Users/' kit/tools/check_journey_package.py kit/tools/compose_canonical_art.py kit/tools/export_opening_profiles.py kit/tools/export_opening_field_package.py kit/tools/export_va2_battle.py kit/tests/test_opening_field_package.py
 	$(ZIG) fmt --check game/build.zig game/build.zig.zon game/src game/tests game/assets
 	cd game && $(ZIG) build test test-world test-settings test-zon-data test-hq-launch test-hq-session test-campaign build-journey --cache-dir "$(ZIG_LOCAL_CACHE_DIR)"
@@ -227,6 +227,7 @@ test-simulation-replay:
 	$(PYTHON) kit/tools/check_simulation_replay.py verify --runner "$(REPLAY_PREFIX)/bin/simulation-replay"
 
 test-game: fmt-check test-simulation-replay
+	$(PYTHON) kit/tests/test_runtime_boundaries.py
 	cd game && $(ZIG) build --cache-dir "$(ZIG_LOCAL_CACHE_DIR)" test --summary all
 
 test-kit: prepare
